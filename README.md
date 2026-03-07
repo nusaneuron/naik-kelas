@@ -19,6 +19,8 @@ Aplikasi sederhana untuk menampilkan **list peserta** yang bergabung dari pendaf
   - Contoh EasyPanel:
     `postgres://admin:admin123@website_db-naik-kelas:5432/db-naik-kelas?sslmode=disable`
 - `PORT` (opsional, default `8080`)
+- `TELEGRAM_BOT_TOKEN` (opsional, untuk webhook Telegram)
+- `TELEGRAM_WEBHOOK_SECRET` (opsional tapi direkomendasikan)
 
 ### Frontend
 - `NEXT_PUBLIC_API_BASE_URL` (opsional)
@@ -30,6 +32,7 @@ Aplikasi sederhana untuk menampilkan **list peserta** yang bergabung dari pendaf
 - `GET /participants/check?phone=0812xxxx`
 - `POST /participants`
 - `POST /bot/message` (flow chat Nala: /start, /daftar, /cek, /batal)
+- `POST /telegram/webhook` (endpoint webhook Telegram)
   - body JSON:
     ```json
     {
@@ -67,3 +70,18 @@ Repo sudah menyediakan:
 
 Set environment variable di service:
 - `DATABASE_URL=postgres://admin:admin123@website_db-naik-kelas:5432/db-naik-kelas?sslmode=disable`
+- `TELEGRAM_BOT_TOKEN=<token-bot-telegram>`
+- `TELEGRAM_WEBHOOK_SECRET=<secret-random>`
+
+### Set webhook Telegram (setelah deploy)
+Gunakan terminal lokal Anda:
+
+```bash
+curl -X POST "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://<domain-aplikasi>/api/telegram/webhook",
+    "secret_token": "<TELEGRAM_WEBHOOK_SECRET>",
+    "allowed_updates": ["message"]
+  }'
+```

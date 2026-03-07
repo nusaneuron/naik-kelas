@@ -1,14 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"net/mail"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -49,10 +52,26 @@ type botSession struct {
 	UpdatedAt time.Time
 }
 
+type telegramUpdate struct {
+	UpdateID int `json:"update_id"`
+	Message  struct {
+		MessageID int `json:"message_id"`
+		From      struct {
+			ID int64 `json:"id"`
+		} `json:"from"`
+		Chat struct {
+			ID int64 `json:"id"`
+		} `json:"chat"`
+		Text string `json:"text"`
+	} `json:"message"`
+}
+
 type app struct {
-	db          *sql.DB
-	botSessions map[string]*botSession
-	mu          sync.Mutex
+	db                  *sql.DB
+	botSessions         map[string]*botSession
+	mu                  sync.Mutex
+	telegramBotToken    string
+	telegramSecretToken string
 }
 
 func main() {
@@ -73,7 +92,13 @@ func main() {
 		log.Fatalf("ping database: %v", err)
 	}
 
-	a := &app{db: db, botSessions: map[string]*botSession{}}
+	a := &app{
+		db:                  db,
+		botSessions:         map[string]*botSession{},
+		telegramBotToken:    strings.TrimSpace(getenv("TELEGRAM_BOT_TOKEN", "")),
+		telegramSecretToken: strings.TrimSpace(getenv("TELEGRAM_WEBHOOK_SECRET", "")),
+	}
+
 	if err := a.initDB(ctx); err != nil {
 		log.Fatalf("init database: %v", err)
 	}
@@ -83,6 +108,7 @@ func main() {
 	mux.HandleFunc("/participants", a.handleParticipants)
 	mux.HandleFunc("/participants/check", a.checkParticipantByPhone)
 	mux.HandleFunc("/bot/message", a.handleBotMessage)
+	mux.HandleFunc("/telegram/webhook", a.handleTelegramWebhook)
 
 	port := getenv("PORT", "8080")
 	addr := ":" + port
@@ -139,19 +165,11 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	if err := a.db.PingContext(ctx); err != nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
-			"status":  "degraded",
-			"service": "naik-kelas-backend",
-			"db":      "down",
-		})
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"status": "degraded", "service": "naik-kelas-backend", "db": "down"})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":  "ok",
-		"service": "naik-kelas-backend",
-		"db":      "up",
-	})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -243,6 +261,199 @@ func (a *app) createParticipant(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"item": p})
 }
 
+func (a *app) handleBotMessage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	var req botMessageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json body"})
+		return
+	}
+	uid := strings.TrimSpace(req.UserID)
+	text := strings.TrimSpace(req.Text)
+	if uid == "" || text == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "userId and text are required"})
+		return
+	}
+
+	reply, state := a.processBotText(r.Context(), uid, text)
+	writeJSON(w, http.StatusOK, botMessageResponse{Reply: reply, State: state})
+}
+
+func (a *app) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	if a.telegramBotToken == "" {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "TELEGRAM_BOT_TOKEN not configured"})
+		return
+	}
+	if a.telegramSecretToken != "" {
+		if r.Header.Get("X-Telegram-Bot-Api-Secret-Token") != a.telegramSecretToken {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid secret token"})
+			return
+		}
+	}
+
+	var upd telegramUpdate
+	if err := json.NewDecoder(r.Body).Decode(&upd); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid update payload"})
+		return
+	}
+
+	text := strings.TrimSpace(upd.Message.Text)
+	if text == "" || upd.Message.Chat.ID == 0 || upd.Message.From.ID == 0 {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "ignored": true})
+		return
+	}
+
+	uid := strconv.FormatInt(upd.Message.From.ID, 10)
+	reply, _ := a.processBotText(r.Context(), uid, text)
+	if strings.TrimSpace(reply) != "" {
+		if err := a.sendTelegramMessage(r.Context(), upd.Message.Chat.ID, reply); err != nil {
+			log.Printf("telegram send error: %v", err)
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *app) sendTelegramMessage(ctx context.Context, chatID int64, text string) error {
+	payload := map[string]any{"chat_id": chatID, "text": text}
+	b, _ := json.Marshal(payload)
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", a.telegramBotToken)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("telegram send status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func (a *app) processBotText(ctx context.Context, uid, text string) (reply, state string) {
+	a.mu.Lock()
+	s := a.botSessions[uid]
+	if s == nil {
+		s = &botSession{State: "idle"}
+		a.botSessions[uid] = s
+	}
+	if time.Since(s.UpdatedAt) > 15*time.Minute {
+		s.State, s.Name, s.Phone = "idle", "", ""
+	}
+	a.mu.Unlock()
+
+	lower := strings.ToLower(strings.TrimSpace(text))
+	if lower == "/batal" {
+		a.resetSession(uid)
+		return "Oke, proses pendaftaran dibatalkan dulu ya 🙂\nKapan pun siap, ketik /daftar untuk mulai lagi.", "idle"
+	}
+	if lower == "/start" {
+		a.resetSession(uid)
+		return "Selamat datang di Naik Kelas, perkenalkan saya Nala ✨\nAku siap bantu kamu daftar belajar dengan cepat.\n\nKetik /daftar untuk registrasi peserta baru 📚\nKetik /cek untuk cek apakah nomor HP sudah terdaftar ✅", "idle"
+	}
+	if lower == "/daftar" {
+		a.mu.Lock()
+		a.botSessions[uid] = &botSession{State: "wait_name", UpdatedAt: time.Now()}
+		a.mu.Unlock()
+		return "Siap! Kita mulai ya 😊\nSilakan kirim nama lengkap kamu dulu.", "wait_name"
+	}
+	if lower == "/cek" {
+		a.mu.Lock()
+		a.botSessions[uid] = &botSession{State: "check_phone", UpdatedAt: time.Now()}
+		a.mu.Unlock()
+		return "Siap, aku bantu cek ✅\nKirim nomor HP yang ingin dicek ya.", "check_phone"
+	}
+
+	a.mu.Lock()
+	s = a.botSessions[uid]
+	curState := s.State
+	a.mu.Unlock()
+
+	switch curState {
+	case "wait_name":
+		if len([]rune(strings.TrimSpace(text))) < 3 {
+			return "Nama lengkapnya minimal 3 karakter ya. Coba kirim lagi 😊", "wait_name"
+		}
+		a.mu.Lock()
+		s.Name = strings.TrimSpace(text)
+		s.State = "wait_phone"
+		s.UpdatedAt = time.Now()
+		a.mu.Unlock()
+		return "Terima kasih ✨\nSekarang kirim nomor HP aktif kamu ya (contoh: 0812xxxxxxx).", "wait_phone"
+
+	case "wait_phone":
+		phone := normalizePhone(text)
+		if len(phone) < 9 {
+			return "Nomor HP belum valid nih. Coba kirim lagi ya (contoh: 0812xxxxxxx).", "wait_phone"
+		}
+		p, found, err := a.findParticipantByPhone(ctx, phone)
+		if err != nil {
+			return "Maaf, Nala lagi kesulitan terhubung ke server 🙏\nCoba lagi sebentar ya.", "wait_phone"
+		}
+		if found {
+			a.resetSession(uid)
+			return "Nomor HP ini sudah pernah terdaftar ✅\nNama: " + p.Name + "\nEmail: " + p.Email + "\n\nKalau mau cek lagi, ketik /cek ya.", "idle"
+		}
+		a.mu.Lock()
+		s.Phone = phone
+		s.State = "wait_email"
+		s.UpdatedAt = time.Now()
+		a.mu.Unlock()
+		return "Oke, lanjut ya 📚\nSekarang kirim email aktif kamu.", "wait_email"
+
+	case "wait_email":
+		email := strings.TrimSpace(strings.ToLower(text))
+		if _, err := mail.ParseAddress(email); err != nil {
+			return "Emailnya belum valid nih 🙏\nCoba kirim lagi dengan format benar ya. Contoh: nama@email.com", "wait_email"
+		}
+		a.mu.Lock()
+		name := s.Name
+		phone := s.Phone
+		a.mu.Unlock()
+		_, err := a.createParticipantRecord(ctx, createParticipantRequest{Name: name, Phone: phone, Email: email, Source: "bot-naik-kelas"})
+		if err != nil {
+			if errors.Is(err, errConflict) {
+				a.resetSession(uid)
+				return "Nomor HP ini sudah pernah terdaftar ✅", "idle"
+			}
+			return "Maaf, Nala lagi kesulitan menyimpan data 🙏\nCoba lagi sebentar ya.", "wait_email"
+		}
+		a.resetSession(uid)
+		return "Yeay! 🎉 Pendaftaran kamu berhasil.\nSemangat belajar bareng Naik Kelas ya ✨📚", "idle"
+
+	case "check_phone":
+		phone := normalizePhone(text)
+		if len(phone) < 9 {
+			return "Nomor HP belum valid. Coba kirim lagi ya.", "check_phone"
+		}
+		p, found, err := a.findParticipantByPhone(ctx, phone)
+		if err != nil {
+			return "Maaf, Nala lagi kesulitan terhubung ke server 🙏\nCoba lagi sebentar ya.", "check_phone"
+		}
+		a.resetSession(uid)
+		if found {
+			return "Nomor ini sudah terdaftar ✅\nNama: " + p.Name + "\nEmail: " + p.Email, "idle"
+		}
+		return "Nomor ini belum terdaftar ya.\nYuk lanjut daftar dengan ketik /daftar ✨", "idle"
+
+	default:
+		return "Halo! Saya Nala ✨\nKetik /start untuk mulai, /daftar untuk registrasi, atau /cek untuk cek pendaftaran.", "idle"
+	}
+}
+
 var (
 	errBadRequest = errors.New("bad request")
 	errConflict   = errors.New("conflict")
@@ -259,7 +470,6 @@ func (a *app) createParticipantRecord(ctx context.Context, req createParticipant
 	if req.Name == "" || req.Phone == "" || req.Email == "" {
 		return Participant{}, errors.Join(errBadRequest, errors.New("name, phone, and email are required"))
 	}
-
 	if _, err := mail.ParseAddress(req.Email); err != nil {
 		return Participant{}, errors.Join(errBadRequest, errors.New("invalid email"))
 	}
@@ -281,7 +491,6 @@ func (a *app) createParticipantRecord(ctx context.Context, req createParticipant
 	if err != nil {
 		return Participant{}, err
 	}
-
 	return p, nil
 }
 
@@ -300,162 +509,6 @@ func (a *app) findParticipantByPhone(ctx context.Context, phone string) (Partici
 		return Participant{}, false, err
 	}
 	return p, true, nil
-}
-
-func (a *app) handleBotMessage(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-		return
-	}
-
-	var req botMessageRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json body"})
-		return
-	}
-	uid := strings.TrimSpace(req.UserID)
-	text := strings.TrimSpace(req.Text)
-	if uid == "" || text == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "userId and text are required"})
-		return
-	}
-
-	a.mu.Lock()
-	s := a.botSessions[uid]
-	if s == nil {
-		s = &botSession{State: "idle"}
-		a.botSessions[uid] = s
-	}
-	if time.Since(s.UpdatedAt) > 15*time.Minute {
-		s.State, s.Name, s.Phone = "idle", "", ""
-	}
-	a.mu.Unlock()
-
-	lower := strings.ToLower(text)
-	if lower == "/batal" {
-		a.resetSession(uid)
-		writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Oke, proses pendaftaran dibatalkan dulu ya 🙂\nKapan pun siap, ketik /daftar untuk mulai lagi.", State: "idle"})
-		return
-	}
-
-	if lower == "/start" {
-		a.resetSession(uid)
-		writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Selamat datang di Naik Kelas, perkenalkan saya Nala ✨\nAku siap bantu kamu daftar belajar dengan cepat.\n\nKetik /daftar untuk registrasi peserta baru 📚\nKetik /cek untuk cek apakah nomor HP sudah terdaftar ✅", State: "idle"})
-		return
-	}
-
-	if lower == "/daftar" {
-		a.mu.Lock()
-		a.botSessions[uid] = &botSession{State: "wait_name", UpdatedAt: time.Now()}
-		a.mu.Unlock()
-		writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Siap! Kita mulai ya 😊\nSilakan kirim nama lengkap kamu dulu.", State: "wait_name"})
-		return
-	}
-
-	if lower == "/cek" {
-		a.mu.Lock()
-		a.botSessions[uid] = &botSession{State: "check_phone", UpdatedAt: time.Now()}
-		a.mu.Unlock()
-		writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Siap, aku bantu cek ✅\nKirim nomor HP yang ingin dicek ya.", State: "check_phone"})
-		return
-	}
-
-	a.mu.Lock()
-	s = a.botSessions[uid]
-	state := s.State
-	a.mu.Unlock()
-
-	switch state {
-	case "wait_name":
-		if len([]rune(text)) < 3 {
-			writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Nama lengkapnya minimal 3 karakter ya. Coba kirim lagi 😊", State: "wait_name"})
-			return
-		}
-		a.mu.Lock()
-		s.Name = text
-		s.State = "wait_phone"
-		s.UpdatedAt = time.Now()
-		a.mu.Unlock()
-		writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Terima kasih ✨\nSekarang kirim nomor HP aktif kamu ya (contoh: 0812xxxxxxx).", State: "wait_phone"})
-		return
-
-	case "wait_phone":
-		phone := normalizePhone(text)
-		if len(phone) < 9 {
-			writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Nomor HP belum valid nih. Coba kirim lagi ya (contoh: 0812xxxxxxx).", State: "wait_phone"})
-			return
-		}
-		p, found, err := a.findParticipantByPhone(r.Context(), phone)
-		if err != nil {
-			writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Maaf, Nala lagi kesulitan terhubung ke server 🙏\nCoba lagi sebentar ya.", State: "wait_phone"})
-			return
-		}
-		if found {
-			writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Nomor HP ini sudah pernah terdaftar ✅\nNama: " + p.Name + "\nEmail: " + p.Email + "\n\nKalau mau cek lagi, ketik /cek ya.", State: "idle"})
-			a.resetSession(uid)
-			return
-		}
-		a.mu.Lock()
-		s.Phone = phone
-		s.State = "wait_email"
-		s.UpdatedAt = time.Now()
-		a.mu.Unlock()
-		writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Oke, lanjut ya 📚\nSekarang kirim email aktif kamu.", State: "wait_email"})
-		return
-
-	case "wait_email":
-		email := strings.TrimSpace(strings.ToLower(text))
-		if _, err := mail.ParseAddress(email); err != nil {
-			writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Emailnya belum valid nih 🙏\nCoba kirim lagi dengan format benar ya. Contoh: nama@email.com", State: "wait_email"})
-			return
-		}
-
-		a.mu.Lock()
-		name := s.Name
-		phone := s.Phone
-		a.mu.Unlock()
-
-		_, err := a.createParticipantRecord(r.Context(), createParticipantRequest{
-			Name:   name,
-			Phone:  phone,
-			Email:  email,
-			Source: "bot-naik-kelas",
-		})
-		if err != nil {
-			if errors.Is(err, errConflict) {
-				writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Nomor HP ini sudah pernah terdaftar ✅", State: "idle"})
-				a.resetSession(uid)
-				return
-			}
-			writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Maaf, Nala lagi kesulitan menyimpan data 🙏\nCoba lagi sebentar ya.", State: "wait_email"})
-			return
-		}
-		a.resetSession(uid)
-		writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Yeay! 🎉 Pendaftaran kamu berhasil.\nSemangat belajar bareng Naik Kelas ya ✨📚", State: "idle"})
-		return
-
-	case "check_phone":
-		phone := normalizePhone(text)
-		if len(phone) < 9 {
-			writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Nomor HP belum valid. Coba kirim lagi ya.", State: "check_phone"})
-			return
-		}
-		p, found, err := a.findParticipantByPhone(r.Context(), phone)
-		if err != nil {
-			writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Maaf, Nala lagi kesulitan terhubung ke server 🙏\nCoba lagi sebentar ya.", State: "check_phone"})
-			return
-		}
-		a.resetSession(uid)
-		if found {
-			writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Nomor ini sudah terdaftar ✅\nNama: " + p.Name + "\nEmail: " + p.Email, State: "idle"})
-			return
-		}
-		writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Nomor ini belum terdaftar ya.\nYuk lanjut daftar dengan ketik /daftar ✨", State: "idle"})
-		return
-
-	default:
-		writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Halo! Saya Nala ✨\nKetik /start untuk mulai, /daftar untuk registrasi, atau /cek untuk cek pendaftaran.", State: "idle"})
-	}
 }
 
 func (a *app) resetSession(uid string) {
