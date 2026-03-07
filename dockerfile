@@ -10,6 +10,7 @@ RUN npm run build
 FROM golang:1.22-alpine AS backend-builder
 WORKDIR /app/backend
 COPY backend/go.mod ./
+COPY backend/go.sum ./
 COPY backend/main.go ./
 RUN go build -o /out/backend-app .
 
