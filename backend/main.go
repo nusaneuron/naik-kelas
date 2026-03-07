@@ -46,12 +46,13 @@ type botMessageResponse struct {
 }
 
 type botSession struct {
-	State       string
-	Name        string
-	Phone       string
-	QuizIndex   int
-	QuizAnswers []string
-	UpdatedAt   time.Time
+	State        string
+	Name         string
+	Phone        string
+	QuizCategory string
+	QuizIndex    int
+	QuizAnswers  []string
+	UpdatedAt    time.Time
 }
 
 type quizQuestion struct {
@@ -60,12 +61,31 @@ type quizQuestion struct {
 	Answer   string
 }
 
-var quizQuestions = []quizQuestion{
-	{Question: "1) Ibu kota Indonesia adalah...", Options: []string{"A. Bandung", "B. Jakarta", "C. Surabaya", "D. Medan"}, Answer: "B"},
-	{Question: "2) 5 + 7 = ...", Options: []string{"A. 10", "B. 11", "C. 12", "D. 13"}, Answer: "C"},
-	{Question: "3) Planet yang kita tinggali adalah...", Options: []string{"A. Mars", "B. Venus", "C. Saturnus", "D. Bumi"}, Answer: "D"},
-	{Question: "4) Bahasa resmi negara Indonesia adalah...", Options: []string{"A. Melayu", "B. Indonesia", "C. Jawa", "D. Inggris"}, Answer: "B"},
-	{Question: "5) 9 x 3 = ...", Options: []string{"A. 27", "B. 21", "C. 18", "D. 24"}, Answer: "A"},
+type quizCategory struct {
+	Code  string
+	Name  string
+	Items []quizQuestion
+}
+
+var quizCategories = []quizCategory{
+	{
+		Code: "umum",
+		Name: "Pengetahuan Umum",
+		Items: []quizQuestion{
+			{Question: "1) Ibu kota Indonesia adalah...", Options: []string{"A. Bandung", "B. Jakarta", "C. Surabaya", "D. Medan"}, Answer: "B"},
+			{Question: "2) Planet yang kita tinggali adalah...", Options: []string{"A. Mars", "B. Venus", "C. Saturnus", "D. Bumi"}, Answer: "D"},
+			{Question: "3) Bahasa resmi negara Indonesia adalah...", Options: []string{"A. Melayu", "B. Indonesia", "C. Jawa", "D. Inggris"}, Answer: "B"},
+		},
+	},
+	{
+		Code: "matematika",
+		Name: "Matematika Dasar",
+		Items: []quizQuestion{
+			{Question: "1) 5 + 7 = ...", Options: []string{"A. 10", "B. 11", "C. 12", "D. 13"}, Answer: "C"},
+			{Question: "2) 9 x 3 = ...", Options: []string{"A. 27", "B. 21", "C. 18", "D. 24"}, Answer: "A"},
+			{Question: "3) 20 - 8 = ...", Options: []string{"A. 10", "B. 11", "C. 12", "D. 13"}, Answer: "C"},
+		},
+	},
 }
 
 type telegramUpdate struct {
@@ -347,6 +367,16 @@ func (a *app) sendTelegramMessage(ctx context.Context, chatID int64, text, state
 			"resize_keyboard":   true,
 			"one_time_keyboard": false,
 		}
+	} else if state == "quiz_choose_category" {
+		rows := make([][]string, 0, len(quizCategories))
+		for _, c := range quizCategories {
+			rows = append(rows, []string{c.Name})
+		}
+		payload["reply_markup"] = map[string]any{
+			"keyboard":          rows,
+			"resize_keyboard":   true,
+			"one_time_keyboard": false,
+		}
 	} else {
 		payload["reply_markup"] = map[string]any{
 			"remove_keyboard": true,
@@ -407,9 +437,9 @@ func (a *app) processBotText(ctx context.Context, uid, text string) (reply, stat
 	}
 	if lower == "/quiz" {
 		a.mu.Lock()
-		a.botSessions[uid] = &botSession{State: "quiz_answering", QuizIndex: 0, QuizAnswers: []string{}, UpdatedAt: time.Now()}
+		a.botSessions[uid] = &botSession{State: "quiz_choose_category", QuizIndex: 0, QuizAnswers: []string{}, UpdatedAt: time.Now()}
 		a.mu.Unlock()
-		return "Siap, kita mulai quiz Naik Kelas! 🔥\nJawab semua soal dulu ya. Nanti Nala cek di akhir.\n\n" + formatQuizQuestion(0), "quiz_answering"
+		return "Siap, kita mulai quiz Naik Kelas! 🔥\nPilih dulu kategori quiz yang kamu mau:\n\n" + formatQuizCategories(), "quiz_choose_category"
 	}
 
 	a.mu.Lock()
@@ -484,10 +514,29 @@ func (a *app) processBotText(ctx context.Context, uid, text string) (reply, stat
 		}
 		return "Nomor ini belum terdaftar ya.\nYuk lanjut daftar dengan ketik /daftar ✨", "idle"
 
+	case "quiz_choose_category":
+		cat, ok := findQuizCategory(text)
+		if !ok {
+			return "Kategori belum dikenali 🙏\nSilakan pilih salah satu kategori berikut:\n\n" + formatQuizCategories(), "quiz_choose_category"
+		}
+		a.mu.Lock()
+		s.QuizCategory = cat.Code
+		s.State = "quiz_answering"
+		s.QuizIndex = 0
+		s.QuizAnswers = []string{}
+		s.UpdatedAt = time.Now()
+		a.mu.Unlock()
+		return "Kategori dipilih: " + cat.Name + " ✅\nJawab semua soal dulu ya. Nanti Nala cek di akhir.\n\n" + formatQuizQuestion(cat, 0), "quiz_answering"
+
 	case "quiz_answering":
 		ans := normalizeQuizAnswer(text)
 		if ans == "" {
 			return "Jawab dengan A, B, C, atau D ya ✍️", "quiz_answering"
+		}
+		cat, ok := findQuizCategory(s.QuizCategory)
+		if !ok {
+			a.resetSession(uid)
+			return "Kategori quiz tidak ditemukan. Ketik /quiz untuk mulai lagi ya.", "idle"
 		}
 		a.mu.Lock()
 		s.QuizAnswers = append(s.QuizAnswers, ans)
@@ -497,19 +546,19 @@ func (a *app) processBotText(ctx context.Context, uid, text string) (reply, stat
 		answers := append([]string(nil), s.QuizAnswers...)
 		a.mu.Unlock()
 
-		if next < len(quizQuestions) {
-			return formatQuizQuestion(next), "quiz_answering"
+		if next < len(cat.Items) {
+			return formatQuizQuestion(cat, next), "quiz_answering"
 		}
 
 		wrong := 0
-		for i, q := range quizQuestions {
+		for i, q := range cat.Items {
 			if i >= len(answers) || answers[i] != q.Answer {
 				wrong++
 			}
 		}
 		if wrong == 0 {
 			a.resetSession(uid)
-			return "Luar biasa! 🎉 Semua jawaban kamu benar!\nKamu berhasil menuntaskan quiz Naik Kelas.", "idle"
+			return "Luar biasa! 🎉 Semua jawaban kamu benar!\nKamu berhasil menuntaskan quiz kategori " + cat.Name + ".", "idle"
 		}
 
 		a.mu.Lock()
@@ -518,7 +567,7 @@ func (a *app) processBotText(ctx context.Context, uid, text string) (reply, stat
 		s.QuizAnswers = []string{}
 		s.UpdatedAt = time.Now()
 		a.mu.Unlock()
-		return fmt.Sprintf("Semangat! Kamu masih punya %d jawaban yang belum tepat. Kita ulang dari awal ya 🔁\n\n%s", wrong, formatQuizQuestion(0)), "quiz_answering"
+		return fmt.Sprintf("Semangat! Kamu masih punya %d jawaban yang belum tepat di kategori %s. Kita ulang dari awal ya 🔁\n\n%s", wrong, cat.Name, formatQuizQuestion(cat, 0)), "quiz_answering"
 
 	default:
 		return "Halo! Saya Nala ✨\nKetik /start untuk mulai, /daftar untuk registrasi, /cek untuk cek pendaftaran, atau /quiz untuk latihan soal.", "idle"
@@ -588,12 +637,30 @@ func (a *app) resetSession(uid string) {
 	a.botSessions[uid] = &botSession{State: "idle", UpdatedAt: time.Now()}
 }
 
-func formatQuizQuestion(index int) string {
-	if index < 0 || index >= len(quizQuestions) {
+func formatQuizQuestion(cat quizCategory, index int) string {
+	if index < 0 || index >= len(cat.Items) {
 		return "Soal tidak ditemukan."
 	}
-	q := quizQuestions[index]
-	return q.Question + "\n" + strings.Join(q.Options, "\n") + "\n\nBalas dengan: A / B / C / D"
+	q := cat.Items[index]
+	return "[" + cat.Name + "]\n" + q.Question + "\n" + strings.Join(q.Options, "\n") + "\n\nBalas dengan: A / B / C / D"
+}
+
+func formatQuizCategories() string {
+	lines := make([]string, 0, len(quizCategories))
+	for _, c := range quizCategories {
+		lines = append(lines, "- "+c.Name+" ("+c.Code+")")
+	}
+	return strings.Join(lines, "\n") + "\n\nKirim nama kategori atau kode dalam kurung."
+}
+
+func findQuizCategory(input string) (quizCategory, bool) {
+	s := strings.ToLower(strings.TrimSpace(input))
+	for _, c := range quizCategories {
+		if s == strings.ToLower(c.Code) || s == strings.ToLower(c.Name) {
+			return c, true
+		}
+	}
+	return quizCategory{}, false
 }
 
 func normalizeQuizAnswer(v string) string {
