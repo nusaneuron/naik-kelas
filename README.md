@@ -29,6 +29,7 @@ Aplikasi sederhana untuk menampilkan **list peserta** yang bergabung dari pendaf
 - `GET /participants`
 - `GET /participants/check?phone=0812xxxx`
 - `POST /participants`
+- `POST /bot/message` (flow chat Nala: /start, /daftar, /cek, /batal)
   - body JSON:
     ```json
     {

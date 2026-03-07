@@ -10,6 +10,7 @@ import (
 	"net/mail"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -31,8 +32,27 @@ type createParticipantRequest struct {
 	Source string `json:"source"`
 }
 
+type botMessageRequest struct {
+	UserID string `json:"userId"`
+	Text   string `json:"text"`
+}
+
+type botMessageResponse struct {
+	Reply string `json:"reply"`
+	State string `json:"state"`
+}
+
+type botSession struct {
+	State     string
+	Name      string
+	Phone     string
+	UpdatedAt time.Time
+}
+
 type app struct {
-	db *sql.DB
+	db          *sql.DB
+	botSessions map[string]*botSession
+	mu          sync.Mutex
 }
 
 func main() {
@@ -53,7 +73,7 @@ func main() {
 		log.Fatalf("ping database: %v", err)
 	}
 
-	a := &app{db: db}
+	a := &app{db: db, botSessions: map[string]*botSession{}}
 	if err := a.initDB(ctx); err != nil {
 		log.Fatalf("init database: %v", err)
 	}
@@ -62,6 +82,7 @@ func main() {
 	mux.HandleFunc("/health", a.handleHealth)
 	mux.HandleFunc("/participants", a.handleParticipants)
 	mux.HandleFunc("/participants/check", a.checkParticipantByPhone)
+	mux.HandleFunc("/bot/message", a.handleBotMessage)
 
 	port := getenv("PORT", "8080")
 	addr := ":" + port
@@ -86,7 +107,6 @@ func (a *app) initDB(ctx context.Context) error {
 		return err
 	}
 
-	// Migration for existing tables
 	_, _ = a.db.ExecContext(ctx, `ALTER TABLE participants ADD COLUMN IF NOT EXISTS email TEXT`)
 
 	var total int
@@ -187,19 +207,13 @@ func (a *app) checkParticipantByPhone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var p Participant
-	err := a.db.QueryRowContext(r.Context(), `
-		SELECT id, name, phone, email, source, joined_at
-		FROM participants
-		WHERE phone = $1
-		LIMIT 1
-	`, phone).Scan(&p.ID, &p.Name, &p.Phone, &p.Email, &p.Source, &p.JoinedAt)
+	p, found, err := a.findParticipantByPhone(r.Context(), phone)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeJSON(w, http.StatusOK, map[string]any{"exists": false})
-			return
-		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to check participant"})
+		return
+	}
+	if !found {
+		writeJSON(w, http.StatusOK, map[string]any{"exists": false})
 		return
 	}
 
@@ -213,49 +227,241 @@ func (a *app) createParticipant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	p, err := a.createParticipantRecord(r.Context(), req)
+	if err != nil {
+		switch {
+		case errors.Is(err, errBadRequest):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		case errors.Is(err, errConflict):
+			writeJSON(w, http.StatusConflict, map[string]any{"error": "phone already registered", "message": "Nomor HP sudah pernah terdaftar"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create participant"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]any{"item": p})
+}
+
+var (
+	errBadRequest = errors.New("bad request")
+	errConflict   = errors.New("conflict")
+)
+
+func (a *app) createParticipantRecord(ctx context.Context, req createParticipantRequest) (Participant, error) {
 	req.Name = strings.TrimSpace(req.Name)
 	req.Phone = normalizePhone(req.Phone)
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
-
-	if req.Name == "" || req.Phone == "" || req.Email == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name, phone, and email are required"})
-		return
-	}
-
-	if _, err := mail.ParseAddress(req.Email); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid email"})
-		return
-	}
-
 	if req.Source == "" {
 		req.Source = "bot-naik-kelas"
 	}
 
-	var exists bool
-	if err := a.db.QueryRowContext(r.Context(), `SELECT EXISTS(SELECT 1 FROM participants WHERE phone = $1)`, req.Phone).Scan(&exists); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to validate participant"})
-		return
+	if req.Name == "" || req.Phone == "" || req.Email == "" {
+		return Participant{}, errors.Join(errBadRequest, errors.New("name, phone, and email are required"))
 	}
-	if exists {
-		writeJSON(w, http.StatusConflict, map[string]any{
-			"error":   "phone already registered",
-			"message": "Nomor HP sudah pernah terdaftar",
-		})
-		return
+
+	if _, err := mail.ParseAddress(req.Email); err != nil {
+		return Participant{}, errors.Join(errBadRequest, errors.New("invalid email"))
+	}
+
+	_, found, err := a.findParticipantByPhone(ctx, req.Phone)
+	if err != nil {
+		return Participant{}, err
+	}
+	if found {
+		return Participant{}, errConflict
 	}
 
 	var p Participant
-	err := a.db.QueryRowContext(r.Context(), `
+	err = a.db.QueryRowContext(ctx, `
 		INSERT INTO participants (name, phone, email, source)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, name, phone, email, source, joined_at
 	`, req.Name, req.Phone, req.Email, req.Source).Scan(&p.ID, &p.Name, &p.Phone, &p.Email, &p.Source, &p.JoinedAt)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create participant"})
+		return Participant{}, err
+	}
+
+	return p, nil
+}
+
+func (a *app) findParticipantByPhone(ctx context.Context, phone string) (Participant, bool, error) {
+	var p Participant
+	err := a.db.QueryRowContext(ctx, `
+		SELECT id, name, phone, email, source, joined_at
+		FROM participants
+		WHERE phone = $1
+		LIMIT 1
+	`, phone).Scan(&p.ID, &p.Name, &p.Phone, &p.Email, &p.Source, &p.JoinedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Participant{}, false, nil
+		}
+		return Participant{}, false, err
+	}
+	return p, true, nil
+}
+
+func (a *app) handleBotMessage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, map[string]any{"item": p})
+	var req botMessageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json body"})
+		return
+	}
+	uid := strings.TrimSpace(req.UserID)
+	text := strings.TrimSpace(req.Text)
+	if uid == "" || text == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "userId and text are required"})
+		return
+	}
+
+	a.mu.Lock()
+	s := a.botSessions[uid]
+	if s == nil {
+		s = &botSession{State: "idle"}
+		a.botSessions[uid] = s
+	}
+	if time.Since(s.UpdatedAt) > 15*time.Minute {
+		s.State, s.Name, s.Phone = "idle", "", ""
+	}
+	a.mu.Unlock()
+
+	lower := strings.ToLower(text)
+	if lower == "/batal" {
+		a.resetSession(uid)
+		writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Oke, proses pendaftaran dibatalkan dulu ya 🙂\nKapan pun siap, ketik /daftar untuk mulai lagi.", State: "idle"})
+		return
+	}
+
+	if lower == "/start" {
+		a.resetSession(uid)
+		writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Selamat datang di Naik Kelas, perkenalkan saya Nala ✨\nAku siap bantu kamu daftar belajar dengan cepat.\n\nKetik /daftar untuk registrasi peserta baru 📚\nKetik /cek untuk cek apakah nomor HP sudah terdaftar ✅", State: "idle"})
+		return
+	}
+
+	if lower == "/daftar" {
+		a.mu.Lock()
+		a.botSessions[uid] = &botSession{State: "wait_name", UpdatedAt: time.Now()}
+		a.mu.Unlock()
+		writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Siap! Kita mulai ya 😊\nSilakan kirim nama lengkap kamu dulu.", State: "wait_name"})
+		return
+	}
+
+	if lower == "/cek" {
+		a.mu.Lock()
+		a.botSessions[uid] = &botSession{State: "check_phone", UpdatedAt: time.Now()}
+		a.mu.Unlock()
+		writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Siap, aku bantu cek ✅\nKirim nomor HP yang ingin dicek ya.", State: "check_phone"})
+		return
+	}
+
+	a.mu.Lock()
+	s = a.botSessions[uid]
+	state := s.State
+	a.mu.Unlock()
+
+	switch state {
+	case "wait_name":
+		if len([]rune(text)) < 3 {
+			writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Nama lengkapnya minimal 3 karakter ya. Coba kirim lagi 😊", State: "wait_name"})
+			return
+		}
+		a.mu.Lock()
+		s.Name = text
+		s.State = "wait_phone"
+		s.UpdatedAt = time.Now()
+		a.mu.Unlock()
+		writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Terima kasih ✨\nSekarang kirim nomor HP aktif kamu ya (contoh: 0812xxxxxxx).", State: "wait_phone"})
+		return
+
+	case "wait_phone":
+		phone := normalizePhone(text)
+		if len(phone) < 9 {
+			writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Nomor HP belum valid nih. Coba kirim lagi ya (contoh: 0812xxxxxxx).", State: "wait_phone"})
+			return
+		}
+		p, found, err := a.findParticipantByPhone(r.Context(), phone)
+		if err != nil {
+			writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Maaf, Nala lagi kesulitan terhubung ke server 🙏\nCoba lagi sebentar ya.", State: "wait_phone"})
+			return
+		}
+		if found {
+			writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Nomor HP ini sudah pernah terdaftar ✅\nNama: " + p.Name + "\nEmail: " + p.Email + "\n\nKalau mau cek lagi, ketik /cek ya.", State: "idle"})
+			a.resetSession(uid)
+			return
+		}
+		a.mu.Lock()
+		s.Phone = phone
+		s.State = "wait_email"
+		s.UpdatedAt = time.Now()
+		a.mu.Unlock()
+		writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Oke, lanjut ya 📚\nSekarang kirim email aktif kamu.", State: "wait_email"})
+		return
+
+	case "wait_email":
+		email := strings.TrimSpace(strings.ToLower(text))
+		if _, err := mail.ParseAddress(email); err != nil {
+			writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Emailnya belum valid nih 🙏\nCoba kirim lagi dengan format benar ya. Contoh: nama@email.com", State: "wait_email"})
+			return
+		}
+
+		a.mu.Lock()
+		name := s.Name
+		phone := s.Phone
+		a.mu.Unlock()
+
+		_, err := a.createParticipantRecord(r.Context(), createParticipantRequest{
+			Name:   name,
+			Phone:  phone,
+			Email:  email,
+			Source: "bot-naik-kelas",
+		})
+		if err != nil {
+			if errors.Is(err, errConflict) {
+				writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Nomor HP ini sudah pernah terdaftar ✅", State: "idle"})
+				a.resetSession(uid)
+				return
+			}
+			writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Maaf, Nala lagi kesulitan menyimpan data 🙏\nCoba lagi sebentar ya.", State: "wait_email"})
+			return
+		}
+		a.resetSession(uid)
+		writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Yeay! 🎉 Pendaftaran kamu berhasil.\nSemangat belajar bareng Naik Kelas ya ✨📚", State: "idle"})
+		return
+
+	case "check_phone":
+		phone := normalizePhone(text)
+		if len(phone) < 9 {
+			writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Nomor HP belum valid. Coba kirim lagi ya.", State: "check_phone"})
+			return
+		}
+		p, found, err := a.findParticipantByPhone(r.Context(), phone)
+		if err != nil {
+			writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Maaf, Nala lagi kesulitan terhubung ke server 🙏\nCoba lagi sebentar ya.", State: "check_phone"})
+			return
+		}
+		a.resetSession(uid)
+		if found {
+			writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Nomor ini sudah terdaftar ✅\nNama: " + p.Name + "\nEmail: " + p.Email, State: "idle"})
+			return
+		}
+		writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Nomor ini belum terdaftar ya.\nYuk lanjut daftar dengan ketik /daftar ✨", State: "idle"})
+		return
+
+	default:
+		writeJSON(w, http.StatusOK, botMessageResponse{Reply: "Halo! Saya Nala ✨\nKetik /start untuk mulai, /daftar untuk registrasi, atau /cek untuk cek pendaftaran.", State: "idle"})
+	}
+}
+
+func (a *app) resetSession(uid string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.botSessions[uid] = &botSession{State: "idle", UpdatedAt: time.Now()}
 }
 
 func normalizePhone(v string) string {
