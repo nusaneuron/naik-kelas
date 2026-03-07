@@ -13,6 +13,7 @@
   - Selamat datang di Naik Kelas, perkenalkan saya Nala ✨
   - Ketik /daftar untuk registrasi peserta baru 📚
   - Ketik /cek untuk cek apakah nomor HP sudah terdaftar ✅
+  - Ketik /quiz untuk mulai latihan soal 🧠
 - Berhasil daftar: `Yeay! 🎉 Pendaftaran kamu berhasil. Semangat belajar bareng Naik Kelas ya ✨📚`
 - Sudah terdaftar: `Nomor HP ini sudah pernah terdaftar ✅`
 - Error server: `Maaf, Nala lagi kesulitan terhubung ke server 🙏 Coba lagi sebentar ya.`

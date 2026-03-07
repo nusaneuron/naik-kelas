@@ -31,7 +31,7 @@ Aplikasi sederhana untuk menampilkan **list peserta** yang bergabung dari pendaf
 - `GET /participants`
 - `GET /participants/check?phone=0812xxxx`
 - `POST /participants`
-- `POST /bot/message` (flow chat Nala: /start, /daftar, /cek, /batal)
+- `POST /bot/message` (flow chat Nala: /start, /daftar, /cek, /quiz, /batal)
 - `POST /telegram/webhook` (endpoint webhook Telegram)
   - body JSON:
     ```json

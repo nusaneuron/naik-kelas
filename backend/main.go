@@ -46,10 +46,26 @@ type botMessageResponse struct {
 }
 
 type botSession struct {
-	State     string
-	Name      string
-	Phone     string
-	UpdatedAt time.Time
+	State       string
+	Name        string
+	Phone       string
+	QuizIndex   int
+	QuizAnswers []string
+	UpdatedAt   time.Time
+}
+
+type quizQuestion struct {
+	Question string
+	Options  []string
+	Answer   string
+}
+
+var quizQuestions = []quizQuestion{
+	{Question: "1) Ibu kota Indonesia adalah...", Options: []string{"A. Bandung", "B. Jakarta", "C. Surabaya", "D. Medan"}, Answer: "B"},
+	{Question: "2) 5 + 7 = ...", Options: []string{"A. 10", "B. 11", "C. 12", "D. 13"}, Answer: "C"},
+	{Question: "3) Planet yang kita tinggali adalah...", Options: []string{"A. Mars", "B. Venus", "C. Saturnus", "D. Bumi"}, Answer: "D"},
+	{Question: "4) Bahasa resmi negara Indonesia adalah...", Options: []string{"A. Melayu", "B. Indonesia", "C. Jawa", "D. Inggris"}, Answer: "B"},
+	{Question: "5) 9 x 3 = ...", Options: []string{"A. 27", "B. 21", "C. 18", "D. 24"}, Answer: "A"},
 }
 
 type telegramUpdate struct {
@@ -351,18 +367,18 @@ func (a *app) processBotText(ctx context.Context, uid, text string) (reply, stat
 		a.botSessions[uid] = s
 	}
 	if time.Since(s.UpdatedAt) > 15*time.Minute {
-		s.State, s.Name, s.Phone = "idle", "", ""
+		s.State, s.Name, s.Phone, s.QuizIndex, s.QuizAnswers = "idle", "", "", 0, nil
 	}
 	a.mu.Unlock()
 
 	lower := strings.ToLower(strings.TrimSpace(text))
 	if lower == "/batal" {
 		a.resetSession(uid)
-		return "Oke, proses pendaftaran dibatalkan dulu ya 🙂\nKapan pun siap, ketik /daftar untuk mulai lagi.", "idle"
+		return "Oke, proses dibatalkan dulu ya 🙂\nKapan pun siap, ketik /daftar atau /quiz untuk mulai lagi.", "idle"
 	}
 	if lower == "/start" {
 		a.resetSession(uid)
-		return "Selamat datang di Naik Kelas, perkenalkan saya Nala ✨\nAku siap bantu kamu daftar belajar dengan cepat.\n\nKetik /daftar untuk registrasi peserta baru 📚\nKetik /cek untuk cek apakah nomor HP sudah terdaftar ✅", "idle"
+		return "Selamat datang di Naik Kelas, perkenalkan saya Nala ✨\nAku siap bantu kamu daftar belajar dengan cepat.\n\nKetik /daftar untuk registrasi peserta baru 📚\nKetik /cek untuk cek apakah nomor HP sudah terdaftar ✅\nKetik /quiz untuk mulai latihan soal 🧠", "idle"
 	}
 	if lower == "/daftar" {
 		a.mu.Lock()
@@ -375,6 +391,12 @@ func (a *app) processBotText(ctx context.Context, uid, text string) (reply, stat
 		a.botSessions[uid] = &botSession{State: "check_phone", UpdatedAt: time.Now()}
 		a.mu.Unlock()
 		return "Siap, aku bantu cek ✅\nKirim nomor HP yang ingin dicek ya.", "check_phone"
+	}
+	if lower == "/quiz" {
+		a.mu.Lock()
+		a.botSessions[uid] = &botSession{State: "quiz_answering", QuizIndex: 0, QuizAnswers: []string{}, UpdatedAt: time.Now()}
+		a.mu.Unlock()
+		return "Siap, kita mulai quiz Naik Kelas! 🔥\nJawab semua soal dulu ya. Nanti Nala cek di akhir.\n\n" + formatQuizQuestion(0), "quiz_answering"
 	}
 
 	a.mu.Lock()
@@ -449,8 +471,44 @@ func (a *app) processBotText(ctx context.Context, uid, text string) (reply, stat
 		}
 		return "Nomor ini belum terdaftar ya.\nYuk lanjut daftar dengan ketik /daftar ✨", "idle"
 
+	case "quiz_answering":
+		ans := normalizeQuizAnswer(text)
+		if ans == "" {
+			return "Jawab dengan A, B, C, atau D ya ✍️", "quiz_answering"
+		}
+		a.mu.Lock()
+		s.QuizAnswers = append(s.QuizAnswers, ans)
+		s.QuizIndex++
+		s.UpdatedAt = time.Now()
+		next := s.QuizIndex
+		answers := append([]string(nil), s.QuizAnswers...)
+		a.mu.Unlock()
+
+		if next < len(quizQuestions) {
+			return formatQuizQuestion(next), "quiz_answering"
+		}
+
+		wrong := 0
+		for i, q := range quizQuestions {
+			if i >= len(answers) || answers[i] != q.Answer {
+				wrong++
+			}
+		}
+		if wrong == 0 {
+			a.resetSession(uid)
+			return "Luar biasa! 🎉 Semua jawaban kamu benar!\nKamu berhasil menuntaskan quiz Naik Kelas.", "idle"
+		}
+
+		a.mu.Lock()
+		s.State = "quiz_answering"
+		s.QuizIndex = 0
+		s.QuizAnswers = []string{}
+		s.UpdatedAt = time.Now()
+		a.mu.Unlock()
+		return fmt.Sprintf("Semangat! Kamu masih punya %d jawaban yang belum tepat. Kita ulang dari awal ya 🔁\n\n%s", wrong, formatQuizQuestion(0)), "quiz_answering"
+
 	default:
-		return "Halo! Saya Nala ✨\nKetik /start untuk mulai, /daftar untuk registrasi, atau /cek untuk cek pendaftaran.", "idle"
+		return "Halo! Saya Nala ✨\nKetik /start untuk mulai, /daftar untuk registrasi, /cek untuk cek pendaftaran, atau /quiz untuk latihan soal.", "idle"
 	}
 }
 
@@ -515,6 +573,30 @@ func (a *app) resetSession(uid string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.botSessions[uid] = &botSession{State: "idle", UpdatedAt: time.Now()}
+}
+
+func formatQuizQuestion(index int) string {
+	if index < 0 || index >= len(quizQuestions) {
+		return "Soal tidak ditemukan."
+	}
+	q := quizQuestions[index]
+	return q.Question + "\n" + strings.Join(q.Options, "\n") + "\n\nBalas dengan: A / B / C / D"
+}
+
+func normalizeQuizAnswer(v string) string {
+	v = strings.ToUpper(strings.TrimSpace(v))
+	if len(v) == 0 {
+		return ""
+	}
+	if len(v) > 1 {
+		v = string([]rune(v)[0])
+	}
+	switch v {
+	case "A", "B", "C", "D":
+		return v
+	default:
+		return ""
+	}
 }
 
 func normalizePhone(v string) string {
