@@ -31,5 +31,5 @@ COPY --from=backend-builder /out/backend-app /app/backend-app
 COPY deploy/nginx.conf /etc/nginx/http.d/default.conf
 COPY deploy/supervisord.conf /etc/supervisord.conf
 
-EXPOSE 80
+EXPOSE 8080
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
