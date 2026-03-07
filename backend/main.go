@@ -328,9 +328,9 @@ func (a *app) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uid := strconv.FormatInt(upd.Message.From.ID, 10)
-	reply, _ := a.processBotText(r.Context(), uid, text)
+	reply, state := a.processBotText(r.Context(), uid, text)
 	if strings.TrimSpace(reply) != "" {
-		if err := a.sendTelegramMessage(r.Context(), upd.Message.Chat.ID, reply); err != nil {
+		if err := a.sendTelegramMessage(r.Context(), upd.Message.Chat.ID, reply, state); err != nil {
 			log.Printf("telegram send error: %v", err)
 		}
 	}
@@ -338,8 +338,21 @@ func (a *app) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-func (a *app) sendTelegramMessage(ctx context.Context, chatID int64, text string) error {
+func (a *app) sendTelegramMessage(ctx context.Context, chatID int64, text, state string) error {
 	payload := map[string]any{"chat_id": chatID, "text": text}
+
+	if state == "quiz_answering" {
+		payload["reply_markup"] = map[string]any{
+			"keyboard":          [][]string{{"A", "B", "C", "D"}},
+			"resize_keyboard":   true,
+			"one_time_keyboard": false,
+		}
+	} else {
+		payload["reply_markup"] = map[string]any{
+			"remove_keyboard": true,
+		}
+	}
+
 	b, _ := json.Marshal(payload)
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", a.telegramBotToken)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(b))
