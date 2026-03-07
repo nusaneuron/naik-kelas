@@ -7,7 +7,9 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"net/mail"
 	"os"
+	"strings"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -17,6 +19,7 @@ type Participant struct {
 	ID       int       `json:"id"`
 	Name     string    `json:"name"`
 	Phone    string    `json:"phone"`
+	Email    string    `json:"email"`
 	JoinedAt time.Time `json:"joinedAt"`
 	Source   string    `json:"source"`
 }
@@ -24,6 +27,7 @@ type Participant struct {
 type createParticipantRequest struct {
 	Name   string `json:"name"`
 	Phone  string `json:"phone"`
+	Email  string `json:"email"`
 	Source string `json:"source"`
 }
 
@@ -57,6 +61,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", a.handleHealth)
 	mux.HandleFunc("/participants", a.handleParticipants)
+	mux.HandleFunc("/participants/check", a.checkParticipantByPhone)
 
 	port := getenv("PORT", "8080")
 	addr := ":" + port
@@ -72,6 +77,7 @@ func (a *app) initDB(ctx context.Context) error {
 			id SERIAL PRIMARY KEY,
 			name TEXT NOT NULL,
 			phone TEXT NOT NULL,
+			email TEXT,
 			source TEXT NOT NULL DEFAULT 'bot-naik-kelas',
 			joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)
@@ -80,6 +86,9 @@ func (a *app) initDB(ctx context.Context) error {
 		return err
 	}
 
+	// Migration for existing tables
+	_, _ = a.db.ExecContext(ctx, `ALTER TABLE participants ADD COLUMN IF NOT EXISTS email TEXT`)
+
 	var total int
 	if err := a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM participants`).Scan(&total); err != nil {
 		return err
@@ -87,10 +96,10 @@ func (a *app) initDB(ctx context.Context) error {
 
 	if total == 0 {
 		_, err = a.db.ExecContext(ctx, `
-			INSERT INTO participants (name, phone, source) VALUES
-			('Aldi', '0812xxxx1111', 'bot-naik-kelas'),
-			('Rina', '0813xxxx2222', 'bot-naik-kelas'),
-			('Bimo', '0821xxxx3333', 'bot-naik-kelas')
+			INSERT INTO participants (name, phone, email, source) VALUES
+			('Aldi', '0812xxxx1111', 'aldi@example.com', 'bot-naik-kelas'),
+			('Rina', '0813xxxx2222', 'rina@example.com', 'bot-naik-kelas'),
+			('Bimo', '0821xxxx3333', 'bimo@example.com', 'bot-naik-kelas')
 		`)
 		if err != nil {
 			return err
@@ -138,7 +147,7 @@ func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) listParticipants(w http.ResponseWriter, r *http.Request) {
 	rows, err := a.db.QueryContext(r.Context(), `
-		SELECT id, name, phone, source, joined_at
+		SELECT id, name, phone, email, source, joined_at
 		FROM participants
 		ORDER BY joined_at DESC, id DESC
 	`)
@@ -151,7 +160,7 @@ func (a *app) listParticipants(w http.ResponseWriter, r *http.Request) {
 	items := make([]Participant, 0)
 	for rows.Next() {
 		var p Participant
-		if err := rows.Scan(&p.ID, &p.Name, &p.Phone, &p.Source, &p.JoinedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Phone, &p.Email, &p.Source, &p.JoinedAt); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to scan participant"})
 			return
 		}
@@ -166,6 +175,37 @@ func (a *app) listParticipants(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "total": len(items)})
 }
 
+func (a *app) checkParticipantByPhone(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	phone := normalizePhone(r.URL.Query().Get("phone"))
+	if phone == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "phone query is required"})
+		return
+	}
+
+	var p Participant
+	err := a.db.QueryRowContext(r.Context(), `
+		SELECT id, name, phone, email, source, joined_at
+		FROM participants
+		WHERE phone = $1
+		LIMIT 1
+	`, phone).Scan(&p.ID, &p.Name, &p.Phone, &p.Email, &p.Source, &p.JoinedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusOK, map[string]any{"exists": false})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to check participant"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"exists": true, "item": p})
+}
+
 func (a *app) createParticipant(w http.ResponseWriter, r *http.Request) {
 	var req createParticipantRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -173,8 +213,17 @@ func (a *app) createParticipant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Name == "" || req.Phone == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name and phone are required"})
+	req.Name = strings.TrimSpace(req.Name)
+	req.Phone = normalizePhone(req.Phone)
+	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+
+	if req.Name == "" || req.Phone == "" || req.Email == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name, phone, and email are required"})
+		return
+	}
+
+	if _, err := mail.ParseAddress(req.Email); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid email"})
 		return
 	}
 
@@ -182,22 +231,37 @@ func (a *app) createParticipant(w http.ResponseWriter, r *http.Request) {
 		req.Source = "bot-naik-kelas"
 	}
 
+	var exists bool
+	if err := a.db.QueryRowContext(r.Context(), `SELECT EXISTS(SELECT 1 FROM participants WHERE phone = $1)`, req.Phone).Scan(&exists); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to validate participant"})
+		return
+	}
+	if exists {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":   "phone already registered",
+			"message": "Nomor HP sudah pernah terdaftar",
+		})
+		return
+	}
+
 	var p Participant
 	err := a.db.QueryRowContext(r.Context(), `
-		INSERT INTO participants (name, phone, source)
-		VALUES ($1, $2, $3)
-		RETURNING id, name, phone, source, joined_at
-	`, req.Name, req.Phone, req.Source).Scan(&p.ID, &p.Name, &p.Phone, &p.Source, &p.JoinedAt)
+		INSERT INTO participants (name, phone, email, source)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, name, phone, email, source, joined_at
+	`, req.Name, req.Phone, req.Email, req.Source).Scan(&p.ID, &p.Name, &p.Phone, &p.Email, &p.Source, &p.JoinedAt)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create participant"})
-			return
-		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create participant"})
 		return
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]any{"item": p})
+}
+
+func normalizePhone(v string) string {
+	v = strings.TrimSpace(v)
+	replacer := strings.NewReplacer(" ", "", "-", "", "(", "", ")", "")
+	return replacer.Replace(v)
 }
 
 func withCORS(next http.Handler) http.Handler {

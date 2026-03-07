@@ -27,15 +27,21 @@ Aplikasi sederhana untuk menampilkan **list peserta** yang bergabung dari pendaf
 ## Endpoint API
 - `GET /health`
 - `GET /participants`
+- `GET /participants/check?phone=0812xxxx`
 - `POST /participants`
   - body JSON:
     ```json
     {
-      "name": "Nama Peserta",
+      "name": "Nama Lengkap",
       "phone": "0812xxxx",
+      "email": "email@contoh.com",
       "source": "bot-naik-kelas"
     }
     ```
+  - validasi:
+    - wajib `name`, `phone`, `email`
+    - cek format email
+    - cek duplikasi `phone` (kalau sudah ada → 409 Conflict)
 
 ## Jalankan lokal
 

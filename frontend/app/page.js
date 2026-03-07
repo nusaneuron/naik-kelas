@@ -30,12 +30,13 @@ export default function Page() {
       {error ? <p style={{ color: '#fca5a5' }}>{error}</p> : null}
 
       <div style={{ overflowX: 'auto', background: '#101a2f', border: '1px solid #22304d', borderRadius: 12 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 680 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 820 }}>
           <thead>
             <tr style={{ background: '#16233d' }}>
               <th style={th}>ID</th>
               <th style={th}>Nama</th>
               <th style={th}>No. HP</th>
+              <th style={th}>Email</th>
               <th style={th}>Sumber</th>
               <th style={th}>Tanggal Daftar</th>
             </tr>
@@ -46,13 +47,14 @@ export default function Page() {
                 <td style={td}>{p.id}</td>
                 <td style={td}>{p.name}</td>
                 <td style={td}>{p.phone}</td>
+                <td style={td}>{p.email || '-'}</td>
                 <td style={td}>{p.source}</td>
                 <td style={td}>{new Date(p.joinedAt).toLocaleString('id-ID')}</td>
               </tr>
             ))}
             {!items.length && (
               <tr>
-                <td style={td} colSpan={5}>Belum ada peserta.</td>
+                <td style={td} colSpan={6}>Belum ada peserta.</td>
               </tr>
             )}
           </tbody>
