@@ -347,8 +347,8 @@ export default function Page() {
         ) : null}
 
         {showAdminView ? (
-          <section style={{ ...card2, padding: 0, overflow: 'hidden' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', minHeight: 520 }}>
+          <section style={{ ...card2, padding: 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '220px minmax(0,1fr)', minHeight: 520 }}>
               <aside style={{ background: '#0b0f1a', borderRight: '1px solid #273244', padding: 14 }}>
                 <h3 style={{ marginTop: 4, marginBottom: 14 }}>Admin Menu</h3>
                 <div style={{ display: 'grid', gap: 8 }}>
@@ -375,7 +375,7 @@ export default function Page() {
                 </div>
               </aside>
 
-              <div style={{ padding: 16 }}>
+              <div style={{ padding: 16, overflowX: 'auto' }}>
                 {adminSection === 'peserta' ? (
                   <section style={card2}>
                     <h2>Admin · Peserta</h2>
