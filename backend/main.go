@@ -1773,6 +1773,12 @@ func (a *app) sendTelegramMessage(ctx context.Context, chatID int64, text, state
 			"resize_keyboard":   true,
 			"one_time_keyboard": false,
 		}
+	} else if state == "poin_menu" {
+		payload["reply_markup"] = map[string]any{
+			"keyboard":          [][]string{{"saldo saya", "transaksi saya"}},
+			"resize_keyboard":   true,
+			"one_time_keyboard": false,
+		}
 	} else {
 		payload["reply_markup"] = map[string]any{
 			"remove_keyboard": true,
@@ -1884,16 +1890,11 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		if !registered {
 			return "Kamu belum terdaftar. Ketik /daftar dulu ya ✨", "idle"
 		}
-		var webUserID int64
-		err = a.db.QueryRowContext(ctx, `SELECT user_id FROM telegram_links WHERE telegram_user_id = $1`, uid).Scan(&webUserID)
-		if err != nil {
-			return "Akunmu belum tersinkron. Coba /daftar ulang ya 🙏", "idle"
-		}
-		bal, err := a.getPointBalance(ctx, webUserID)
-		if err != nil {
-			return "Maaf, belum bisa ambil saldo poin sekarang 🙏", "idle"
-		}
-		return fmt.Sprintf("Saldo poin kamu saat ini: %d poin 🌟", bal), "idle"
+		a.mu.Lock()
+		s.State = "poin_menu"
+		s.UpdatedAt = time.Now()
+		a.mu.Unlock()
+		return "Menu Poin 🌟\nPilih salah satu:\n- saldo saya\n- transaksi saya", "poin_menu"
 	}
 
 	if lower == "/jadwal_belajar" {
@@ -2091,6 +2092,53 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		s.UpdatedAt = time.Now()
 		a.mu.Unlock()
 		return fmt.Sprintf("Semangat! Kamu masih punya %d jawaban yang belum tepat di kategori %s.\nIni percobaan ke-%d, kita ulang dari awal ya 🔁\n\n%s", wrong, cat.Name, attemptNo, formatQuizQuestion(cat, 0)), "quiz_answering"
+
+	case "poin_menu":
+		if lower != "saldo saya" && lower != "transaksi saya" {
+			return "Pilih salah satu ya:\n- saldo saya\n- transaksi saya", "poin_menu"
+		}
+		var webUserID int64
+		if err := a.db.QueryRowContext(ctx, `SELECT user_id FROM telegram_links WHERE telegram_user_id = $1`, uid).Scan(&webUserID); err != nil {
+			a.resetSession(uid)
+			return "Akunmu belum tersinkron. Coba /daftar ulang ya 🙏", "idle"
+		}
+		if lower == "saldo saya" {
+			bal, err := a.getPointBalance(ctx, webUserID)
+			if err != nil {
+				return "Maaf, belum bisa ambil saldo poin sekarang 🙏", "poin_menu"
+			}
+			return fmt.Sprintf("Saldo poin kamu saat ini: %d poin 🌟", bal), "poin_menu"
+		}
+		rows, err := a.db.QueryContext(ctx, `
+			SELECT delta, type, reason, created_at
+			FROM point_ledger
+			WHERE user_id = $1
+			ORDER BY created_at DESC
+			LIMIT 10
+		`, webUserID)
+		if err != nil {
+			return "Maaf, belum bisa ambil riwayat transaksi sekarang 🙏", "poin_menu"
+		}
+		defer rows.Close()
+		lines := []string{"Transaksi poin kamu (10 terbaru):"}
+		i := 0
+		for rows.Next() {
+			var delta int64
+			var typ, reason string
+			var created time.Time
+			if rows.Scan(&delta, &typ, &reason, &created) == nil {
+				i++
+				sign := fmt.Sprintf("%d", delta)
+				if delta > 0 {
+					sign = fmt.Sprintf("+%d", delta)
+				}
+				lines = append(lines, fmt.Sprintf("%d) %s poin • %s • %s", i, sign, strings.TrimSpace(reason), created.In(time.FixedZone("WIB", 7*3600)).Format("02 Jan 2006 15:04 WIB")))
+			}
+		}
+		if i == 0 {
+			return "Belum ada transaksi poin untuk akunmu ya.", "poin_menu"
+		}
+		return strings.Join(lines, "\n"), "poin_menu"
 
 	case "reminder_set_time", "reminder_update_time":
 		tm, ok := normalizeTimeHHMM(text)
