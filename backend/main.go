@@ -548,8 +548,9 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 			return "Maaf, Nala lagi kesulitan terhubung ke server 🙏\nCoba lagi sebentar ya.", "wait_phone"
 		}
 		if found {
+			_ = a.saveBotProfile(ctx, uid, p.Name, displayName)
 			a.resetSession(uid)
-			return "Nomor HP ini sudah pernah terdaftar ✅\nNama: " + p.Name + "\nEmail: " + p.Email + "\n\nKalau mau cek lagi, ketik /cek ya.", "idle"
+			return "Nomor HP ini sudah pernah terdaftar ✅\nNama: " + p.Name + "\nEmail: " + p.Email + "\n\nAkun Telegram kamu sudah saya sinkronkan ke data pendaftaran. Kalau mau cek lagi, ketik /cek ya.", "idle"
 		}
 		a.mu.Lock()
 		s.Phone = phone
