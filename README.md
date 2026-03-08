@@ -63,6 +63,10 @@ Aplikasi sederhana untuk menampilkan **list peserta** yang bergabung dari pendaf
 - `GET|POST /admin/categories` (role admin; action create/update/delete)
 - `GET|POST /admin/questions` (role admin; action create/update/delete)
 
+Security hardening (phase 5):
+- Login rate limit: lock sementara 10 menit setelah 5 gagal login beruntun per no HP.
+- Admin audit log tercatat di tabel `admin_audit_logs` untuk aksi admin utama.
+
 ## Jalankan lokal
 
 ### 1) Backend

@@ -316,6 +316,32 @@ func (a *app) initDB(ctx context.Context) error {
 	}
 
 	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS auth_login_attempts (
+			phone TEXT PRIMARY KEY,
+			failed_count INT NOT NULL DEFAULT 0,
+			locked_until TIMESTAMPTZ,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS admin_audit_logs (
+			id BIGSERIAL PRIMARY KEY,
+			admin_user_id BIGINT NOT NULL,
+			action TEXT NOT NULL,
+			target TEXT NOT NULL DEFAULT '',
+			detail JSONB,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	_, err = a.db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS question_categories (
 			id BIGSERIAL PRIMARY KEY,
 			code TEXT NOT NULL UNIQUE,
@@ -511,6 +537,7 @@ func (a *app) handleAdminBootstrap(w http.ResponseWriter, r *http.Request) {
 			ON CONFLICT (user_id) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW()
 		`, userID, strings.TrimSpace(req.Name))
 	}
+	_ = a.logAdminAction(r.Context(), 0, "admin.bootstrap", phone, map[string]any{"user_id": userID, "phone": phone})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "user_id": userID, "phone": phone, "role": "admin", "default_password": req.Password})
 }
 
@@ -533,11 +560,17 @@ func (a *app) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if locked, until, err := a.isLoginLocked(r.Context(), phone); err == nil && locked {
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "too many failed attempts", "retry_after": until.Format(time.RFC3339)})
+		return
+	}
+
 	var userID int64
 	var hash, role string
 	var mustChange, isActive bool
 	err := a.db.QueryRowContext(r.Context(), `SELECT id, password_hash, role, must_change_password, is_active FROM users WHERE phone=$1`, phone).Scan(&userID, &hash, &role, &mustChange, &isActive)
 	if err != nil {
+		_ = a.recordFailedLogin(r.Context(), phone)
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
 		return
 	}
@@ -546,9 +579,11 @@ func (a *app) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.Password)) != nil {
+		_ = a.recordFailedLogin(r.Context(), phone)
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
 		return
 	}
+	_ = a.resetFailedLogin(r.Context(), phone)
 
 	tok := randomToken(32)
 	expires := time.Now().Add(7 * 24 * time.Hour)
@@ -558,8 +593,50 @@ func (a *app) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{Name: "nk_session", Value: tok, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: false, Expires: expires})
+	isSecure := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+	http.SetCookie(w, &http.Cookie{Name: "nk_session", Value: tok, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: isSecure, Expires: expires})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "role": role, "must_change_password": mustChange})
+}
+
+func (a *app) isLoginLocked(ctx context.Context, phone string) (bool, time.Time, error) {
+	var failed int
+	var lockedUntil sql.NullTime
+	err := a.db.QueryRowContext(ctx, `SELECT failed_count, locked_until FROM auth_login_attempts WHERE phone=$1`, phone).Scan(&failed, &lockedUntil)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, time.Time{}, nil
+		}
+		return false, time.Time{}, err
+	}
+	if lockedUntil.Valid && time.Now().Before(lockedUntil.Time) {
+		return true, lockedUntil.Time, nil
+	}
+	return false, time.Time{}, nil
+}
+
+func (a *app) recordFailedLogin(ctx context.Context, phone string) error {
+	var failed int
+	var lockedUntil sql.NullTime
+	err := a.db.QueryRowContext(ctx, `SELECT failed_count, locked_until FROM auth_login_attempts WHERE phone=$1`, phone).Scan(&failed, &lockedUntil)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			_, err = a.db.ExecContext(ctx, `INSERT INTO auth_login_attempts (phone, failed_count, updated_at) VALUES ($1, 1, NOW())`, phone)
+			return err
+		}
+		return err
+	}
+	failed++
+	if failed >= 5 {
+		_, err = a.db.ExecContext(ctx, `UPDATE auth_login_attempts SET failed_count=$1, locked_until=NOW() + interval '10 minutes', updated_at=NOW() WHERE phone=$2`, failed, phone)
+		return err
+	}
+	_, err = a.db.ExecContext(ctx, `UPDATE auth_login_attempts SET failed_count=$1, updated_at=NOW() WHERE phone=$2`, failed, phone)
+	return err
+}
+
+func (a *app) resetFailedLogin(ctx context.Context, phone string) error {
+	_, err := a.db.ExecContext(ctx, `DELETE FROM auth_login_attempts WHERE phone=$1`, phone)
+	return err
 }
 
 func (a *app) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
@@ -570,7 +647,8 @@ func (a *app) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie("nk_session"); err == nil {
 		_, _ = a.db.ExecContext(r.Context(), `DELETE FROM user_sessions WHERE token=$1`, c.Value)
 	}
-	http.SetCookie(w, &http.Cookie{Name: "nk_session", Value: "", Path: "/", HttpOnly: true, MaxAge: -1, Expires: time.Unix(0, 0)})
+	isSecure := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+	http.SetCookie(w, &http.Cookie{Name: "nk_session", Value: "", Path: "/", HttpOnly: true, Secure: isSecure, MaxAge: -1, Expires: time.Unix(0, 0)})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -773,7 +851,7 @@ func (a *app) handleAdminParticipants(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleAdminResetPassword(w http.ResponseWriter, r *http.Request) {
-	_, err := a.requireRole(r.Context(), r, "admin")
+	admin, err := a.requireRole(r.Context(), r, "admin")
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
@@ -807,11 +885,12 @@ func (a *app) handleAdminResetPassword(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed reset password"})
 		return
 	}
+	_ = a.logAdminAction(r.Context(), admin.ID, "participants.reset_password", phone, map[string]any{"phone": phone})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "phone": phone, "new_default_password": pass})
 }
 
 func (a *app) handleAdminToggleActive(w http.ResponseWriter, r *http.Request) {
-	_, err := a.requireRole(r.Context(), r, "admin")
+	admin, err := a.requireRole(r.Context(), r, "admin")
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
@@ -833,11 +912,12 @@ func (a *app) handleAdminToggleActive(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed update status"})
 		return
 	}
+	_ = a.logAdminAction(r.Context(), admin.ID, "participants.toggle_active", fmt.Sprint(req.UserID), map[string]any{"user_id": req.UserID, "is_active": req.IsActive})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (a *app) handleAdminCategories(w http.ResponseWriter, r *http.Request) {
-	_, err := a.requireRole(r.Context(), r, "admin")
+	admin, err := a.requireRole(r.Context(), r, "admin")
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
@@ -891,6 +971,7 @@ func (a *app) handleAdminCategories(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed action"})
 			return
 		}
+		_ = a.logAdminAction(r.Context(), admin.ID, "categories."+req.Action, fmt.Sprint(req.ID), req)
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
@@ -898,7 +979,7 @@ func (a *app) handleAdminCategories(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleAdminQuestions(w http.ResponseWriter, r *http.Request) {
-	_, err := a.requireRole(r.Context(), r, "admin")
+	admin, err := a.requireRole(r.Context(), r, "admin")
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
@@ -960,6 +1041,7 @@ func (a *app) handleAdminQuestions(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed action"})
 			return
 		}
+		_ = a.logAdminAction(r.Context(), admin.ID, "questions."+req.Action, fmt.Sprint(req.ID), req)
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
@@ -1007,6 +1089,18 @@ func (a *app) requireRole(ctx context.Context, r *http.Request, roles ...string)
 		}
 	}
 	return authUser{}, errors.New("forbidden")
+}
+
+func (a *app) logAdminAction(ctx context.Context, adminUserID int64, action, target string, detail any) error {
+	if strings.TrimSpace(action) == "" {
+		return nil
+	}
+	b, _ := json.Marshal(detail)
+	_, err := a.db.ExecContext(ctx, `
+		INSERT INTO admin_audit_logs (admin_user_id, action, target, detail)
+		VALUES ($1,$2,$3,$4::jsonb)
+	`, adminUserID, action, target, string(b))
+	return err
 }
 
 func randomToken(n int) string {
