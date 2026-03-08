@@ -24,7 +24,7 @@ export default function Page() {
   const [questions, setQuestions] = useState([]);
   const [adminReminders, setAdminReminders] = useState([]);
   const [adminPointHistory, setAdminPointHistory] = useState([]);
-  const [pointUserId, setPointUserId] = useState('');
+  const [pointPhone, setPointPhone] = useState('');
   const [pointDelta, setPointDelta] = useState('');
   const [pointReason, setPointReason] = useState('');
 
@@ -141,14 +141,22 @@ export default function Page() {
   }
 
   async function adjustPoints() {
+    const normalized = (pointPhone || '').replace(/[^0-9]/g, '');
+    const target = participants.find((p) => (p.phone || '').replace(/[^0-9]/g, '') === normalized);
+    if (!target) {
+      setErr('Nomor telepon peserta tidak ditemukan.');
+      return;
+    }
     await fetch(`${apiBase}/admin/points/adjust`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-      body: JSON.stringify({ user_id: Number(pointUserId), delta: Number(pointDelta), reason: pointReason })
+      body: JSON.stringify({ user_id: Number(target.id), delta: Number(pointDelta), reason: pointReason })
     });
-    setPointUserId(''); setPointDelta(''); setPointReason('');
+    setPointPhone(''); setPointDelta(''); setPointReason('');
     await loadAdmin();
     await loadParticipant();
   }
+
+  const matchedParticipant = participants.find((p) => ((p.phone || '').replace(/[^0-9]/g, '') === (pointPhone || '').replace(/[^0-9]/g, '')));
 
   if (loading) return <main style={wrap}><p>Loading...</p></main>;
 
@@ -179,7 +187,7 @@ export default function Page() {
             <section style={card2}><h2>Admin · Kategori Soal</h2><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><input style={inputSmall} placeholder='code' value={newCategoryCode} onChange={(e)=>setNewCategoryCode(e.target.value)} /><input style={inputSmall} placeholder='name' value={newCategoryName} onChange={(e)=>setNewCategoryName(e.target.value)} /><button style={btnMini} onClick={addCategory}>Tambah</button></div><ul>{categories.map((c)=><li key={c.id}>{c.code} · {c.name}</li>)}</ul></section>
             <section style={card2}><h2>Admin · Bank Soal</h2><div style={{display:'grid',gap:8}}><select style={input} value={qCategoryId} onChange={(e)=>setQCategoryId(e.target.value)}><option value=''>Pilih kategori</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select><input style={input} placeholder='Pertanyaan' value={qText} onChange={(e)=>setQText(e.target.value)} /><input style={input} placeholder='Opsi A' value={qA} onChange={(e)=>setQA(e.target.value)} /><input style={input} placeholder='Opsi B' value={qB} onChange={(e)=>setQB(e.target.value)} /><input style={input} placeholder='Opsi C' value={qC} onChange={(e)=>setQC(e.target.value)} /><input style={input} placeholder='Opsi D' value={qD} onChange={(e)=>setQD(e.target.value)} /><select style={input} value={qCorrect} onChange={(e)=>setQCorrect(e.target.value)}><option>A</option><option>B</option><option>C</option><option>D</option></select><button style={btnMini} onClick={addQuestion}>Tambah Soal</button></div><p style={{color:'#94a3b8'}}>Total soal: {questions.length}</p></section>
             <section style={card2}><h2>Admin · Jadwal Belajar Peserta</h2><ul>{adminReminders.map((r, i)=><li key={i}>{r.name || '-'} ({r.phone || '-'}) · {r.time_of_day} ({r.timezone}) · {r.is_active ? 'aktif' : 'nonaktif'}</li>)}{!adminReminders.length ? <li>Belum ada jadwal belajar yang diset.</li> : null}</ul></section>
-            <section style={card2}><h2>Admin · Poin Peserta</h2><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><input style={inputSmall} placeholder='user_id' value={pointUserId} onChange={(e)=>setPointUserId(e.target.value)} /><input style={inputSmall} placeholder='delta (+/-)' value={pointDelta} onChange={(e)=>setPointDelta(e.target.value)} /><input style={inputSmall} placeholder='reason' value={pointReason} onChange={(e)=>setPointReason(e.target.value)} /><button style={btnMini} onClick={adjustPoints}>Submit Poin</button></div><ul>{adminPointHistory.slice(0,20).map((p,i)=><li key={i}>{p.name || '-'} ({p.phone || '-'}) · {p.delta>0?`+${p.delta}`:p.delta} · {p.reason} · {p.type}</li>)}{!adminPointHistory.length?<li>Belum ada transaksi poin.</li>:null}</ul></section>
+            <section style={card2}><h2>Admin · Poin Peserta</h2><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><input style={inputSmall} placeholder='nomor telepon peserta' value={pointPhone} onChange={(e)=>setPointPhone(e.target.value)} /><input style={inputSmall} placeholder='delta (+/-)' value={pointDelta} onChange={(e)=>setPointDelta(e.target.value)} /><input style={inputSmall} placeholder='reason' value={pointReason} onChange={(e)=>setPointReason(e.target.value)} /><button style={btnMini} onClick={adjustPoints}>Submit Poin</button></div><p style={{color:'#94a3b8', marginTop:8}}>Nama terdeteksi: <b>{matchedParticipant?.name || '-'}</b>{matchedParticipant?.phone ? ` (${matchedParticipant.phone})` : ''}</p><ul>{adminPointHistory.slice(0,20).map((p,i)=><li key={i}>{p.name || '-'} ({p.phone || '-'}) · {p.delta>0?`+${p.delta}`:p.delta} · {p.reason} · {p.type}</li>)}{!adminPointHistory.length?<li>Belum ada transaksi poin.</li>:null}</ul></section>
           </>
         ) : null}
       </div>
