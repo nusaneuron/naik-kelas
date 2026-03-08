@@ -200,9 +200,9 @@ export default function Page() {
 }
 
 const wrap = { minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 16 };
-const card = { width: '100%', maxWidth: 420, border: '1px solid #334155', borderRadius: 12, padding: 20, background: '#0f172a' };
-const card2 = { border: '1px solid #334155', borderRadius: 12, padding: 16, background: '#0f172a', marginTop: 16 };
-const input = { width: '100%', padding: 10, borderRadius: 8, border: '1px solid #334155', background: '#111827', color: 'white' };
-const inputSmall = { padding: 10, borderRadius: 8, border: '1px solid #334155', background: '#111827', color: 'white' };
-const btn = { border: '1px solid #374151', background: '#111827', color: 'white', borderRadius: 10, padding: '8px 14px', cursor: 'pointer' };
-const btnMini = { border: '1px solid #374151', background: '#1f2937', color: 'white', borderRadius: 8, padding: '6px 10px', cursor: 'pointer' };
+const card = { width: '100%', maxWidth: 420, border: '1px solid #334155', borderRadius: 'var(--nk-radius-lg)', padding: 20, background: 'var(--nk-bg-surface)', boxShadow: 'var(--nk-shadow-sm)' };
+const card2 = { border: '1px solid #334155', borderRadius: 'var(--nk-radius-lg)', padding: 16, background: 'var(--nk-bg-surface)', marginTop: 16, boxShadow: 'var(--nk-shadow-sm)' };
+const input = { width: '100%', padding: 10, borderRadius: 'var(--nk-radius-sm)', border: '1px solid #334155', background: 'var(--nk-bg-elevated)', color: 'white' };
+const inputSmall = { padding: 10, borderRadius: 'var(--nk-radius-sm)', border: '1px solid #334155', background: 'var(--nk-bg-elevated)', color: 'white' };
+const btn = { border: 0, background: 'var(--nk-cta)', color: 'white', borderRadius: 'var(--nk-radius-md)', padding: '8px 14px', cursor: 'pointer', fontWeight: 600 };
+const btnMini = { border: '1px solid #374151', background: '#1f2937', color: 'white', borderRadius: 'var(--nk-radius-sm)', padding: '6px 10px', cursor: 'pointer' };

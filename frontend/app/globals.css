@@ -1,0 +1,76 @@
+:root {
+  /* Naik Kelas Design Tokens */
+  --nk-bg-main: #be94f5;
+  --nk-bg-surface: #0f172a;
+  --nk-bg-elevated: #111827;
+
+  --nk-cta: #ff5734;
+  --nk-accent: #fccc42;
+
+  --nk-ink: #151313;
+  --nk-text: #e5e7eb;
+  --nk-muted: #94a3b8;
+
+  --nk-success: #16a34a;
+  --nk-warning: #f59e0b;
+  --nk-danger: #dc2626;
+
+  --nk-radius-sm: 8px;
+  --nk-radius-md: 12px;
+  --nk-radius-lg: 16px;
+  --nk-radius-xl: 24px;
+  --nk-pill: 999px;
+
+  --nk-shadow-sm: 0 6px 14px rgba(0, 0, 0, 0.18);
+  --nk-shadow-md: 0 12px 28px rgba(0, 0, 0, 0.24);
+
+  --nk-space-1: 4px;
+  --nk-space-2: 8px;
+  --nk-space-3: 12px;
+  --nk-space-4: 16px;
+  --nk-space-5: 24px;
+  --nk-space-6: 32px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: radial-gradient(1200px 700px at 20% 10%, rgba(190, 148, 245, 0.25), transparent 55%),
+    radial-gradient(900px 500px at 80% 0%, rgba(252, 204, 66, 0.15), transparent 55%),
+    linear-gradient(180deg, #0b1220 0%, #0b1220 100%);
+  color: var(--nk-text);
+  font-family: Inter, Arial, sans-serif;
+}
+
+.nk-card {
+  border: 1px solid #334155;
+  border-radius: var(--nk-radius-lg);
+  background: var(--nk-bg-surface);
+  box-shadow: var(--nk-shadow-sm);
+}
+
+.nk-btn-primary {
+  border: 0;
+  border-radius: var(--nk-radius-md);
+  padding: 9px 14px;
+  cursor: pointer;
+  background: var(--nk-cta);
+  color: white;
+  font-weight: 600;
+}
+
+.nk-btn-primary:hover {
+  filter: brightness(1.05);
+}
+
+.nk-muted {
+  color: var(--nk-muted);
+}
