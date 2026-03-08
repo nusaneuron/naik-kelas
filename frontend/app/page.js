@@ -133,6 +133,47 @@ export default function Page() {
     setBusy(false);
   }
 
+  async function toggleRole(p) {
+    setBusy(true); setActionMsg('');
+    const nextRole = p.role === 'admin' ? 'participant' : 'admin';
+    await fetch(`${apiBase}/admin/participants/set-role`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ user_id: p.id, role: nextRole })
+    });
+    await loadAdmin();
+    setActionType('success'); setActionMsg(`Role ${p.phone} diubah ke ${nextRole}.`);
+    setBusy(false);
+  }
+
+  async function toggleActive(p) {
+    setBusy(true); setActionMsg('');
+    await fetch(`${apiBase}/admin/participants/toggle-active`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ user_id: p.id, is_active: !p.is_active })
+    });
+    await loadAdmin();
+    setActionType('success'); setActionMsg(`Status ${p.phone} berhasil diperbarui.`);
+    setBusy(false);
+  }
+
+  async function deleteParticipant(userId) {
+    if (!confirm('Yakin hapus peserta ini?')) return;
+    setBusy(true); setActionMsg('');
+    const res = await fetch(`${apiBase}/admin/participants/delete`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ user_id: userId })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setActionType('error'); setActionMsg(d.error || 'Gagal menghapus peserta.');
+      setBusy(false);
+      return;
+    }
+    await loadAdmin();
+    setActionType('success'); setActionMsg('Peserta berhasil dihapus.');
+    setBusy(false);
+  }
+
   async function addCategory() {
     setBusy(true); setActionMsg('');
     const isEdit = !!editingCategoryId;
@@ -320,7 +361,39 @@ export default function Page() {
                 {adminSection === 'peserta' ? (
                   <section style={card2}>
                     <h2>Admin · Peserta</h2>
-                    <ul>{participants.map((p)=><li key={p.id}>{p.name || '-'} · {p.phone} · <b>{p.role}</b> · {p.is_active?'active':'disabled'} <button style={btnMini} disabled={busy} onClick={()=>resetPassword(p.id)}>{busy?'Proses...':'Reset Pass'}</button></li>)}{!participants.length?<li className='nk-empty'>Belum ada peserta.</li>:null}</ul>
+                    {participants.length ? (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 920 }}>
+                          <thead>
+                            <tr>
+                              <th style={thAdmin}>Nama</th>
+                              <th style={thAdmin}>No. HP</th>
+                              <th style={thAdmin}>Role</th>
+                              <th style={thAdmin}>Status</th>
+                              <th style={thAdmin}>Aksi</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {participants.map((p) => (
+                              <tr key={p.id}>
+                                <td style={tdAdmin}>{p.name || '-'}</td>
+                                <td style={tdAdmin}>{p.phone}</td>
+                                <td style={tdAdmin}><b>{p.role}</b></td>
+                                <td style={tdAdmin}>{p.is_active ? 'active' : 'non-active'}</td>
+                                <td style={tdAdmin}>
+                                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                    <button style={btnMini} disabled={busy} onClick={() => resetPassword(p.id)}>Reset Pass</button>
+                                    <button style={btnMini} disabled={busy} onClick={() => toggleRole(p)}>{p.role === 'admin' ? 'Jadi Participant' : 'Jadi Admin'}</button>
+                                    <button style={btnMini} disabled={busy} onClick={() => toggleActive(p)}>{p.is_active ? 'Non Aktifkan' : 'Aktifkan'}</button>
+                                    <button style={{ ...btnMini, background: '#7f1d1d', borderColor: '#b91c1c' }} disabled={busy} onClick={() => deleteParticipant(p.id)}>Hapus</button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : <div className='nk-empty'>Belum ada peserta.</div>}
                   </section>
                 ) : null}
 
@@ -357,3 +430,5 @@ const inputSmall = { padding: 10, borderRadius: 'var(--nk-radius-sm)', border: '
 const fieldLabel = { display: 'block', fontSize: 13, color: 'var(--nk-muted)', marginTop: 2 };
 const btn = { border: 0, background: 'var(--nk-cta)', color: 'white', borderRadius: 'var(--nk-radius-md)', padding: '8px 14px', cursor: 'pointer', fontWeight: 600 };
 const btnMini = { border: '1px solid #374151', background: '#1f2937', color: 'white', borderRadius: 'var(--nk-radius-sm)', padding: '6px 10px', cursor: 'pointer' };
+const thAdmin = { textAlign: 'left', padding: '10px 8px', borderBottom: '1px solid #334155', color: '#cbd5e1', fontSize: 13 };
+const tdAdmin = { padding: '10px 8px', borderBottom: '1px solid #1f2937', fontSize: 14, verticalAlign: 'top' };

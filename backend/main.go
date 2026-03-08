@@ -175,6 +175,8 @@ func main() {
 	mux.HandleFunc("/admin/points/history", a.handleAdminPointsHistory)
 	mux.HandleFunc("/admin/participants/reset-password", a.handleAdminResetPassword)
 	mux.HandleFunc("/admin/participants/toggle-active", a.handleAdminToggleActive)
+	mux.HandleFunc("/admin/participants/set-role", a.handleAdminSetRole)
+	mux.HandleFunc("/admin/participants/delete", a.handleAdminDeleteParticipant)
 	mux.HandleFunc("/admin/categories", a.handleAdminCategories)
 	mux.HandleFunc("/admin/questions", a.handleAdminQuestions)
 
@@ -1175,6 +1177,68 @@ func (a *app) handleAdminToggleActive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = a.logAdminAction(r.Context(), admin.ID, "participants.toggle_active", fmt.Sprint(req.UserID), map[string]any{"user_id": req.UserID, "is_active": req.IsActive})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *app) handleAdminSetRole(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req struct {
+		UserID int64  `json:"user_id"`
+		Role   string `json:"role"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || req.UserID == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
+		return
+	}
+	role := strings.TrimSpace(strings.ToLower(req.Role))
+	if role != "participant" && role != "admin" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "role must be participant/admin"})
+		return
+	}
+	_, err = a.db.ExecContext(r.Context(), `UPDATE users SET role=$1, updated_at=NOW() WHERE id=$2`, role, req.UserID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed set role"})
+		return
+	}
+	_ = a.logAdminAction(r.Context(), admin.ID, "participants.set_role", fmt.Sprint(req.UserID), map[string]any{"user_id": req.UserID, "role": role})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *app) handleAdminDeleteParticipant(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req struct {
+		UserID int64 `json:"user_id"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || req.UserID == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
+		return
+	}
+	if req.UserID == admin.ID {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot delete current admin account"})
+		return
+	}
+	_, err = a.db.ExecContext(r.Context(), `DELETE FROM users WHERE id=$1`, req.UserID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed delete user"})
+		return
+	}
+	_ = a.logAdminAction(r.Context(), admin.ID, "participants.delete", fmt.Sprint(req.UserID), map[string]any{"user_id": req.UserID})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 

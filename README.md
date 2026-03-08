@@ -67,6 +67,8 @@ Aplikasi sederhana untuk menampilkan **list peserta** yang bergabung dari pendaf
 - `GET /admin/points/history` (role admin)
 - `POST /admin/participants/reset-password` (role admin)
 - `POST /admin/participants/toggle-active` (role admin)
+- `POST /admin/participants/set-role` (role admin)
+- `POST /admin/participants/delete` (role admin)
 - `GET|POST /admin/categories` (role admin; action create/update/delete)
 - `GET|POST /admin/questions` (role admin; action create/update/delete)
 
