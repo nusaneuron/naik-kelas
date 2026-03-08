@@ -31,6 +31,9 @@ export default function Page() {
   const [adminReminders, setAdminReminders] = useState([]);
   const [adminPointHistory, setAdminPointHistory] = useState([]);
   const [adminPointBalances, setAdminPointBalances] = useState([]);
+  const [adminExpRules, setAdminExpRules] = useState([]);
+  const [adminExpHistory, setAdminExpHistory] = useState([]);
+  const [adminExpStatus, setAdminExpStatus] = useState([]);
   const [pointPhone, setPointPhone] = useState('');
   const [pointDelta, setPointDelta] = useState('');
   const [pointReason, setPointReason] = useState('');
@@ -77,13 +80,16 @@ export default function Page() {
   }
 
   async function loadAdmin() {
-    const [pRes, cRes, qRes, rRes, phRes, pbRes] = await Promise.all([
+    const [pRes, cRes, qRes, rRes, phRes, pbRes, erRes, ehRes, esRes] = await Promise.all([
       fetch(`${apiBase}/admin/participants`, { credentials: 'include' }),
       fetch(`${apiBase}/admin/categories`, { credentials: 'include' }),
       fetch(`${apiBase}/admin/questions`, { credentials: 'include' }),
       fetch(`${apiBase}/admin/reminders`, { credentials: 'include' }),
       fetch(`${apiBase}/admin/points/history`, { credentials: 'include' }),
-      fetch(`${apiBase}/admin/points/balances`, { credentials: 'include' })
+      fetch(`${apiBase}/admin/points/balances`, { credentials: 'include' }),
+      fetch(`${apiBase}/admin/exp/rules`, { credentials: 'include' }),
+      fetch(`${apiBase}/admin/exp/history`, { credentials: 'include' }),
+      fetch(`${apiBase}/admin/exp/status`, { credentials: 'include' })
     ]);
     if (pRes.ok) setParticipants((await pRes.json()).items || []);
     if (cRes.ok) setCategories((await cRes.json()).items || []);
@@ -91,6 +97,9 @@ export default function Page() {
     if (rRes.ok) setAdminReminders((await rRes.json()).items || []);
     if (phRes.ok) setAdminPointHistory((await phRes.json()).items || []);
     if (pbRes.ok) setAdminPointBalances((await pbRes.json()).items || []);
+    if (erRes.ok) setAdminExpRules((await erRes.json()).items || []);
+    if (ehRes.ok) setAdminExpHistory((await ehRes.json()).items || []);
+    if (esRes.ok) setAdminExpStatus((await esRes.json()).items || []);
   }
 
   async function loadPortal(role) {
@@ -345,6 +354,23 @@ export default function Page() {
     setBusy(false);
   }
 
+  async function updateExpRule(ruleKey, ruleValue) {
+    setBusy(true); setActionMsg('');
+    const res = await fetch(`${apiBase}/admin/exp/rules`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ rule_key: ruleKey, rule_value: Number(ruleValue) })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setActionType('error'); setActionMsg(d.error || 'Gagal update rule EXP.');
+      setBusy(false);
+      return;
+    }
+    await loadAdmin();
+    setActionType('success'); setActionMsg(`Rule EXP ${ruleKey} berhasil diperbarui.`);
+    setBusy(false);
+  }
+
   const matchedParticipant = participants.find((p) => ((p.phone || '').replace(/[^0-9]/g, '') === (pointPhone || '').replace(/[^0-9]/g, '')));
   const filteredQuestions = questionFilterCategoryId
     ? questions.filter((q) => String(q.category_id) === String(questionFilterCategoryId))
@@ -438,7 +464,8 @@ export default function Page() {
                     ['peserta', 'Peserta'],
                     ['bank', 'Bank Soal'],
                     ['jadwal', 'Jadwal Belajar'],
-                    ['poin', 'Poin']
+                    ['poin', 'Poin'],
+                    ['exp', 'EXP']
                   ].map(([key, label]) => (
                     <button
                       key={key}
@@ -568,6 +595,49 @@ export default function Page() {
                         </table>
                       </div>
                     ) : <div className='nk-empty'>Belum ada transaksi poin.</div>}
+                  </section>
+                ) : null}
+
+                {adminSection === 'exp' ? (
+                  <section style={card2}>
+                    <h2>Admin · EXP Peserta</h2>
+                    <h3 style={{ marginTop: 10, marginBottom: 8 }}>Rules EXP (editable)</h3>
+                    {adminExpRules.length ? (
+                      <div style={{overflowX:'auto',border:'1px solid #22304d',borderRadius:'var(--nk-radius-md)'}}>
+                        <table style={{width:'100%',borderCollapse:'collapse',minWidth:720}}>
+                          <thead><tr><th style={thAdmin}>Rule</th><th style={thAdmin}>Value</th><th style={thAdmin}>Aksi</th></tr></thead>
+                          <tbody>
+                            {adminExpRules.map((r)=>(
+                              <tr key={r.rule_key}>
+                                <td style={tdAdmin}>{r.rule_key}</td>
+                                <td style={tdAdmin}><input style={{...inputSmall, width:120}} type='number' min='1' defaultValue={r.rule_value} id={`rule-${r.rule_key}`} /></td>
+                                <td style={tdAdmin}><button style={btnMini} disabled={busy} onClick={()=>{ const el=document.getElementById(`rule-${r.rule_key}`); updateExpRule(r.rule_key, el?.value || r.rule_value); }}>Simpan</button></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : <div className='nk-empty'>Rule EXP belum tersedia.</div>}
+
+                    <h3 style={{ marginTop: 16, marginBottom: 8 }}>Status Level & EXP Peserta</h3>
+                    {adminExpStatus.length ? (
+                      <div style={{overflowX:'auto',overflowY:'auto',maxHeight:320,border:'1px solid #22304d',borderRadius:'var(--nk-radius-md)'}}>
+                        <table style={{width:'max-content',minWidth:860,borderCollapse:'collapse'}}>
+                          <thead><tr><th style={thAdmin}>Nama</th><th style={thAdmin}>No. HP</th><th style={thAdmin}>Level</th><th style={thAdmin}>EXP</th><th style={thAdmin}>Progress</th></tr></thead>
+                          <tbody>{adminExpStatus.map((s)=><tr key={s.user_id}><td style={tdAdmin}>{s.name || '-'}</td><td style={tdAdmin}>{s.phone || '-'}</td><td style={tdAdmin}>{s.level}</td><td style={tdAdmin}>{s.exp}</td><td style={tdAdmin}>{s.progress}/{s.level_step}</td></tr>)}</tbody>
+                        </table>
+                      </div>
+                    ) : <div className='nk-empty'>Belum ada data EXP peserta.</div>}
+
+                    <h3 style={{ marginTop: 16, marginBottom: 8 }}>History EXP Peserta</h3>
+                    {adminExpHistory.length ? (
+                      <div style={{overflowX:'auto',overflowY:'auto',maxHeight:380,border:'1px solid #22304d',borderRadius:'var(--nk-radius-md)'}}>
+                        <table style={{width:'max-content',minWidth:980,borderCollapse:'collapse'}}>
+                          <thead><tr><th style={thAdmin}>Nama</th><th style={thAdmin}>No. HP</th><th style={thAdmin}>Delta EXP</th><th style={thAdmin}>Type</th><th style={thAdmin}>Reason</th><th style={thAdmin}>Waktu</th></tr></thead>
+                          <tbody>{adminExpHistory.map((h)=><tr key={h.id}><td style={tdAdmin}>{h.name || '-'}</td><td style={tdAdmin}>{h.phone || '-'}</td><td style={tdAdmin}>{h.delta}</td><td style={tdAdmin}>{h.type}</td><td style={tdAdmin}>{h.reason}</td><td style={tdAdmin}>{new Date(h.created_at).toLocaleString('id-ID')}</td></tr>)}</tbody>
+                        </table>
+                      </div>
+                    ) : <div className='nk-empty'>Belum ada history EXP.</div>}
                   </section>
                 ) : null}
               </div>

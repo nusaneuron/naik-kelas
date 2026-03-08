@@ -181,6 +181,9 @@ func main() {
 	mux.HandleFunc("/admin/points/delete", a.handleAdminPointsDelete)
 	mux.HandleFunc("/admin/points/recalculate", a.handleAdminPointsRecalculate)
 	mux.HandleFunc("/admin/points/balances", a.handleAdminPointBalances)
+	mux.HandleFunc("/admin/exp/rules", a.handleAdminExpRules)
+	mux.HandleFunc("/admin/exp/history", a.handleAdminExpHistory)
+	mux.HandleFunc("/admin/exp/status", a.handleAdminExpStatus)
 	mux.HandleFunc("/admin/participants/reset-password", a.handleAdminResetPassword)
 	mux.HandleFunc("/admin/participants/toggle-active", a.handleAdminToggleActive)
 	mux.HandleFunc("/admin/participants/set-role", a.handleAdminSetRole)
@@ -458,6 +461,24 @@ func (a *app) initDB(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS exp_rules (
+			rule_key TEXT PRIMARY KEY,
+			rule_value BIGINT NOT NULL,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+	_, _ = a.db.ExecContext(ctx, `INSERT INTO exp_rules (rule_key, rule_value) VALUES
+		('quiz_complete', 5),
+		('quiz_perfect', 15),
+		('tryout_complete', 8),
+		('tryout_perfect', 20),
+		('level_step', 100)
+	ON CONFLICT (rule_key) DO NOTHING`)
 
 	if err := a.seedQuestionBankIfEmpty(ctx); err != nil {
 		return err
@@ -799,8 +820,9 @@ func (a *app) handleParticipantMe(w http.ResponseWriter, r *http.Request) {
 	var name, email, source string
 	_ = a.db.QueryRowContext(r.Context(), `SELECT COALESCE(name,''), COALESCE(email,''), COALESCE(source,'') FROM participant_profiles WHERE user_id=$1`, u.ID).Scan(&name, &email, &source)
 	totalExp, _ := a.getExpTotal(r.Context(), u.ID)
-	level := (totalExp / 100) + 1
-	writeJSON(w, http.StatusOK, map[string]any{"id": u.ID, "phone": u.Phone, "role": u.Role, "must_change_password": u.MustChangePassword, "name": name, "email": email, "source": source, "exp": totalExp, "level": level})
+	levelStep := a.getExpRuleValue(r.Context(), "level_step", 100)
+	level, progress := calcLevel(totalExp, levelStep)
+	writeJSON(w, http.StatusOK, map[string]any{"id": u.ID, "phone": u.Phone, "role": u.Role, "must_change_password": u.MustChangePassword, "name": name, "email": email, "source": source, "exp": totalExp, "level": level, "level_progress": progress, "level_step": levelStep})
 }
 
 func (a *app) handleParticipantHistory(w http.ResponseWriter, r *http.Request) {
@@ -1173,6 +1195,123 @@ func (a *app) handleAdminPointsRecalculate(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "recalculated_users": count})
 }
 
+func (a *app) handleAdminExpRules(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method == http.MethodGet {
+		rows, err := a.db.QueryContext(r.Context(), `SELECT rule_key, rule_value, updated_at FROM exp_rules ORDER BY rule_key ASC`)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed load exp rules"})
+			return
+		}
+		defer rows.Close()
+		items := []map[string]any{}
+		for rows.Next() {
+			var k string
+			var v int64
+			var at time.Time
+			if rows.Scan(&k, &v, &at) == nil {
+				items = append(items, map[string]any{"rule_key": k, "rule_value": v, "updated_at": at})
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req struct {
+		RuleKey   string `json:"rule_key"`
+		RuleValue int64  `json:"rule_value"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || strings.TrimSpace(req.RuleKey) == "" || req.RuleValue <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "rule_key dan rule_value wajib"})
+		return
+	}
+	_, err = a.db.ExecContext(r.Context(), `
+		INSERT INTO exp_rules (rule_key, rule_value, updated_at)
+		VALUES ($1,$2,NOW())
+		ON CONFLICT (rule_key) DO UPDATE SET rule_value=EXCLUDED.rule_value, updated_at=NOW()
+	`, strings.TrimSpace(req.RuleKey), req.RuleValue)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed update exp rule"})
+		return
+	}
+	_ = a.logAdminAction(r.Context(), admin.ID, "exp.rule.update", req.RuleKey, req)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *app) handleAdminExpHistory(w http.ResponseWriter, r *http.Request) {
+	_, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	rows, err := a.db.QueryContext(r.Context(), `
+		SELECT e.id, e.user_id, COALESCE(p.name,''), COALESCE(u.phone,''), e.delta, e.type, e.reason, e.source_ref, e.created_at
+		FROM exp_ledger e
+		LEFT JOIN users u ON u.id = e.user_id
+		LEFT JOIN participant_profiles p ON p.user_id = e.user_id
+		ORDER BY e.created_at DESC LIMIT 300
+	`)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed load exp history"})
+		return
+	}
+	defer rows.Close()
+	items := []map[string]any{}
+	for rows.Next() {
+		var id, uid, delta int64
+		var name, phone, typ, reason string
+		var src sql.NullString
+		var created time.Time
+		if rows.Scan(&id, &uid, &name, &phone, &delta, &typ, &reason, &src, &created) == nil {
+			it := map[string]any{"id": id, "user_id": uid, "name": name, "phone": phone, "delta": delta, "type": typ, "reason": reason, "created_at": created}
+			if src.Valid {
+				it["source_ref"] = src.String
+			}
+			items = append(items, it)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (a *app) handleAdminExpStatus(w http.ResponseWriter, r *http.Request) {
+	_, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	levelStep := a.getExpRuleValue(r.Context(), "level_step", 100)
+	rows, err := a.db.QueryContext(r.Context(), `
+		SELECT u.id, COALESCE(p.name,''), COALESCE(u.phone,''), COALESCE(w.total_exp,0)
+		FROM users u
+		LEFT JOIN participant_profiles p ON p.user_id = u.id
+		LEFT JOIN exp_wallets w ON w.user_id = u.id
+		ORDER BY COALESCE(w.total_exp,0) DESC, u.created_at ASC
+		LIMIT 500
+	`)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed load exp status"})
+		return
+	}
+	defer rows.Close()
+	items := []map[string]any{}
+	for rows.Next() {
+		var id, exp int64
+		var name, phone string
+		if rows.Scan(&id, &name, &phone, &exp) == nil {
+			level, progress := calcLevel(exp, levelStep)
+			items = append(items, map[string]any{"user_id": id, "name": name, "phone": phone, "exp": exp, "level": level, "progress": progress, "level_step": levelStep})
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "level_step": levelStep})
+}
+
 func (a *app) handleAdminPointBalances(w http.ResponseWriter, r *http.Request) {
 	_, err := a.requireRole(r.Context(), r, "admin")
 	if err != nil {
@@ -1300,6 +1439,23 @@ func (a *app) resolveWebUserIDByExternal(ctx context.Context, externalUserID str
 	var userID int64
 	err := a.db.QueryRowContext(ctx, `SELECT user_id FROM telegram_links WHERE telegram_user_id=$1`, externalUserID).Scan(&userID)
 	return userID, err
+}
+
+func (a *app) getExpRuleValue(ctx context.Context, key string, fallback int64) int64 {
+	var v int64
+	if err := a.db.QueryRowContext(ctx, `SELECT rule_value FROM exp_rules WHERE rule_key=$1`, key).Scan(&v); err == nil && v > 0 {
+		return v
+	}
+	return fallback
+}
+
+func calcLevel(totalExp, levelStep int64) (int64, int64) {
+	if levelStep <= 0 {
+		levelStep = 100
+	}
+	level := (totalExp / levelStep) + 1
+	progress := totalExp % levelStep
+	return level, progress
 }
 
 func (a *app) getExpTotal(ctx context.Context, userID int64) (int64, error) {
@@ -2069,9 +2225,9 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		if err != nil {
 			return "Maaf, belum bisa ambil data EXP sekarang 🙏", "idle"
 		}
-		level := (totalExp / 100) + 1
-		progress := totalExp % 100
-		return fmt.Sprintf("EXP kamu saat ini: %d ✨\nLevel: %d\nProgress ke level berikutnya: %d/100", totalExp, level, progress), "idle"
+		levelStep := a.getExpRuleValue(ctx, "level_step", 100)
+		level, progress := calcLevel(totalExp, levelStep)
+		return fmt.Sprintf("EXP kamu saat ini: %d ✨\nLevel: %d\nProgress ke level berikutnya: %d/%d", totalExp, level, progress, levelStep), "idle"
 	}
 
 	if lower == "/status" {
@@ -2094,8 +2250,9 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		if err != nil {
 			return "Maaf, belum bisa ambil data status sekarang 🙏", "idle"
 		}
-		level := (totalExp / 100) + 1
-		return fmt.Sprintf("Status Belajar Kamu 👤\n- Level: %d\n- EXP: %d ✨\n- Poin: %d 🌟", level, totalExp, bal), "idle"
+		levelStep := a.getExpRuleValue(ctx, "level_step", 100)
+		level, progress := calcLevel(totalExp, levelStep)
+		return fmt.Sprintf("Status Belajar Kamu 👤\n- Level: %d\n- EXP: %d ✨\n- Progress: %d/%d\n- Poin: %d 🌟", level, totalExp, progress, levelStep, bal), "idle"
 	}
 
 	if lower == "/poin" {
@@ -2493,10 +2650,10 @@ func (a *app) saveTryoutResult(ctx context.Context, userID, displayName string, 
 	if err != nil {
 		return err
 	}
-	delta := int64(8)
+	delta := a.getExpRuleValue(ctx, "tryout_complete", 8)
 	reason := "Selesai tryout"
 	if allCorrect {
-		delta = 20
+		delta = a.getExpRuleValue(ctx, "tryout_perfect", 20)
 		reason = "Selesai tryout dengan hasil perfect"
 	}
 	_, _ = a.addExpByExternalUser(ctx, userID, delta, "tryout", reason, "tryout_results")
@@ -2523,10 +2680,10 @@ func (a *app) saveQuizAttempt(ctx context.Context, userID, displayName string, c
 	if err != nil {
 		return 0, err
 	}
-	delta := int64(5)
+	delta := a.getExpRuleValue(ctx, "quiz_complete", 5)
 	reason := "Selesai latihan quiz"
 	if allCorrect {
-		delta = 15
+		delta = a.getExpRuleValue(ctx, "quiz_perfect", 15)
 		reason = "Selesai latihan quiz dengan nilai sempurna"
 	}
 	_, _ = a.addExpByExternalUser(ctx, userID, delta, "quiz", reason, cat.Code)
