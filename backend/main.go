@@ -211,6 +211,18 @@ func (a *app) initDB(ctx context.Context) error {
 		return err
 	}
 
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS bot_profiles (
+			user_id TEXT PRIMARY KEY,
+			registered_name TEXT NOT NULL,
+			telegram_display TEXT NOT NULL DEFAULT '',
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -549,6 +561,7 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 			}
 			return "Maaf, Nala lagi kesulitan menyimpan data 🙏\nCoba lagi sebentar ya.", "wait_email"
 		}
+		_ = a.saveBotProfile(ctx, uid, name, displayName)
 		a.resetSession(uid)
 		return "Yeay! 🎉 Pendaftaran kamu berhasil.\nSemangat belajar bareng Naik Kelas ya ✨📚", "idle"
 
@@ -741,15 +754,33 @@ func (a *app) saveTryoutResult(ctx context.Context, userID, displayName string, 
 	return err
 }
 
+func (a *app) saveBotProfile(ctx context.Context, userID, registeredName, telegramDisplay string) error {
+	if strings.TrimSpace(userID) == "" || strings.TrimSpace(registeredName) == "" {
+		return nil
+	}
+	_, err := a.db.ExecContext(ctx, `
+		INSERT INTO bot_profiles (user_id, registered_name, telegram_display, updated_at)
+		VALUES ($1, $2, $3, NOW())
+		ON CONFLICT (user_id)
+		DO UPDATE SET
+			registered_name = EXCLUDED.registered_name,
+			telegram_display = EXCLUDED.telegram_display,
+			updated_at = NOW()
+	`, userID, registeredName, telegramDisplay)
+	return err
+}
+
 func (a *app) getTryoutLeaderboard(ctx context.Context, limit int) (string, error) {
 	rows, err := a.db.QueryContext(ctx, `
-		SELECT user_id,
-		       COALESCE(NULLIF(display_name, ''), user_id) as name,
-		       MIN(duration_seconds) as best_seconds,
-		       COUNT(*) FILTER (WHERE all_correct) as perfect_count
-		FROM tryout_results
-		WHERE all_correct = TRUE
-		GROUP BY user_id, name
+		SELECT tr.user_id,
+		       COALESCE(NULLIF(bp.registered_name, ''), NULLIF(tr.display_name, ''), tr.user_id) as name,
+		       COALESCE(NULLIF(bp.telegram_display, ''), tr.user_id) as tg,
+		       MIN(tr.duration_seconds) as best_seconds,
+		       COUNT(*) FILTER (WHERE tr.all_correct) as perfect_count
+		FROM tryout_results tr
+		LEFT JOIN bot_profiles bp ON bp.user_id = tr.user_id
+		WHERE tr.all_correct = TRUE
+		GROUP BY tr.user_id, name, tg
 		ORDER BY best_seconds ASC, perfect_count DESC, name ASC
 		LIMIT $1
 	`, limit)
@@ -761,12 +792,12 @@ func (a *app) getTryoutLeaderboard(ctx context.Context, limit int) (string, erro
 	lines := []string{"🏆 Leaderbot Tryout (Perfect Score)", ""}
 	rank := 1
 	for rows.Next() {
-		var userID, name string
+		var userID, name, tg string
 		var bestSec, perfectCount int
-		if err := rows.Scan(&userID, &name, &bestSec, &perfectCount); err != nil {
+		if err := rows.Scan(&userID, &name, &tg, &bestSec, &perfectCount); err != nil {
 			return "", err
 		}
-		lines = append(lines, fmt.Sprintf("%d. %s | TG: %s — %ds (perfect: %dx)", rank, name, userID, bestSec, perfectCount))
+		lines = append(lines, fmt.Sprintf("%d. %s | TG: %s — %ds (perfect: %dx)", rank, name, tg, bestSec, perfectCount))
 		rank++
 	}
 	if err := rows.Err(); err != nil {
