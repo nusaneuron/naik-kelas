@@ -13,6 +13,7 @@ export default function Page() {
   const [busy, setBusy] = useState(false);
   const [adminViewMode, setAdminViewMode] = useState('participant');
   const [adminSection, setAdminSection] = useState('peserta');
+  const [confirmAction, setConfirmAction] = useState(null);
 
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -122,6 +123,24 @@ export default function Page() {
     setProfile(null);
   }
 
+  function openConfirm(type, participant) {
+    const actionMap = {
+      role: `Ubah role ${participant.phone} dari ${participant.role} ?`,
+      active: `${participant.is_active ? 'Nonaktifkan' : 'Aktifkan'} akun ${participant.phone}?`,
+      delete: `Hapus permanen peserta ${participant.phone}?`
+    };
+    setConfirmAction({ type, participant, message: actionMap[type] || 'Lanjutkan aksi?' });
+  }
+
+  async function executeConfirmAction() {
+    if (!confirmAction) return;
+    const { type, participant } = confirmAction;
+    setConfirmAction(null);
+    if (type === 'role') return toggleRole(participant);
+    if (type === 'active') return toggleActive(participant);
+    if (type === 'delete') return deleteParticipant(participant.id);
+  }
+
   async function resetPassword(userId) {
     setBusy(true); setActionMsg('');
     await fetch(`${apiBase}/admin/participants/reset-password`, {
@@ -157,7 +176,6 @@ export default function Page() {
   }
 
   async function deleteParticipant(userId) {
-    if (!confirm('Yakin hapus peserta ini?')) return;
     setBusy(true); setActionMsg('');
     const res = await fetch(`${apiBase}/admin/participants/delete`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
@@ -383,9 +401,9 @@ export default function Page() {
                                 <td style={tdAdmin}>
                                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                                     <button style={btnMini} disabled={busy} onClick={() => resetPassword(p.id)}>Reset Pass</button>
-                                    <button style={btnMini} disabled={busy} onClick={() => toggleRole(p)}>{p.role === 'admin' ? 'Jadi Participant' : 'Jadi Admin'}</button>
-                                    <button style={btnMini} disabled={busy} onClick={() => toggleActive(p)}>{p.is_active ? 'Non Aktifkan' : 'Aktifkan'}</button>
-                                    <button style={{ ...btnMini, background: '#7f1d1d', borderColor: '#b91c1c' }} disabled={busy} onClick={() => deleteParticipant(p.id)}>Hapus</button>
+                                    <button style={btnMini} disabled={busy} onClick={() => openConfirm('role', p)}>{p.role === 'admin' ? 'Jadi Participant' : 'Jadi Admin'}</button>
+                                    <button style={btnMini} disabled={busy} onClick={() => openConfirm('active', p)}>{p.is_active ? 'Non Aktifkan' : 'Aktifkan'}</button>
+                                    <button style={{ ...btnMini, background: '#7f1d1d', borderColor: '#b91c1c' }} disabled={busy} onClick={() => openConfirm('delete', p)}>Hapus</button>
                                   </div>
                                 </td>
                               </tr>
@@ -415,6 +433,19 @@ export default function Page() {
             </div>
           </section>
         ) : null}
+
+        {confirmAction ? (
+          <div style={modalOverlay}>
+            <div style={modalCard}>
+              <h3 style={{ marginTop: 0 }}>Konfirmasi Aksi</h3>
+              <p style={{ marginBottom: 14 }}>{confirmAction.message}</p>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button style={btnMini} onClick={() => setConfirmAction(null)}>Batal</button>
+                <button style={{ ...btnMini, background: '#7f1d1d', borderColor: '#b91c1c' }} onClick={executeConfirmAction}>Ya, Lanjutkan</button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </main>
   );
@@ -432,3 +463,5 @@ const btn = { border: 0, background: 'var(--nk-cta)', color: 'white', borderRadi
 const btnMini = { border: '1px solid #374151', background: '#1f2937', color: 'white', borderRadius: 'var(--nk-radius-sm)', padding: '6px 10px', cursor: 'pointer' };
 const thAdmin = { textAlign: 'left', padding: '10px 8px', borderBottom: '1px solid #334155', color: '#cbd5e1', fontSize: 13 };
 const tdAdmin = { padding: '10px 8px', borderBottom: '1px solid #1f2937', fontSize: 14, verticalAlign: 'top' };
+const modalOverlay = { position: 'fixed', inset: 0, background: 'rgba(2,6,23,.6)', display: 'grid', placeItems: 'center', zIndex: 9999 };
+const modalCard = { width: 'min(460px,92vw)', border: '1px solid #334155', borderRadius: 'var(--nk-radius-lg)', padding: 16, background: '#0f172a', boxShadow: 'var(--nk-shadow-md)' };
