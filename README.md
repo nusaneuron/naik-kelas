@@ -21,6 +21,7 @@ Aplikasi sederhana untuk menampilkan **list peserta** yang bergabung dari pendaf
 - `PORT` (opsional, default `8080`)
 - `TELEGRAM_BOT_TOKEN` (opsional, untuk webhook Telegram)
 - `TELEGRAM_WEBHOOK_SECRET` (opsional tapi direkomendasikan)
+- `ADMIN_BOOTSTRAP_TOKEN` (opsional, untuk bootstrap akun admin via API)
 
 ### Frontend
 - `NEXT_PUBLIC_API_BASE_URL` (opsional)
@@ -38,6 +39,7 @@ Aplikasi sederhana untuk menampilkan **list peserta** yang bergabung dari pendaf
     - tersimpan: durasi (detik) dan kecepatan (`speed_qpm`)
   - `/leaderbot`: ranking peserta dengan skor sempurna tercepat
 - `POST /telegram/webhook` (endpoint webhook Telegram)
+- `POST /admin/bootstrap` (bootstrap/promote akun admin; butuh header token)
   - body JSON:
     ```json
     {

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type Participant struct {
@@ -115,6 +116,7 @@ type app struct {
 	mu                  sync.Mutex
 	telegramBotToken    string
 	telegramSecretToken string
+	adminBootstrapToken string
 }
 
 func main() {
@@ -140,6 +142,7 @@ func main() {
 		botSessions:         map[string]*botSession{},
 		telegramBotToken:    strings.TrimSpace(getenv("TELEGRAM_BOT_TOKEN", "")),
 		telegramSecretToken: strings.TrimSpace(getenv("TELEGRAM_WEBHOOK_SECRET", "")),
+		adminBootstrapToken: strings.TrimSpace(getenv("ADMIN_BOOTSTRAP_TOKEN", "")),
 	}
 
 	if err := a.initDB(ctx); err != nil {
@@ -152,6 +155,7 @@ func main() {
 	mux.HandleFunc("/participants/check", a.checkParticipantByPhone)
 	mux.HandleFunc("/bot/message", a.handleBotMessage)
 	mux.HandleFunc("/telegram/webhook", a.handleTelegramWebhook)
+	mux.HandleFunc("/admin/bootstrap", a.handleAdminBootstrap)
 
 	port := getenv("PORT", "8080")
 	addr := ":" + port
@@ -244,7 +248,159 @@ func (a *app) initDB(ctx context.Context) error {
 
 	_, _ = a.db.ExecContext(ctx, `ALTER TABLE tryout_results ADD COLUMN IF NOT EXISTS speed_qpm NUMERIC(10,2) NOT NULL DEFAULT 0`)
 
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS users (
+			id BIGSERIAL PRIMARY KEY,
+			phone TEXT NOT NULL UNIQUE,
+			password_hash TEXT NOT NULL,
+			role TEXT NOT NULL DEFAULT 'participant',
+			is_active BOOLEAN NOT NULL DEFAULT TRUE,
+			must_change_password BOOLEAN NOT NULL DEFAULT TRUE,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS participant_profiles (
+			user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+			name TEXT NOT NULL,
+			email TEXT,
+			source TEXT NOT NULL DEFAULT 'bot-naik-kelas',
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	if err := a.migrateParticipantsToUsers(ctx); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func (a *app) migrateParticipantsToUsers(ctx context.Context) error {
+	rows, err := a.db.QueryContext(ctx, `SELECT id, name, phone, COALESCE(email,''), source FROM participants`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var pid int64
+		var name, phone, email, source string
+		if err := rows.Scan(&pid, &name, &phone, &email, &source); err != nil {
+			return err
+		}
+		phone = normalizePhone(phone)
+		if phone == "" {
+			continue
+		}
+
+		var userID int64
+		err := a.db.QueryRowContext(ctx, `SELECT id FROM users WHERE phone = $1`, phone).Scan(&userID)
+		if err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
+			defaultPass := defaultPasswordForPhone(phone)
+			hash, hErr := bcrypt.GenerateFromPassword([]byte(defaultPass), bcrypt.DefaultCost)
+			if hErr != nil {
+				return hErr
+			}
+			err = a.db.QueryRowContext(ctx, `
+				INSERT INTO users (phone, password_hash, role, must_change_password)
+				VALUES ($1, $2, 'participant', TRUE)
+				RETURNING id
+			`, phone, string(hash)).Scan(&userID)
+			if err != nil {
+				return err
+			}
+		}
+
+		_, err = a.db.ExecContext(ctx, `
+			INSERT INTO participant_profiles (user_id, name, email, source, updated_at)
+			VALUES ($1, $2, NULLIF($3,''), $4, NOW())
+			ON CONFLICT (user_id)
+			DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, source = EXCLUDED.source, updated_at = NOW()
+		`, userID, strings.TrimSpace(name), strings.TrimSpace(email), strings.TrimSpace(source))
+		if err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+func defaultPasswordForPhone(phone string) string {
+	p := normalizePhone(phone)
+	if len(p) >= 4 {
+		p = p[len(p)-4:]
+	}
+	return "NK-" + p + "!"
+}
+
+func (a *app) handleAdminBootstrap(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	if a.adminBootstrapToken == "" {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "ADMIN_BOOTSTRAP_TOKEN not configured"})
+		return
+	}
+	if r.Header.Get("X-Admin-Bootstrap-Token") != a.adminBootstrapToken {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid bootstrap token"})
+		return
+	}
+
+	var req struct {
+		Phone    string `json:"phone"`
+		Name     string `json:"name"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+	phone := normalizePhone(req.Phone)
+	if phone == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "phone is required"})
+		return
+	}
+	if req.Password == "" {
+		req.Password = defaultPasswordForPhone(phone)
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to hash password"})
+		return
+	}
+	var userID int64
+	err = a.db.QueryRowContext(r.Context(), `
+		INSERT INTO users (phone, password_hash, role, must_change_password)
+		VALUES ($1, $2, 'admin', FALSE)
+		ON CONFLICT (phone)
+		DO UPDATE SET role='admin', password_hash=EXCLUDED.password_hash, must_change_password=FALSE, updated_at=NOW()
+		RETURNING id
+	`, phone, string(hash)).Scan(&userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to upsert admin"})
+		return
+	}
+	if strings.TrimSpace(req.Name) != "" {
+		_, _ = a.db.ExecContext(r.Context(), `
+			INSERT INTO participant_profiles (user_id, name, source)
+			VALUES ($1, $2, 'admin')
+			ON CONFLICT (user_id) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW()
+		`, userID, strings.TrimSpace(req.Name))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "user_id": userID, "phone": phone, "role": "admin", "default_password": req.Password})
 }
 
 func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
