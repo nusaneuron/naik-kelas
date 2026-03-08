@@ -14,6 +14,7 @@ export default function Page() {
 
   const [history, setHistory] = useState({ quiz: [], tryout: [] });
   const [leaderboard, setLeaderboard] = useState([]);
+  const [profile, setProfile] = useState(null);
 
   const [participants, setParticipants] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -37,10 +38,12 @@ export default function Page() {
   }
 
   async function loadParticipant() {
-    const [hRes, lRes] = await Promise.all([
+    const [mRes, hRes, lRes] = await Promise.all([
+      fetch(`${apiBase}/participant/me`, { credentials: 'include' }),
       fetch(`${apiBase}/participant/history`, { credentials: 'include' }),
       fetch(`${apiBase}/participant/leaderboard`, { credentials: 'include' })
     ]);
+    if (mRes.ok) setProfile(await mRes.json());
     if (hRes.ok) setHistory(await hRes.json());
     if (lRes.ok) {
       const d = await lRes.json();
@@ -90,6 +93,7 @@ export default function Page() {
   async function logout() {
     await fetch(`${apiBase}/auth/logout`, { method: 'POST', credentials: 'include' });
     setMe(null);
+    setProfile(null);
   }
 
   async function resetPassword(userId) {
@@ -134,7 +138,7 @@ export default function Page() {
 
         {me.must_change_password ? <p style={{ color: '#facc15' }}>⚠️ Password default terdeteksi. Ganti via /auth/change-password.</p> : null}
 
-        <section style={card2}><h2>Profil</h2><p><b>Nama:</b> {me.name || '-'}</p><p><b>Email:</b> {me.email || '-'}</p><p><b>Sumber:</b> {me.source || '-'}</p></section>
+        <section style={card2}><h2>Profil</h2><p><b>Nama:</b> {profile?.name || '-'}</p><p><b>Email:</b> {profile?.email || '-'}</p><p><b>Sumber:</b> {profile?.source || '-'}</p></section>
         <section style={card2}><h2>Leaderbot Tryout</h2><ol>{leaderboard.map((it)=><li key={it.rank}>{it.name} ({it.telegram}) — {it.best_seconds}s (perfect: {it.perfect_count}x)</li>)}{!leaderboard.length?<li>Belum ada data.</li>:null}</ol></section>
         <section style={card2}><h2>Riwayat Quiz</h2><ul>{(history.quiz||[]).map((q,i)=><li key={i}>{q.category} · attempt #{q.attempt_no} · wrong {q.wrong_count}/{q.total_questions} · {q.all_correct?'LULUS':'BELUM'}</li>)}{!history.quiz?.length?<li>Belum ada riwayat quiz.</li>:null}</ul></section>
         <section style={card2}><h2>Riwayat Tryout</h2><ul>{(history.tryout||[]).map((t,i)=><li key={i}>{t.correct_count}/{t.total_questions} · {t.duration_seconds}s · speed {Number(t.speed_qpm||0).toFixed(2)} qpm · {t.all_correct?'PERFECT':'BELUM'}</li>)}{!history.tryout?.length?<li>Belum ada riwayat tryout.</li>:null}</ul></section>
