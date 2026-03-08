@@ -1944,7 +1944,7 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 	}
 	if lower == "/start" {
 		a.resetSession(uid)
-		return "Selamat datang di Naik Kelas, perkenalkan saya Nala ✨\nAku siap bantu kamu daftar belajar dengan cepat.\n\nKetik /daftar untuk registrasi peserta baru 📚\nKetik /cek untuk cek apakah nomor HP sudah terdaftar ✅\nKetik /quiz untuk latihan per kategori 🧠\nKetik /tryout untuk simulasi soal acak 🚀\nKetik /leaderbot untuk lihat ranking tryout 🏆\nKetik /poin untuk cek menu poin 🌟\nKetik /exp untuk cek EXP & level kamu ✨\nKetik /jadwal_belajar untuk atur pengingat belajar ⏰", "idle"
+		return "Selamat datang di Naik Kelas, perkenalkan saya Nala ✨\nAku siap bantu kamu daftar belajar dengan cepat.\n\nKetik /daftar untuk registrasi peserta baru 📚\nKetik /cek untuk cek apakah nomor HP sudah terdaftar ✅\nKetik /quiz untuk latihan per kategori 🧠\nKetik /tryout untuk simulasi soal acak 🚀\nKetik /leaderbot untuk lihat ranking tryout 🏆\nKetik /poin untuk cek menu poin 🌟\nKetik /exp untuk cek EXP & level kamu ✨\nKetik /status untuk ringkasan level, EXP, dan poin kamu 👤\nKetik /jadwal_belajar untuk atur pengingat belajar ⏰", "idle"
 	}
 	if lower == "/daftar" {
 		a.mu.Lock()
@@ -2021,6 +2021,30 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		level := (totalExp / 100) + 1
 		progress := totalExp % 100
 		return fmt.Sprintf("EXP kamu saat ini: %d ✨\nLevel: %d\nProgress ke level berikutnya: %d/100", totalExp, level, progress), "idle"
+	}
+
+	if lower == "/status" {
+		registered, err := a.isRegisteredBotUser(ctx, uid)
+		if err != nil {
+			return "Maaf, Nala lagi kesulitan cek akunmu 🙏", "idle"
+		}
+		if !registered {
+			return "Kamu belum terdaftar. Ketik /daftar dulu ya ✨", "idle"
+		}
+		webUserID, err := a.resolveWebUserIDByExternal(ctx, uid)
+		if err != nil {
+			return "Akunmu belum tersinkron. Coba /daftar ulang ya 🙏", "idle"
+		}
+		totalExp, err := a.getExpTotal(ctx, webUserID)
+		if err != nil {
+			return "Maaf, belum bisa ambil data status sekarang 🙏", "idle"
+		}
+		bal, err := a.getPointBalance(ctx, webUserID)
+		if err != nil {
+			return "Maaf, belum bisa ambil data status sekarang 🙏", "idle"
+		}
+		level := (totalExp / 100) + 1
+		return fmt.Sprintf("Status Belajar Kamu 👤\n- Level: %d\n- EXP: %d ✨\n- Poin: %d 🌟", level, totalExp, bal), "idle"
 	}
 
 	if lower == "/poin" {
