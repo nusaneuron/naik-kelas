@@ -8,6 +8,9 @@ export default function Page() {
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
+  const [actionMsg, setActionMsg] = useState('');
+  const [actionType, setActionType] = useState('success');
+  const [busy, setBusy] = useState(false);
 
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -116,29 +119,38 @@ export default function Page() {
   }
 
   async function resetPassword(userId) {
+    setBusy(true); setActionMsg('');
     await fetch(`${apiBase}/admin/participants/reset-password`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ user_id: userId })
     });
     await loadAdmin();
+    setActionType('success'); setActionMsg('Password peserta berhasil direset.');
+    setBusy(false);
   }
 
   async function addCategory() {
+    setBusy(true); setActionMsg('');
     await fetch(`${apiBase}/admin/categories`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ action: 'create', code: newCategoryCode, name: newCategoryName })
     });
     setNewCategoryCode(''); setNewCategoryName('');
     await loadAdmin();
+    setActionType('success'); setActionMsg('Kategori berhasil ditambahkan.');
+    setBusy(false);
   }
 
   async function addQuestion() {
+    setBusy(true); setActionMsg('');
     await fetch(`${apiBase}/admin/questions`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ action: 'create', category_id: Number(qCategoryId), question_text: qText, option_a: qA, option_b: qB, option_c: qC, option_d: qD, correct_option: qCorrect })
     });
     setQText(''); setQA(''); setQB(''); setQC(''); setQD(''); setQCorrect('A');
     await loadAdmin();
+    setActionType('success'); setActionMsg('Soal berhasil ditambahkan.');
+    setBusy(false);
   }
 
   async function adjustPoints() {
@@ -146,15 +158,25 @@ export default function Page() {
     const target = participants.find((p) => (p.phone || '').replace(/[^0-9]/g, '') === normalized);
     if (!target) {
       setErr('Nomor telepon peserta tidak ditemukan.');
+      setActionType('error'); setActionMsg('Gagal: nomor telepon tidak ditemukan.');
       return;
     }
-    await fetch(`${apiBase}/admin/points/adjust`, {
+    setBusy(true); setActionMsg('');
+    const res = await fetch(`${apiBase}/admin/points/adjust`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ user_id: Number(target.id), delta: Number(pointDelta), reason: pointReason })
     });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setActionType('error'); setActionMsg(d.error || 'Gagal update poin.');
+      setBusy(false);
+      return;
+    }
     setPointPhone(''); setPointDelta(''); setPointReason('');
     await loadAdmin();
     await loadParticipant();
+    setActionType('success'); setActionMsg('Poin peserta berhasil diperbarui.');
+    setBusy(false);
   }
 
   const matchedParticipant = participants.find((p) => ((p.phone || '').replace(/[^0-9]/g, '') === (pointPhone || '').replace(/[^0-9]/g, '')));
@@ -162,7 +184,7 @@ export default function Page() {
     ? questions.filter((q) => String(q.category_id) === String(questionFilterCategoryId))
     : questions;
 
-  if (loading) return <main style={wrap}><p>Loading...</p></main>;
+  if (loading) return <main style={wrap}><div style={{...card, textAlign:'center'}}><h2 style={{marginTop:0}}>Menyiapkan Portal Naik Kelas...</h2><p className='nk-muted'>Memuat profil, leaderboard, dan riwayat belajar.</p></div></main>;
 
   if (!me) {
     return <main style={wrap}><form onSubmit={login} style={card}><h1>Naik Kelas Login</h1><p style={{ color: '#94a3b8' }}>Nomor HP + password</p><input style={input} placeholder='No HP' value={phone} onChange={(e)=>setPhone(e.target.value)} /><input style={{...input, marginTop:8}} type='password' placeholder='Password' value={password} onChange={(e)=>setPassword(e.target.value)} />{err?<p style={{color:'#fca5a5'}}>{err}</p>:null}<button style={btn}>Login</button></form></main>;
@@ -180,6 +202,7 @@ export default function Page() {
         </div>
 
         {me.must_change_password ? <p style={{ color: '#facc15' }}>⚠️ Password default terdeteksi. Ganti via /auth/change-password.</p> : null}
+        {actionMsg ? <div className={`nk-banner ${actionType}`}>{actionMsg}</div> : null}
 
         <div style={summaryGrid}>
           <section style={card2}><h2>Profil</h2><p><b>Nama:</b> {profile?.name || '-'}</p><p><b>Email:</b> {profile?.email || '-'}</p><p><b>Sumber:</b> {profile?.source || '-'}</p></section>
@@ -202,15 +225,15 @@ export default function Page() {
             </section>
 
             <div style={summaryGrid}>
-              <section style={card2}><h2>Admin · Peserta</h2><ul>{participants.map((p)=><li key={p.id}>{p.name || '-'} · {p.phone} · <b>{p.role}</b> · {p.is_active?'active':'disabled'} <button style={btnMini} onClick={()=>resetPassword(p.id)}>Reset Pass</button></li>)}{!participants.length?<li>Belum ada peserta.</li>:null}</ul></section>
-              <section style={card2}><h2>Admin · Kategori Soal</h2><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><input style={inputSmall} placeholder='code' value={newCategoryCode} onChange={(e)=>setNewCategoryCode(e.target.value)} /><input style={inputSmall} placeholder='name' value={newCategoryName} onChange={(e)=>setNewCategoryName(e.target.value)} /><button style={btnMini} onClick={addCategory}>Tambah</button></div><ul>{categories.map((c)=><li key={c.id}>{c.code} · {c.name}</li>)}{!categories.length?<li>Belum ada kategori.</li>:null}</ul></section>
+              <section style={card2}><h2>Admin · Peserta</h2><ul>{participants.map((p)=><li key={p.id}>{p.name || '-'} · {p.phone} · <b>{p.role}</b> · {p.is_active?'active':'disabled'} <button style={btnMini} disabled={busy} onClick={()=>resetPassword(p.id)}>{busy?'Proses...':'Reset Pass'}</button></li>)}{!participants.length?<li className='nk-empty'>Belum ada peserta.</li>:null}</ul></section>
+              <section style={card2}><h2>Admin · Kategori Soal</h2><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><input style={inputSmall} placeholder='code' value={newCategoryCode} onChange={(e)=>setNewCategoryCode(e.target.value)} /><input style={inputSmall} placeholder='name' value={newCategoryName} onChange={(e)=>setNewCategoryName(e.target.value)} /><button style={btnMini} disabled={busy} onClick={addCategory}>{busy?'Proses...':'Tambah'}</button></div><ul>{categories.map((c)=><li key={c.id}>{c.code} · {c.name}</li>)}{!categories.length?<li className='nk-empty'>Belum ada kategori.</li>:null}</ul></section>
             </div>
 
-            <section style={card2}><h2>Admin · Bank Soal</h2><div style={{display:'grid',gap:8}}><select style={input} value={qCategoryId} onChange={(e)=>setQCategoryId(e.target.value)}><option value=''>Pilih kategori</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select><input style={input} placeholder='Pertanyaan' value={qText} onChange={(e)=>setQText(e.target.value)} /><input style={input} placeholder='Opsi A' value={qA} onChange={(e)=>setQA(e.target.value)} /><input style={input} placeholder='Opsi B' value={qB} onChange={(e)=>setQB(e.target.value)} /><input style={input} placeholder='Opsi C' value={qC} onChange={(e)=>setQC(e.target.value)} /><input style={input} placeholder='Opsi D' value={qD} onChange={(e)=>setQD(e.target.value)} /><select style={input} value={qCorrect} onChange={(e)=>setQCorrect(e.target.value)}><option>A</option><option>B</option><option>C</option><option>D</option></select><button style={btnMini} onClick={addQuestion}>Tambah Soal</button></div><p className='nk-muted'>Total soal: {questions.length}</p><div style={{marginTop:12}}><label style={{display:'block',marginBottom:6}}>Filter daftar soal berdasarkan kategori</label><select style={input} value={questionFilterCategoryId} onChange={(e)=>setQuestionFilterCategoryId(e.target.value)}><option value=''>Semua kategori</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div><ul style={{marginTop:10}}>{filteredQuestions.map((q)=><li key={q.id}><b>{q.category_name}</b> · {q.question_text}</li>)}{!filteredQuestions.length?<li>Tidak ada soal untuk kategori ini.</li>:null}</ul></section>
+            <section style={card2}><h2>Admin · Bank Soal</h2><div style={{display:'grid',gap:8}}><select style={input} value={qCategoryId} onChange={(e)=>setQCategoryId(e.target.value)}><option value=''>Pilih kategori</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select><input style={input} placeholder='Pertanyaan' value={qText} onChange={(e)=>setQText(e.target.value)} /><input style={input} placeholder='Opsi A' value={qA} onChange={(e)=>setQA(e.target.value)} /><input style={input} placeholder='Opsi B' value={qB} onChange={(e)=>setQB(e.target.value)} /><input style={input} placeholder='Opsi C' value={qC} onChange={(e)=>setQC(e.target.value)} /><input style={input} placeholder='Opsi D' value={qD} onChange={(e)=>setQD(e.target.value)} /><select style={input} value={qCorrect} onChange={(e)=>setQCorrect(e.target.value)}><option>A</option><option>B</option><option>C</option><option>D</option></select><button style={btnMini} disabled={busy} onClick={addQuestion}>{busy?'Proses...':'Tambah Soal'}</button></div><p className='nk-muted'>Total soal: {questions.length}</p><div style={{marginTop:12}}><label style={{display:'block',marginBottom:6}}>Filter daftar soal berdasarkan kategori</label><select style={input} value={questionFilterCategoryId} onChange={(e)=>setQuestionFilterCategoryId(e.target.value)}><option value=''>Semua kategori</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div><ul style={{marginTop:10}}>{filteredQuestions.map((q)=><li key={q.id}><b>{q.category_name}</b> · {q.question_text}</li>)}{!filteredQuestions.length?<li className='nk-empty'>Tidak ada soal untuk kategori ini.</li>:null}</ul></section>
 
             <div style={summaryGrid}>
               <section style={card2}><h2>Admin · Jadwal Belajar Peserta</h2><ul>{adminReminders.map((r, i)=><li key={i}>{r.name || '-'} ({r.phone || '-'}) · {r.time_of_day} ({r.timezone}) · {r.is_active ? 'aktif' : 'nonaktif'}</li>)}{!adminReminders.length ? <li>Belum ada jadwal belajar yang diset.</li> : null}</ul></section>
-              <section style={card2}><h2>Admin · Poin Peserta</h2><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><input style={inputSmall} placeholder='nomor telepon peserta' value={pointPhone} onChange={(e)=>setPointPhone(e.target.value)} /><input style={inputSmall} placeholder='delta (+/-)' value={pointDelta} onChange={(e)=>setPointDelta(e.target.value)} /><input style={inputSmall} placeholder='reason' value={pointReason} onChange={(e)=>setPointReason(e.target.value)} /><button style={btnMini} onClick={adjustPoints}>Submit Poin</button></div><p className='nk-muted' style={{ marginTop:8 }}>Nama terdeteksi: <b>{matchedParticipant?.name || '-'}</b>{matchedParticipant?.phone ? ` (${matchedParticipant.phone})` : ''}</p><ul>{adminPointHistory.slice(0,20).map((p,i)=><li key={i}>{p.name || '-'} ({p.phone || '-'}) · {p.delta>0?`+${p.delta}`:p.delta} · {p.reason} · {p.type}</li>)}{!adminPointHistory.length?<li>Belum ada transaksi poin.</li>:null}</ul></section>
+              <section style={card2}><h2>Admin · Poin Peserta</h2><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><input style={inputSmall} placeholder='nomor telepon peserta' value={pointPhone} onChange={(e)=>setPointPhone(e.target.value)} /><input style={inputSmall} placeholder='delta (+/-)' value={pointDelta} onChange={(e)=>setPointDelta(e.target.value)} /><input style={inputSmall} placeholder='reason' value={pointReason} onChange={(e)=>setPointReason(e.target.value)} /><button style={btnMini} disabled={busy} onClick={adjustPoints}>{busy?'Proses...':'Submit Poin'}</button></div><p className='nk-muted' style={{ marginTop:8 }}>Nama terdeteksi: <b>{matchedParticipant?.name || '-'}</b>{matchedParticipant?.phone ? ` (${matchedParticipant.phone})` : ''}</p><ul>{adminPointHistory.slice(0,20).map((p,i)=><li key={i}>{p.name || '-'} ({p.phone || '-'}) · {p.delta>0?`+${p.delta}`:p.delta} · {p.reason} · {p.type}</li>)}{!adminPointHistory.length?<li className='nk-empty'>Belum ada transaksi poin.</li>:null}</ul></section>
             </div>
           </>
         ) : null}

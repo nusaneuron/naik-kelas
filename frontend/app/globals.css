@@ -74,3 +74,42 @@ body {
 .nk-muted {
   color: var(--nk-muted);
 }
+
+.nk-btn,
+button {
+  transition: transform 160ms ease, filter 160ms ease, box-shadow 180ms ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+.nk-empty {
+  border: 1px dashed #475569;
+  border-radius: var(--nk-radius-md);
+  padding: 10px 12px;
+  color: var(--nk-muted);
+  background: rgba(148, 163, 184, 0.06);
+}
+
+.nk-banner {
+  border-radius: var(--nk-radius-md);
+  padding: 10px 12px;
+  margin-top: 10px;
+}
+
+.nk-banner.error {
+  border: 1px solid rgba(220, 38, 38, 0.5);
+  background: rgba(220, 38, 38, 0.12);
+  color: #fecaca;
+}
+
+.nk-banner.success {
+  border: 1px solid rgba(22, 163, 74, 0.5);
+  background: rgba(22, 163, 74, 0.14);
+  color: #bbf7d0;
+}
