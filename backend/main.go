@@ -164,6 +164,11 @@ func main() {
 	mux.HandleFunc("/participant/history", a.handleParticipantHistory)
 	mux.HandleFunc("/participant/leaderboard", a.handleParticipantLeaderboard)
 	mux.HandleFunc("/admin/ping", a.handleAdminPing)
+	mux.HandleFunc("/admin/participants", a.handleAdminParticipants)
+	mux.HandleFunc("/admin/participants/reset-password", a.handleAdminResetPassword)
+	mux.HandleFunc("/admin/participants/toggle-active", a.handleAdminToggleActive)
+	mux.HandleFunc("/admin/categories", a.handleAdminCategories)
+	mux.HandleFunc("/admin/questions", a.handleAdminQuestions)
 
 	port := getenv("PORT", "8080")
 	addr := ":" + port
@@ -298,10 +303,84 @@ func (a *app) initDB(ctx context.Context) error {
 		return err
 	}
 
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS question_categories (
+			id BIGSERIAL PRIMARY KEY,
+			code TEXT NOT NULL UNIQUE,
+			name TEXT NOT NULL,
+			is_active BOOLEAN NOT NULL DEFAULT TRUE,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS questions (
+			id BIGSERIAL PRIMARY KEY,
+			category_id BIGINT NOT NULL REFERENCES question_categories(id) ON DELETE CASCADE,
+			question_text TEXT NOT NULL,
+			option_a TEXT NOT NULL,
+			option_b TEXT NOT NULL,
+			option_c TEXT NOT NULL,
+			option_d TEXT NOT NULL,
+			correct_option TEXT NOT NULL,
+			is_active BOOLEAN NOT NULL DEFAULT TRUE,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	if err := a.seedQuestionBankIfEmpty(ctx); err != nil {
+		return err
+	}
+
 	if err := a.migrateParticipantsToUsers(ctx); err != nil {
 		return err
 	}
 
+	return nil
+}
+
+func (a *app) seedQuestionBankIfEmpty(ctx context.Context) error {
+	var total int
+	if err := a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM question_categories`).Scan(&total); err != nil {
+		return err
+	}
+	if total > 0 {
+		return nil
+	}
+	for _, c := range quizCategories {
+		var cid int64
+		if err := a.db.QueryRowContext(ctx, `INSERT INTO question_categories(code,name,is_active) VALUES($1,$2,TRUE) RETURNING id`, strings.ToLower(strings.TrimSpace(c.Code)), c.Name).Scan(&cid); err != nil {
+			return err
+		}
+		for _, q := range c.Items {
+			if len(q.Options) < 4 {
+				continue
+			}
+			oA := strings.TrimPrefix(q.Options[0], "A. ")
+			oB := strings.TrimPrefix(q.Options[1], "B. ")
+			oC := strings.TrimPrefix(q.Options[2], "C. ")
+			oD := strings.TrimPrefix(q.Options[3], "D. ")
+			questionText := strings.TrimSpace(q.Question)
+			if idx := strings.Index(questionText, ") "); idx > 0 {
+				questionText = questionText[idx+2:]
+			}
+			_, err := a.db.ExecContext(ctx, `
+				INSERT INTO questions(category_id,question_text,option_a,option_b,option_c,option_d,correct_option,is_active)
+				VALUES($1,$2,$3,$4,$5,$6,$7,TRUE)
+			`, cid, questionText, oA, oB, oC, oD, strings.ToUpper(strings.TrimSpace(q.Answer)))
+			if err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
@@ -650,6 +729,231 @@ func (a *app) handleAdminPing(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "admin_id": u.ID})
 }
 
+func (a *app) handleAdminParticipants(w http.ResponseWriter, r *http.Request) {
+	_, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	rows, err := a.db.QueryContext(r.Context(), `
+		SELECT u.id, u.phone, u.role, u.is_active, u.must_change_password,
+		       COALESCE(p.name,''), COALESCE(p.email,'')
+		FROM users u
+		LEFT JOIN participant_profiles p ON p.user_id = u.id
+		ORDER BY u.created_at DESC
+		LIMIT 200
+	`)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load participants"})
+		return
+	}
+	defer rows.Close()
+	items := []map[string]any{}
+	for rows.Next() {
+		var id int64
+		var phone, role, name, email string
+		var isActive, mustChange bool
+		if rows.Scan(&id, &phone, &role, &isActive, &mustChange, &name, &email) == nil {
+			items = append(items, map[string]any{"id": id, "phone": phone, "role": role, "is_active": isActive, "must_change_password": mustChange, "name": name, "email": email})
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (a *app) handleAdminResetPassword(w http.ResponseWriter, r *http.Request) {
+	_, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req struct {
+		UserID int64  `json:"user_id"`
+		Phone  string `json:"phone"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+	var phone string
+	if req.UserID > 0 {
+		_ = a.db.QueryRowContext(r.Context(), `SELECT phone FROM users WHERE id=$1`, req.UserID).Scan(&phone)
+	} else {
+		phone = normalizePhone(req.Phone)
+	}
+	if phone == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "user_id or phone required"})
+		return
+	}
+	pass := defaultPasswordForPhone(phone)
+	hash, _ := bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
+	_, err = a.db.ExecContext(r.Context(), `UPDATE users SET password_hash=$1, must_change_password=TRUE, updated_at=NOW() WHERE phone=$2`, string(hash), phone)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed reset password"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "phone": phone, "new_default_password": pass})
+}
+
+func (a *app) handleAdminToggleActive(w http.ResponseWriter, r *http.Request) {
+	_, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req struct {
+		UserID   int64 `json:"user_id"`
+		IsActive bool  `json:"is_active"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || req.UserID == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
+		return
+	}
+	_, err = a.db.ExecContext(r.Context(), `UPDATE users SET is_active=$1, updated_at=NOW() WHERE id=$2`, req.IsActive, req.UserID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed update status"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *app) handleAdminCategories(w http.ResponseWriter, r *http.Request) {
+	_, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		rows, err := a.db.QueryContext(r.Context(), `SELECT id, code, name, is_active FROM question_categories ORDER BY id DESC`)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed categories"})
+			return
+		}
+		defer rows.Close()
+		items := []map[string]any{}
+		for rows.Next() {
+			var id int64
+			var code, name string
+			var active bool
+			if rows.Scan(&id, &code, &name, &active) == nil {
+				items = append(items, map[string]any{"id": id, "code": code, "name": name, "is_active": active})
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	case http.MethodPost:
+		var req struct {
+			Action   string `json:"action"`
+			ID       int64  `json:"id"`
+			Code     string `json:"code"`
+			Name     string `json:"name"`
+			IsActive *bool  `json:"is_active"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			return
+		}
+		switch req.Action {
+		case "create":
+			_, err = a.db.ExecContext(r.Context(), `INSERT INTO question_categories(code,name,is_active) VALUES($1,$2,TRUE)`, strings.ToLower(strings.TrimSpace(req.Code)), strings.TrimSpace(req.Name))
+		case "update":
+			active := true
+			if req.IsActive != nil {
+				active = *req.IsActive
+			}
+			_, err = a.db.ExecContext(r.Context(), `UPDATE question_categories SET code=$1,name=$2,is_active=$3,updated_at=NOW() WHERE id=$4`, strings.ToLower(strings.TrimSpace(req.Code)), strings.TrimSpace(req.Name), active, req.ID)
+		case "delete":
+			_, err = a.db.ExecContext(r.Context(), `DELETE FROM question_categories WHERE id=$1`, req.ID)
+		default:
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown action"})
+			return
+		}
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed action"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+func (a *app) handleAdminQuestions(w http.ResponseWriter, r *http.Request) {
+	_, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		rows, err := a.db.QueryContext(r.Context(), `
+			SELECT q.id,q.category_id,COALESCE(c.name,''),q.question_text,q.option_a,q.option_b,q.option_c,q.option_d,q.correct_option,q.is_active
+			FROM questions q LEFT JOIN question_categories c ON c.id=q.category_id ORDER BY q.id DESC LIMIT 300
+		`)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed questions"})
+			return
+		}
+		defer rows.Close()
+		items := []map[string]any{}
+		for rows.Next() {
+			var id, cid int64
+			var cname, qt, a1, b1, c1, d1, co string
+			var active bool
+			if rows.Scan(&id, &cid, &cname, &qt, &a1, &b1, &c1, &d1, &co, &active) == nil {
+				items = append(items, map[string]any{"id": id, "category_id": cid, "category_name": cname, "question_text": qt, "option_a": a1, "option_b": b1, "option_c": c1, "option_d": d1, "correct_option": co, "is_active": active})
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	case http.MethodPost:
+		var req struct {
+			Action        string `json:"action"`
+			ID            int64  `json:"id"`
+			CategoryID    int64  `json:"category_id"`
+			QuestionText  string `json:"question_text"`
+			OptionA       string `json:"option_a"`
+			OptionB       string `json:"option_b"`
+			OptionC       string `json:"option_c"`
+			OptionD       string `json:"option_d"`
+			CorrectOption string `json:"correct_option"`
+			IsActive      *bool  `json:"is_active"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			return
+		}
+		switch req.Action {
+		case "create":
+			_, err = a.db.ExecContext(r.Context(), `INSERT INTO questions(category_id,question_text,option_a,option_b,option_c,option_d,correct_option,is_active) VALUES($1,$2,$3,$4,$5,$6,$7,TRUE)`, req.CategoryID, strings.TrimSpace(req.QuestionText), req.OptionA, req.OptionB, req.OptionC, req.OptionD, strings.ToUpper(strings.TrimSpace(req.CorrectOption)))
+		case "update":
+			active := true
+			if req.IsActive != nil {
+				active = *req.IsActive
+			}
+			_, err = a.db.ExecContext(r.Context(), `UPDATE questions SET category_id=$1,question_text=$2,option_a=$3,option_b=$4,option_c=$5,option_d=$6,correct_option=$7,is_active=$8,updated_at=NOW() WHERE id=$9`, req.CategoryID, strings.TrimSpace(req.QuestionText), req.OptionA, req.OptionB, req.OptionC, req.OptionD, strings.ToUpper(strings.TrimSpace(req.CorrectOption)), active, req.ID)
+		case "delete":
+			_, err = a.db.ExecContext(r.Context(), `DELETE FROM questions WHERE id=$1`, req.ID)
+		default:
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown action"})
+			return
+		}
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed action"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
 type authUser struct {
 	ID                 int64  `json:"id"`
 	Phone              string `json:"phone"`
@@ -884,16 +1188,6 @@ func (a *app) sendTelegramMessage(ctx context.Context, chatID int64, text, state
 			"resize_keyboard":   true,
 			"one_time_keyboard": false,
 		}
-	} else if state == "quiz_choose_category" {
-		rows := make([][]string, 0, len(quizCategories))
-		for _, c := range quizCategories {
-			rows = append(rows, []string{c.Name})
-		}
-		payload["reply_markup"] = map[string]any{
-			"keyboard":          rows,
-			"resize_keyboard":   true,
-			"one_time_keyboard": false,
-		}
 	} else {
 		payload["reply_markup"] = map[string]any{
 			"remove_keyboard": true,
@@ -961,10 +1255,14 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		if !registered {
 			return "Sebelum ikut quiz, kamu perlu daftar dulu ya ✨\nKetik /daftar untuk registrasi dulu.", "idle"
 		}
+		catsText, err := a.formatQuizCategoriesDB(ctx)
+		if err != nil || strings.TrimSpace(catsText) == "" {
+			catsText = formatQuizCategories()
+		}
 		a.mu.Lock()
 		a.botSessions[uid] = &botSession{State: "quiz_choose_category", QuizIndex: 0, QuizAnswers: []string{}, UpdatedAt: time.Now()}
 		a.mu.Unlock()
-		return "Siap, kita mulai quiz Naik Kelas! 🔥\nPilih dulu kategori quiz yang kamu mau:\n\n" + formatQuizCategories(), "quiz_choose_category"
+		return "Siap, kita mulai quiz Naik Kelas! 🔥\nPilih dulu kategori quiz yang kamu mau:\n\n" + catsText, "quiz_choose_category"
 	}
 	if lower == "/tryout" {
 		registered, err := a.isRegisteredBotUser(ctx, uid)
@@ -974,7 +1272,10 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		if !registered {
 			return "Sebelum ikut tryout, kamu perlu daftar dulu ya ✨\nKetik /daftar untuk registrasi dulu.", "idle"
 		}
-		qs := shuffledTryoutQuestions()
+		qs, err := a.shuffledTryoutQuestionsDB(ctx)
+		if err != nil || len(qs) == 0 {
+			qs = shuffledTryoutQuestions()
+		}
 		a.mu.Lock()
 		a.botSessions[uid] = &botSession{State: "tryout_answering", TryoutQuestions: qs, TryoutAnswers: []string{}, TryoutStartedAt: time.Now(), DisplayName: displayName, UpdatedAt: time.Now()}
 		a.mu.Unlock()
@@ -1066,9 +1367,16 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		return "Nomor ini belum terdaftar ya.\nYuk lanjut daftar dengan ketik /daftar ✨", "idle"
 
 	case "quiz_choose_category":
-		cat, ok := findQuizCategory(text)
+		cat, ok, err := a.findQuizCategoryDB(ctx, text)
+		if err != nil {
+			return "Maaf, kategori quiz belum bisa dimuat 🙏 Coba lagi sebentar ya.", "quiz_choose_category"
+		}
 		if !ok {
-			return "Kategori belum dikenali 🙏\nSilakan pilih salah satu kategori berikut:\n\n" + formatQuizCategories(), "quiz_choose_category"
+			catsText, _ := a.formatQuizCategoriesDB(ctx)
+			if strings.TrimSpace(catsText) == "" {
+				catsText = formatQuizCategories()
+			}
+			return "Kategori belum dikenali 🙏\nSilakan pilih salah satu kategori berikut:\n\n" + catsText, "quiz_choose_category"
 		}
 		a.mu.Lock()
 		s.QuizCategory = cat.Code
@@ -1084,7 +1392,11 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		if ans == "" {
 			return "Jawab dengan A, B, C, atau D ya ✍️", "quiz_answering"
 		}
-		cat, ok := findQuizCategory(s.QuizCategory)
+		cat, ok, err := a.findQuizCategoryDB(ctx, s.QuizCategory)
+		if err != nil {
+			a.resetSession(uid)
+			return "Kategori quiz tidak ditemukan. Ketik /quiz untuk mulai lagi ya.", "idle"
+		}
 		if !ok {
 			a.resetSession(uid)
 			return "Kategori quiz tidak ditemukan. Ketik /quiz untuk mulai lagi ya.", "idle"
@@ -1334,6 +1646,104 @@ func (a *app) resetSession(uid string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.botSessions[uid] = &botSession{State: "idle", UpdatedAt: time.Now()}
+}
+
+func (a *app) formatQuizCategoriesDB(ctx context.Context) (string, error) {
+	rows, err := a.db.QueryContext(ctx, `SELECT code, name FROM question_categories WHERE is_active = TRUE ORDER BY id ASC`)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	lines := []string{}
+	for rows.Next() {
+		var code, name string
+		if rows.Scan(&code, &name) == nil {
+			lines = append(lines, "- "+name+" ("+code+")")
+		}
+	}
+	if len(lines) == 0 {
+		return "", nil
+	}
+	return strings.Join(lines, "\n") + "\n\nKirim nama kategori atau kode dalam kurung.", nil
+}
+
+func (a *app) findQuizCategoryDB(ctx context.Context, input string) (quizCategory, bool, error) {
+	s := strings.ToLower(strings.TrimSpace(input))
+	if s == "" {
+		return quizCategory{}, false, nil
+	}
+	var id int64
+	var code, name string
+	err := a.db.QueryRowContext(ctx, `
+		SELECT id, code, name FROM question_categories
+		WHERE is_active = TRUE AND (LOWER(code) = $1 OR LOWER(name) = $1)
+		LIMIT 1
+	`, s).Scan(&id, &code, &name)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return quizCategory{}, false, nil
+		}
+		return quizCategory{}, false, err
+	}
+	qs, err := a.getQuestionsByCategoryID(ctx, id)
+	if err != nil {
+		return quizCategory{}, false, err
+	}
+	if len(qs) == 0 {
+		return quizCategory{}, false, nil
+	}
+	return quizCategory{Code: code, Name: name, Items: qs}, true, nil
+}
+
+func (a *app) getQuestionsByCategoryID(ctx context.Context, categoryID int64) ([]quizQuestion, error) {
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT question_text, option_a, option_b, option_c, option_d, correct_option
+		FROM questions
+		WHERE category_id = $1 AND is_active = TRUE
+		ORDER BY id ASC
+	`, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []quizQuestion{}
+	n := 1
+	for rows.Next() {
+		var q, a1, b1, c1, d1, ans string
+		if rows.Scan(&q, &a1, &b1, &c1, &d1, &ans) == nil {
+			out = append(out, quizQuestion{Question: fmt.Sprintf("%d) %s", n, q), Options: []string{"A. " + a1, "B. " + b1, "C. " + c1, "D. " + d1}, Answer: strings.ToUpper(strings.TrimSpace(ans))})
+			n++
+		}
+	}
+	return out, rows.Err()
+}
+
+func (a *app) shuffledTryoutQuestionsDB(ctx context.Context) ([]quizQuestion, error) {
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT q.question_text, q.option_a, q.option_b, q.option_c, q.option_d, q.correct_option
+		FROM questions q
+		JOIN question_categories c ON c.id = q.category_id
+		WHERE q.is_active = TRUE AND c.is_active = TRUE
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []quizQuestion{}
+	n := 1
+	for rows.Next() {
+		var q, a1, b1, c1, d1, ans string
+		if rows.Scan(&q, &a1, &b1, &c1, &d1, &ans) == nil {
+			items = append(items, quizQuestion{Question: fmt.Sprintf("%d) %s", n, q), Options: []string{"A. " + a1, "B. " + b1, "C. " + c1, "D. " + d1}, Answer: strings.ToUpper(strings.TrimSpace(ans))})
+			n++
+		}
+	}
+	if len(items) == 0 {
+		return nil, nil
+	}
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	r.Shuffle(len(items), func(i, j int) { items[i], items[j] = items[j], items[i] })
+	return items, nil
 }
 
 func shuffledTryoutQuestions() []quizQuestion {
