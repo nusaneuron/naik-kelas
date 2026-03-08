@@ -371,11 +371,16 @@ func (a *app) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uid := strconv.FormatInt(upd.Message.From.ID, 10)
-	displayName := strings.TrimSpace(upd.Message.From.FirstName)
-	if u := strings.TrimSpace(upd.Message.From.Username); u != "" {
-		displayName = "@" + u
-	}
-	if displayName == "" {
+	firstName := strings.TrimSpace(upd.Message.From.FirstName)
+	username := strings.TrimSpace(upd.Message.From.Username)
+	displayName := ""
+	if firstName != "" && username != "" {
+		displayName = firstName + " (@" + username + ")"
+	} else if username != "" {
+		displayName = "@" + username
+	} else if firstName != "" {
+		displayName = firstName
+	} else {
 		displayName = uid
 	}
 	reply, state := a.processBotText(r.Context(), uid, displayName, text)
@@ -761,7 +766,7 @@ func (a *app) getTryoutLeaderboard(ctx context.Context, limit int) (string, erro
 		if err := rows.Scan(&userID, &name, &bestSec, &perfectCount); err != nil {
 			return "", err
 		}
-		lines = append(lines, fmt.Sprintf("%d. %s — %ds (perfect: %dx)", rank, name, bestSec, perfectCount))
+		lines = append(lines, fmt.Sprintf("%d. %s | TG: %s — %ds (perfect: %dx)", rank, name, userID, bestSec, perfectCount))
 		rank++
 	}
 	if err := rows.Err(); err != nil {
