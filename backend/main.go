@@ -165,8 +165,10 @@ func main() {
 	mux.HandleFunc("/participant/me", a.handleParticipantMe)
 	mux.HandleFunc("/participant/history", a.handleParticipantHistory)
 	mux.HandleFunc("/participant/leaderboard", a.handleParticipantLeaderboard)
+	mux.HandleFunc("/participant/reminder", a.handleParticipantReminder)
 	mux.HandleFunc("/admin/ping", a.handleAdminPing)
 	mux.HandleFunc("/admin/participants", a.handleAdminParticipants)
+	mux.HandleFunc("/admin/reminders", a.handleAdminReminders)
 	mux.HandleFunc("/admin/participants/reset-password", a.handleAdminResetPassword)
 	mux.HandleFunc("/admin/participants/toggle-active", a.handleAdminToggleActive)
 	mux.HandleFunc("/admin/categories", a.handleAdminCategories)
@@ -824,6 +826,68 @@ func (a *app) handleParticipantLeaderboard(w http.ResponseWriter, r *http.Reques
 		if err := rows.Scan(&userID, &name, &tg, &bestSec, &perfectCount); err == nil {
 			items = append(items, map[string]any{"rank": rank, "name": name, "telegram": cleanTelegramHandle(tg), "best_seconds": bestSec, "perfect_count": perfectCount})
 			rank++
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (a *app) handleParticipantReminder(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant", "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	var tgID string
+	err = a.db.QueryRowContext(r.Context(), `SELECT telegram_user_id FROM telegram_links WHERE user_id = $1 LIMIT 1`, u.ID).Scan(&tgID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusOK, map[string]any{"active": false})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed load reminder"})
+		return
+	}
+	rm, err := a.getStudyReminder(r.Context(), tgID)
+	if err != nil || strings.TrimSpace(rm.TelegramUserID) == "" {
+		writeJSON(w, http.StatusOK, map[string]any{"active": false})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"active": rm.Active, "time_of_day": rm.TimeOfDay, "timezone": rm.Timezone, "last_sent_at": rm.LastSentAt})
+}
+
+func (a *app) handleAdminReminders(w http.ResponseWriter, r *http.Request) {
+	_, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	rows, err := a.db.QueryContext(r.Context(), `
+		SELECT r.telegram_user_id, r.user_id, r.time_of_day, r.timezone, r.is_active, r.last_sent_at,
+		       COALESCE(p.name, ''), COALESCE(u.phone, '')
+		FROM study_reminders r
+		LEFT JOIN users u ON u.id = r.user_id
+		LEFT JOIN participant_profiles p ON p.user_id = r.user_id
+		ORDER BY r.updated_at DESC
+		LIMIT 300
+	`)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed load reminders"})
+		return
+	}
+	defer rows.Close()
+	items := []map[string]any{}
+	for rows.Next() {
+		var tgID string
+		var userID int64
+		var tod, tz, name, phone string
+		var active bool
+		var last sql.NullTime
+		if rows.Scan(&tgID, &userID, &tod, &tz, &active, &last, &name, &phone) == nil {
+			it := map[string]any{"telegram_user_id": tgID, "user_id": userID, "time_of_day": tod, "timezone": tz, "is_active": active, "name": name, "phone": phone}
+			if last.Valid {
+				it["last_sent_at"] = last.Time
+			}
+			items = append(items, it)
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
