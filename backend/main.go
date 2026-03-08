@@ -149,6 +149,10 @@ func main() {
 		log.Fatalf("init database: %v", err)
 	}
 
+	if err := a.syncTelegramBotCommands(ctx); err != nil {
+		log.Printf("telegram setMyCommands warning: %v", err)
+	}
+
 	go a.startReminderScheduler(context.Background())
 
 	mux := http.NewServeMux()
@@ -1876,6 +1880,42 @@ func (a *app) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *app) syncTelegramBotCommands(ctx context.Context) error {
+	if strings.TrimSpace(a.telegramBotToken) == "" {
+		return nil
+	}
+	commands := []map[string]string{
+		{"command": "start", "description": "Mulai dengan Nala"},
+		{"command": "daftar", "description": "Daftar peserta baru"},
+		{"command": "cek", "description": "Cek status pendaftaran"},
+		{"command": "quiz", "description": "Latihan quiz per kategori"},
+		{"command": "tryout", "description": "Tryout soal acak"},
+		{"command": "leaderbot", "description": "Ranking tryout tercepat"},
+		{"command": "poin", "description": "Menu saldo & transaksi poin"},
+		{"command": "exp", "description": "Lihat EXP dan level"},
+		{"command": "status", "description": "Ringkasan level, EXP, poin"},
+		{"command": "jadwal_belajar", "description": "Atur pengingat belajar"},
+		{"command": "batal", "description": "Batalkan proses saat ini"},
+	}
+	payload := map[string]any{"commands": commands}
+	b, _ := json.Marshal(payload)
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/setMyCommands", a.telegramBotToken)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("setMyCommands status %d", resp.StatusCode)
+	}
+	return nil
 }
 
 func (a *app) sendTelegramMessage(ctx context.Context, chatID int64, text, state string) error {
