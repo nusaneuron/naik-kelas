@@ -11,6 +11,7 @@ export default function Page() {
   const [actionMsg, setActionMsg] = useState('');
   const [actionType, setActionType] = useState('success');
   const [busy, setBusy] = useState(false);
+  const [adminViewMode, setAdminViewMode] = useState('participant');
 
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -183,6 +184,9 @@ export default function Page() {
   const filteredQuestions = questionFilterCategoryId
     ? questions.filter((q) => String(q.category_id) === String(questionFilterCategoryId))
     : questions;
+  const isAdmin = me?.role === 'admin';
+  const showParticipantView = !isAdmin || adminViewMode === 'participant';
+  const showAdminView = isAdmin && adminViewMode === 'admin';
 
   if (loading) return <main style={wrap}><div style={{...card, textAlign:'center'}}><h2 style={{marginTop:0}}>Menyiapkan Portal Naik Kelas...</h2><p className='nk-muted'>Memuat profil, leaderboard, dan riwayat belajar.</p></div></main>;
 
@@ -198,26 +202,38 @@ export default function Page() {
             <h1 style={{ margin: 0, fontSize: 34, color: 'var(--nk-ink)' }}>Naik Kelas Portal</h1>
             <p style={{ margin: '6px 0 0', color: 'rgba(21,19,19,0.8)' }}>{profile?.name || me.phone} · role: {me.role}</p>
           </div>
-          <button onClick={logout} style={btn}>Logout</button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {isAdmin ? (
+              <>
+                <button onClick={() => setAdminViewMode('participant')} style={{ ...btnMini, background: adminViewMode === 'participant' ? '#111827' : '#374151' }}>Tampilan Peserta</button>
+                <button onClick={() => setAdminViewMode('admin')} style={{ ...btnMini, background: adminViewMode === 'admin' ? '#111827' : '#374151' }}>Tampilan Admin</button>
+              </>
+            ) : null}
+            <button onClick={logout} style={btn}>Logout</button>
+          </div>
         </div>
 
         {me.must_change_password ? <p style={{ color: '#facc15' }}>⚠️ Password default terdeteksi. Ganti via /auth/change-password.</p> : null}
         {actionMsg ? <div className={`nk-banner ${actionType}`}>{actionMsg}</div> : null}
 
-        <div style={summaryGrid}>
-          <section style={card2}><h2>Profil</h2><p><b>Nama:</b> {profile?.name || '-'}</p><p><b>Email:</b> {profile?.email || '-'}</p><p><b>Sumber:</b> {profile?.source || '-'}</p></section>
-          <section style={card2}><h2>Jadwal Belajar</h2>{myReminder?.active ? <p>Aktif tiap hari jam <b>{myReminder.time_of_day}</b> ({myReminder.timezone})</p> : <p>Belum aktif. Atur lewat bot Nala: <b>/jadwal_belajar</b></p>}</section>
-          <section style={card2}><h2>Saldo Poin</h2><p style={{fontSize:30, margin:'8px 0'}}><b>{myPoints}</b> poin 🌟</p><p className='nk-muted'>Total poin yang bisa digunakan saat ini.</p></section>
-        </div>
+        {showParticipantView ? (
+          <>
+            <div style={summaryGrid}>
+              <section style={card2}><h2>Profil</h2><p><b>Nama:</b> {profile?.name || '-'}</p><p><b>Email:</b> {profile?.email || '-'}</p><p><b>Sumber:</b> {profile?.source || '-'}</p></section>
+              <section style={card2}><h2>Jadwal Belajar</h2>{myReminder?.active ? <p>Aktif tiap hari jam <b>{myReminder.time_of_day}</b> ({myReminder.timezone})</p> : <p>Belum aktif. Atur lewat bot Nala: <b>/jadwal_belajar</b></p>}</section>
+              <section style={card2}><h2>Saldo Poin</h2><p style={{fontSize:30, margin:'8px 0'}}><b>{myPoints}</b> poin 🌟</p><p className='nk-muted'>Total poin yang bisa digunakan saat ini.</p></section>
+            </div>
 
-        <section style={card2}><h2>Riwayat Poin</h2><ul>{myPointHistory.slice(0,10).map((p,i)=><li key={i}>{p.delta > 0 ? `+${p.delta}` : p.delta} · {p.reason} · {p.type}</li>)}{!myPointHistory.length?<li>Belum ada transaksi poin.</li>:null}</ul></section>
-        <section style={card2}><h2>Leaderbot Tryout</h2><ol>{leaderboard.map((it)=><li key={it.rank}>{it.name} ({it.telegram}) — {it.best_seconds}s (perfect: {it.perfect_count}x)</li>)}{!leaderboard.length?<li>Belum ada data.</li>:null}</ol></section>
-        <div style={summaryGrid}>
-          <section style={card2}><h2>Riwayat Quiz</h2><ul>{(history.quiz||[]).map((q,i)=><li key={i}>{q.category} · attempt #{q.attempt_no} · wrong {q.wrong_count}/{q.total_questions} · {q.all_correct?'LULUS':'BELUM'}</li>)}{!history.quiz?.length?<li>Belum ada riwayat quiz.</li>:null}</ul></section>
-          <section style={card2}><h2>Riwayat Tryout</h2><ul>{(history.tryout||[]).map((t,i)=><li key={i}>{t.correct_count}/{t.total_questions} · {t.duration_seconds}s · speed {Number(t.speed_qpm||0).toFixed(2)} qpm · {t.all_correct?'PERFECT':'BELUM'}</li>)}{!history.tryout?.length?<li>Belum ada riwayat tryout.</li>:null}</ul></section>
-        </div>
+            <section style={card2}><h2>Riwayat Poin</h2><ul>{myPointHistory.slice(0,10).map((p,i)=><li key={i}>{p.delta > 0 ? `+${p.delta}` : p.delta} · {p.reason} · {p.type}</li>)}{!myPointHistory.length?<li>Belum ada transaksi poin.</li>:null}</ul></section>
+            <section style={card2}><h2>Leaderbot Tryout</h2><ol>{leaderboard.map((it)=><li key={it.rank}>{it.name} ({it.telegram}) — {it.best_seconds}s (perfect: {it.perfect_count}x)</li>)}{!leaderboard.length?<li>Belum ada data.</li>:null}</ol></section>
+            <div style={summaryGrid}>
+              <section style={card2}><h2>Riwayat Quiz</h2><ul>{(history.quiz||[]).map((q,i)=><li key={i}>{q.category} · attempt #{q.attempt_no} · wrong {q.wrong_count}/{q.total_questions} · {q.all_correct?'LULUS':'BELUM'}</li>)}{!history.quiz?.length?<li>Belum ada riwayat quiz.</li>:null}</ul></section>
+              <section style={card2}><h2>Riwayat Tryout</h2><ul>{(history.tryout||[]).map((t,i)=><li key={i}>{t.correct_count}/{t.total_questions} · {t.duration_seconds}s · speed {Number(t.speed_qpm||0).toFixed(2)} qpm · {t.all_correct?'PERFECT':'BELUM'}</li>)}{!history.tryout?.length?<li>Belum ada riwayat tryout.</li>:null}</ul></section>
+            </div>
+          </>
+        ) : null}
 
-        {me.role === 'admin' ? (
+        {showAdminView ? (
           <>
             <section style={{...card2, background:'rgba(190,148,245,0.15)', borderColor:'rgba(190,148,245,0.5)'}}>
               <h2 style={{marginTop:0}}>Admin Workspace</h2>
