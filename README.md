@@ -39,6 +39,7 @@ Aplikasi sederhana untuk menampilkan **list peserta** yang bergabung dari pendaf
     - tersimpan: durasi (detik) dan kecepatan (`speed_qpm`)
   - `/leaderbot`: ranking peserta dengan skor sempurna tercepat
 - `POST /telegram/webhook` (endpoint webhook Telegram)
+  - otomatis sinkron Telegram user ke akun web participant berdasarkan nomor HP pendaftaran
 - `POST /admin/bootstrap` (bootstrap/promote akun admin; butuh header `X-Admin-Bootstrap-Token`)
   - body JSON:
     ```json

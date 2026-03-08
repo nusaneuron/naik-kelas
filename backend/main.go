@@ -304,6 +304,18 @@ func (a *app) initDB(ctx context.Context) error {
 	}
 
 	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS telegram_links (
+			telegram_user_id TEXT PRIMARY KEY,
+			user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			telegram_display TEXT NOT NULL DEFAULT '',
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	_, err = a.db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS question_categories (
 			id BIGSERIAL PRIMARY KEY,
 			code TEXT NOT NULL UNIQUE,
@@ -1320,6 +1332,7 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		}
 		if found {
 			_ = a.saveBotProfile(ctx, uid, p.Name, displayName)
+			_ = a.linkTelegramToParticipant(ctx, uid, displayName, p.Name, p.Phone, p.Email, p.Source)
 			a.resetSession(uid)
 			return "Nomor HP ini sudah pernah terdaftar ✅\nNama: " + p.Name + "\nEmail: " + p.Email + "\n\nAkun Telegram kamu sudah saya sinkronkan ke data pendaftaran. Kalau mau cek lagi, ketik /cek ya.", "idle"
 		}
@@ -1348,6 +1361,7 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 			return "Maaf, Nala lagi kesulitan menyimpan data 🙏\nCoba lagi sebentar ya.", "wait_email"
 		}
 		_ = a.saveBotProfile(ctx, uid, name, displayName)
+		_ = a.linkTelegramToParticipant(ctx, uid, displayName, name, phone, email, "bot-naik-kelas")
 		a.resetSession(uid)
 		return "Yeay! 🎉 Pendaftaran kamu berhasil.\nSemangat belajar bareng Naik Kelas ya ✨📚", "idle"
 
@@ -1596,9 +1610,55 @@ func (a *app) saveBotProfile(ctx context.Context, userID, registeredName, telegr
 	return err
 }
 
+func (a *app) linkTelegramToParticipant(ctx context.Context, telegramUserID, telegramDisplay, name, phone, email, source string) error {
+	phone = normalizePhone(phone)
+	if phone == "" || strings.TrimSpace(telegramUserID) == "" {
+		return nil
+	}
+
+	var userID int64
+	err := a.db.QueryRowContext(ctx, `SELECT id FROM users WHERE phone=$1`, phone).Scan(&userID)
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		pass := defaultPasswordForPhone(phone)
+		hash, hErr := bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
+		if hErr != nil {
+			return hErr
+		}
+		err = a.db.QueryRowContext(ctx, `
+			INSERT INTO users (phone, password_hash, role, must_change_password)
+			VALUES ($1,$2,'participant',TRUE)
+			RETURNING id
+		`, phone, string(hash)).Scan(&userID)
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = a.db.ExecContext(ctx, `
+		INSERT INTO participant_profiles (user_id, name, email, source, updated_at)
+		VALUES ($1, $2, NULLIF($3,''), $4, NOW())
+		ON CONFLICT (user_id)
+		DO UPDATE SET name=EXCLUDED.name, email=EXCLUDED.email, source=EXCLUDED.source, updated_at=NOW()
+	`, userID, strings.TrimSpace(name), strings.TrimSpace(email), strings.TrimSpace(source))
+	if err != nil {
+		return err
+	}
+
+	_, err = a.db.ExecContext(ctx, `
+		INSERT INTO telegram_links (telegram_user_id, user_id, telegram_display, updated_at)
+		VALUES ($1, $2, $3, NOW())
+		ON CONFLICT (telegram_user_id)
+		DO UPDATE SET user_id = EXCLUDED.user_id, telegram_display = EXCLUDED.telegram_display, updated_at = NOW()
+	`, strings.TrimSpace(telegramUserID), userID, strings.TrimSpace(telegramDisplay))
+	return err
+}
+
 func (a *app) isRegisteredBotUser(ctx context.Context, userID string) (bool, error) {
 	var exists bool
-	err := a.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM bot_profiles WHERE user_id = $1)`, userID).Scan(&exists)
+	err := a.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM telegram_links WHERE telegram_user_id = $1)`, userID).Scan(&exists)
 	return exists, err
 }
 
