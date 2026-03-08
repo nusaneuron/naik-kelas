@@ -33,7 +33,9 @@ Aplikasi sederhana untuk menampilkan **list peserta** yang bergabung dari pendaf
 - `POST /participants`
 - `POST /bot/message` (flow chat Nala: /start, /daftar, /cek, /quiz, /tryout, /leaderbot, /batal)
   - `/quiz`: hanya untuk user yang sudah daftar; pilih kategori dulu, lalu jawab semua soal; cek hasil di akhir ronde
+    - tersimpan: kategori, jumlah salah, status lulus, dan percobaan ke-berapa per kategori
   - `/tryout`: hanya untuk user yang sudah daftar; soal acak dari bank quiz, dinilai di akhir; hasil disimpan untuk leaderboard
+    - tersimpan: durasi (detik) dan kecepatan (`speed_qpm`)
   - `/leaderbot`: ranking peserta dengan skor sempurna tercepat
 - `POST /telegram/webhook` (endpoint webhook Telegram)
   - body JSON:

@@ -204,6 +204,7 @@ func (a *app) initDB(ctx context.Context) error {
 			correct_count INT NOT NULL,
 			all_correct BOOLEAN NOT NULL,
 			duration_seconds INT NOT NULL,
+			speed_qpm NUMERIC(10,2) NOT NULL DEFAULT 0,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)
 	`)
@@ -222,6 +223,26 @@ func (a *app) initDB(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS quiz_attempts (
+			id SERIAL PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			display_name TEXT NOT NULL DEFAULT '',
+			category_code TEXT NOT NULL,
+			category_name TEXT NOT NULL,
+			attempt_no INT NOT NULL,
+			total_questions INT NOT NULL,
+			wrong_count INT NOT NULL,
+			all_correct BOOLEAN NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	_, _ = a.db.ExecContext(ctx, `ALTER TABLE tryout_results ADD COLUMN IF NOT EXISTS speed_qpm NUMERIC(10,2) NOT NULL DEFAULT 0`)
 
 	return nil
 }
@@ -631,17 +652,19 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 			}
 		}
 		if wrong == 0 {
+			attemptNo, _ := a.saveQuizAttempt(ctx, uid, displayName, cat, len(cat.Items), wrong, true)
 			a.resetSession(uid)
-			return "Luar biasa! 🎉 Semua jawaban kamu benar!\nKamu berhasil menuntaskan quiz kategori " + cat.Name + ".", "idle"
+			return fmt.Sprintf("Luar biasa! 🎉 Semua jawaban kamu benar!\nKamu berhasil menuntaskan quiz kategori %s.\nPercobaan ke-%d ✅", cat.Name, attemptNo), "idle"
 		}
 
+		attemptNo, _ := a.saveQuizAttempt(ctx, uid, displayName, cat, len(cat.Items), wrong, false)
 		a.mu.Lock()
 		s.State = "quiz_answering"
 		s.QuizIndex = 0
 		s.QuizAnswers = []string{}
 		s.UpdatedAt = time.Now()
 		a.mu.Unlock()
-		return fmt.Sprintf("Semangat! Kamu masih punya %d jawaban yang belum tepat di kategori %s. Kita ulang dari awal ya 🔁\n\n%s", wrong, cat.Name, formatQuizQuestion(cat, 0)), "quiz_answering"
+		return fmt.Sprintf("Semangat! Kamu masih punya %d jawaban yang belum tepat di kategori %s.\nIni percobaan ke-%d, kita ulang dari awal ya 🔁\n\n%s", wrong, cat.Name, attemptNo, formatQuizQuestion(cat, 0)), "quiz_answering"
 
 	case "tryout_answering":
 		ans := normalizeQuizAnswer(text)
@@ -755,11 +778,38 @@ func (a *app) saveTryoutResult(ctx context.Context, userID, displayName string, 
 	if strings.TrimSpace(displayName) == "" {
 		displayName = userID
 	}
+	speedQPM := 0.0
+	if durationSec > 0 {
+		speedQPM = float64(correct) * 60.0 / float64(durationSec)
+	}
 	_, err := a.db.ExecContext(ctx, `
-		INSERT INTO tryout_results (user_id, display_name, total_questions, correct_count, all_correct, duration_seconds)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, userID, displayName, total, correct, allCorrect, durationSec)
+		INSERT INTO tryout_results (user_id, display_name, total_questions, correct_count, all_correct, duration_seconds, speed_qpm)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`, userID, displayName, total, correct, allCorrect, durationSec, speedQPM)
 	return err
+}
+
+func (a *app) saveQuizAttempt(ctx context.Context, userID, displayName string, cat quizCategory, totalQuestions, wrongCount int, allCorrect bool) (int, error) {
+	if strings.TrimSpace(displayName) == "" {
+		displayName = userID
+	}
+	var attemptNo int
+	err := a.db.QueryRowContext(ctx, `
+		SELECT COALESCE(MAX(attempt_no), 0) + 1
+		FROM quiz_attempts
+		WHERE user_id = $1 AND category_code = $2
+	`, userID, cat.Code).Scan(&attemptNo)
+	if err != nil {
+		return 0, err
+	}
+	_, err = a.db.ExecContext(ctx, `
+		INSERT INTO quiz_attempts (user_id, display_name, category_code, category_name, attempt_no, total_questions, wrong_count, all_correct)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`, userID, displayName, cat.Code, cat.Name, attemptNo, totalQuestions, wrongCount, allCorrect)
+	if err != nil {
+		return 0, err
+	}
+	return attemptNo, nil
 }
 
 func (a *app) saveBotProfile(ctx context.Context, userID, registeredName, telegramDisplay string) error {
