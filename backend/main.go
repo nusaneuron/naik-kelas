@@ -185,6 +185,7 @@ func main() {
 	mux.HandleFunc("/admin/exp/history", a.handleAdminExpHistory)
 	mux.HandleFunc("/admin/exp/status", a.handleAdminExpStatus)
 	mux.HandleFunc("/admin/exp/report-setting", a.handleAdminExpReportSetting)
+	mux.HandleFunc("/admin/exp/report-send", a.handleAdminExpReportSend)
 	mux.HandleFunc("/admin/participants/reset-password", a.handleAdminResetPassword)
 	mux.HandleFunc("/admin/participants/toggle-active", a.handleAdminToggleActive)
 	mux.HandleFunc("/admin/participants/set-role", a.handleAdminSetRole)
@@ -1387,6 +1388,25 @@ func (a *app) handleAdminExpReportSetting(w http.ResponseWriter, r *http.Request
 	}
 	_ = a.logAdminAction(r.Context(), admin.ID, "exp.report_setting.update", "exp_report_settings", map[string]any{"time_of_day": tm, "timezone": tz, "is_active": active})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *app) handleAdminExpReportSend(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	recipients, err := a.sendExpReportBroadcast(r.Context(), false)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed send exp report"})
+		return
+	}
+	_ = a.logAdminAction(r.Context(), admin.ID, "exp.report.send_now", "participants", map[string]any{"recipients": recipients})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "recipients": recipients})
 }
 
 func (a *app) handleAdminPointBalances(w http.ResponseWriter, r *http.Request) {
@@ -2901,6 +2921,68 @@ func (a *app) startReminderScheduler(ctx context.Context) {
 	}
 }
 
+func (a *app) sendExpReportBroadcast(ctx context.Context, updateLastSent bool) (int, error) {
+	levelStep := a.getExpRuleValue(ctx, "level_step", 100)
+	nowLocal := time.Now().In(time.FixedZone("WIB", 7*3600))
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT COALESCE(p.name,''), COALESCE(w.total_exp,0), COALESCE(pw.balance,0)
+		FROM users u
+		LEFT JOIN participant_profiles p ON p.user_id=u.id
+		LEFT JOIN exp_wallets w ON w.user_id=u.id
+		LEFT JOIN point_wallets pw ON pw.user_id=u.id
+		WHERE u.role='participant'
+		ORDER BY COALESCE(w.total_exp,0) DESC, u.created_at ASC
+		LIMIT 50
+	`)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	lines := []string{"📊 Laporan EXP Peserta", fmt.Sprintf("Waktu: %s (Asia/Jakarta)", nowLocal.Format("02 Jan 2006 15:04")), ""}
+	i := 0
+	for rows.Next() {
+		var name string
+		var exp, points int64
+		if rows.Scan(&name, &exp, &points) == nil {
+			i++
+			lv, prog := calcLevel(exp, levelStep)
+			if strings.TrimSpace(name) == "" {
+				name = "Peserta"
+			}
+			lines = append(lines, fmt.Sprintf("%d. %s — Lv %d | EXP %d (%d/%d) | Poin %d", i, name, lv, exp, prog, levelStep, points))
+		}
+	}
+	if i == 0 {
+		lines = append(lines, "Belum ada data peserta.")
+	}
+	msg := strings.Join(lines, "\n")
+	participantRows, err := a.db.QueryContext(ctx, `
+		SELECT tl.telegram_user_id
+		FROM users u
+		JOIN telegram_links tl ON tl.user_id=u.id
+		WHERE u.role='participant' AND u.is_active=TRUE
+	`)
+	if err != nil {
+		return 0, err
+	}
+	defer participantRows.Close()
+	recipients := 0
+	for participantRows.Next() {
+		var tg string
+		if participantRows.Scan(&tg) == nil {
+			chatID, err := strconv.ParseInt(strings.TrimSpace(tg), 10, 64)
+			if err == nil {
+				_ = a.sendTelegramMessage(ctx, chatID, msg, "idle")
+				recipients++
+			}
+		}
+	}
+	if updateLastSent {
+		_, _ = a.db.ExecContext(ctx, `UPDATE exp_report_settings SET last_sent_at=NOW(), updated_at=NOW() WHERE id=1`)
+	}
+	return recipients, nil
+}
+
 func (a *app) runExpReportTick(ctx context.Context) {
 	var tm, tz string
 	var active bool
@@ -2926,58 +3008,7 @@ func (a *app) runExpReportTick(ctx context.Context) {
 			return
 		}
 	}
-	levelStep := a.getExpRuleValue(ctx, "level_step", 100)
-	rows, err := a.db.QueryContext(ctx, `
-		SELECT COALESCE(p.name,''), COALESCE(w.total_exp,0), COALESCE(pw.balance,0)
-		FROM users u
-		LEFT JOIN participant_profiles p ON p.user_id=u.id
-		LEFT JOIN exp_wallets w ON w.user_id=u.id
-		LEFT JOIN point_wallets pw ON pw.user_id=u.id
-		WHERE u.role='participant'
-		ORDER BY COALESCE(w.total_exp,0) DESC, u.created_at ASC
-		LIMIT 50
-	`)
-	if err != nil {
-		return
-	}
-	defer rows.Close()
-	lines := []string{"📊 Laporan EXP Peserta", fmt.Sprintf("Waktu: %s (%s)", nowLocal.Format("02 Jan 2006 15:04"), tz), ""}
-	i := 0
-	for rows.Next() {
-		var name string
-		var exp, points int64
-		if rows.Scan(&name, &exp, &points) == nil {
-			i++
-			lv, prog := calcLevel(exp, levelStep)
-			if strings.TrimSpace(name) == "" {
-				name = "Peserta"
-			}
-			lines = append(lines, fmt.Sprintf("%d. %s — Lv %d | EXP %d (%d/%d) | Poin %d", i, name, lv, exp, prog, levelStep, points))
-		}
-	}
-	if i == 0 {
-		lines = append(lines, "Belum ada data peserta.")
-	}
-	msg := strings.Join(lines, "\n")
-	participantRows, err := a.db.QueryContext(ctx, `
-		SELECT tl.telegram_user_id
-		FROM users u
-		JOIN telegram_links tl ON tl.user_id=u.id
-		WHERE u.role='participant' AND u.is_active=TRUE
-	`)
-	if err == nil {
-		defer participantRows.Close()
-		for participantRows.Next() {
-			var tg string
-			if participantRows.Scan(&tg) == nil {
-				chatID, err := strconv.ParseInt(strings.TrimSpace(tg), 10, 64)
-				if err == nil {
-					_ = a.sendTelegramMessage(ctx, chatID, msg, "idle")
-				}
-			}
-		}
-	}
-	_, _ = a.db.ExecContext(ctx, `UPDATE exp_report_settings SET last_sent_at=NOW(), updated_at=NOW() WHERE id=1`)
+	_, _ = a.sendExpReportBroadcast(ctx, true)
 }
 
 func (a *app) runReminderTick(ctx context.Context) {
