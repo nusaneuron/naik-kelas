@@ -389,11 +389,41 @@ export default function Page() {
               <section style={card2}><h2>Saldo Poin</h2><p style={{fontSize:30, margin:'8px 0'}}><b>{myPoints}</b> poin 🌟</p><p className='nk-muted'>Total poin yang bisa digunakan saat ini.</p></section>
             </div>
 
-            <section style={card2}><h2>Riwayat Poin</h2><ul>{myPointHistory.slice(0,10).map((p,i)=><li key={i}>{p.delta > 0 ? `+${p.delta}` : p.delta} · {p.reason} · {p.type}</li>)}{!myPointHistory.length?<li>Belum ada transaksi poin.</li>:null}</ul></section>
+            <section style={card2}>
+              <h2>Riwayat Poin</h2>
+              {myPointHistory.length ? (
+                <div style={{overflowX:'auto',overflowY:'auto',maxHeight:320,border:'1px solid #22304d',borderRadius:'var(--nk-radius-md)'}}>
+                  <table style={{width:'max-content',minWidth:760,borderCollapse:'collapse'}}>
+                    <thead><tr><th style={thAdmin}>Delta</th><th style={thAdmin}>Reason</th><th style={thAdmin}>Type</th><th style={thAdmin}>Waktu</th></tr></thead>
+                    <tbody>{myPointHistory.slice(0,50).map((p,i)=><tr key={i}><td style={tdAdmin}>{p.delta > 0 ? `+${p.delta}` : p.delta}</td><td style={tdAdmin}>{p.reason}</td><td style={tdAdmin}>{p.type}</td><td style={tdAdmin}>{new Date(p.created_at).toLocaleString('id-ID')}</td></tr>)}</tbody>
+                  </table>
+                </div>
+              ) : <div className='nk-empty'>Belum ada transaksi poin.</div>}
+            </section>
             <section style={card2}><h2>Leaderbot Tryout</h2><ol>{leaderboard.map((it)=><li key={it.rank}>{it.name} ({it.telegram}) — {it.best_seconds}s (perfect: {it.perfect_count}x)</li>)}{!leaderboard.length?<li>Belum ada data.</li>:null}</ol></section>
             <div style={summaryGrid}>
-              <section style={card2}><h2>Riwayat Quiz</h2><ul>{(history.quiz||[]).map((q,i)=><li key={i}>{q.category} · attempt #{q.attempt_no} · wrong {q.wrong_count}/{q.total_questions} · {q.all_correct?'LULUS':'BELUM'}</li>)}{!history.quiz?.length?<li>Belum ada riwayat quiz.</li>:null}</ul></section>
-              <section style={card2}><h2>Riwayat Tryout</h2><ul>{(history.tryout||[]).map((t,i)=><li key={i}>{t.correct_count}/{t.total_questions} · {t.duration_seconds}s · speed {Number(t.speed_qpm||0).toFixed(2)} qpm · {t.all_correct?'PERFECT':'BELUM'}</li>)}{!history.tryout?.length?<li>Belum ada riwayat tryout.</li>:null}</ul></section>
+              <section style={card2}>
+                <h2>Riwayat Quiz</h2>
+                {(history.quiz||[]).length ? (
+                  <div style={{overflowX:'auto',overflowY:'auto',maxHeight:320,border:'1px solid #22304d',borderRadius:'var(--nk-radius-md)'}}>
+                    <table style={{width:'max-content',minWidth:840,borderCollapse:'collapse'}}>
+                      <thead><tr><th style={thAdmin}>Kategori</th><th style={thAdmin}>Attempt</th><th style={thAdmin}>Salah</th><th style={thAdmin}>Total Soal</th><th style={thAdmin}>Status</th></tr></thead>
+                      <tbody>{(history.quiz||[]).map((q,i)=><tr key={i}><td style={tdAdmin}>{q.category}</td><td style={tdAdmin}>#{q.attempt_no}</td><td style={tdAdmin}>{q.wrong_count}</td><td style={tdAdmin}>{q.total_questions}</td><td style={tdAdmin}>{q.all_correct?'LULUS':'BELUM'}</td></tr>)}</tbody>
+                    </table>
+                  </div>
+                ) : <div className='nk-empty'>Belum ada riwayat quiz.</div>}
+              </section>
+              <section style={card2}>
+                <h2>Riwayat Tryout</h2>
+                {(history.tryout||[]).length ? (
+                  <div style={{overflowX:'auto',overflowY:'auto',maxHeight:320,border:'1px solid #22304d',borderRadius:'var(--nk-radius-md)'}}>
+                    <table style={{width:'max-content',minWidth:900,borderCollapse:'collapse'}}>
+                      <thead><tr><th style={thAdmin}>Benar</th><th style={thAdmin}>Total Soal</th><th style={thAdmin}>Durasi (detik)</th><th style={thAdmin}>Kecepatan (qpm)</th><th style={thAdmin}>Status</th></tr></thead>
+                      <tbody>{(history.tryout||[]).map((t,i)=><tr key={i}><td style={tdAdmin}>{t.correct_count}</td><td style={tdAdmin}>{t.total_questions}</td><td style={tdAdmin}>{t.duration_seconds}</td><td style={tdAdmin}>{Number(t.speed_qpm||0).toFixed(2)}</td><td style={tdAdmin}>{t.all_correct?'PERFECT':'BELUM'}</td></tr>)}</tbody>
+                    </table>
+                  </div>
+                ) : <div className='nk-empty'>Belum ada riwayat tryout.</div>}
+              </section>
             </div>
           </>
         ) : null}
