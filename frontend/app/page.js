@@ -380,8 +380,8 @@ export default function Page() {
                   <section style={card2}>
                     <h2>Admin · Peserta</h2>
                     {participants.length ? (
-                      <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 920 }}>
+                      <div style={{ overflow: 'auto', maxHeight: 520, border: '1px solid #22304d', borderRadius: 'var(--nk-radius-md)' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 980 }}>
                           <thead>
                             <tr>
                               <th style={thAdmin}>Nama</th>
@@ -461,7 +461,7 @@ const inputSmall = { padding: 10, borderRadius: 'var(--nk-radius-sm)', border: '
 const fieldLabel = { display: 'block', fontSize: 13, color: 'var(--nk-muted)', marginTop: 2 };
 const btn = { border: 0, background: 'var(--nk-cta)', color: 'white', borderRadius: 'var(--nk-radius-md)', padding: '8px 14px', cursor: 'pointer', fontWeight: 600 };
 const btnMini = { border: '1px solid #374151', background: '#1f2937', color: 'white', borderRadius: 'var(--nk-radius-sm)', padding: '6px 10px', cursor: 'pointer' };
-const thAdmin = { textAlign: 'left', padding: '10px 8px', borderBottom: '1px solid #334155', color: '#cbd5e1', fontSize: 13 };
+const thAdmin = { textAlign: 'left', padding: '10px 8px', borderBottom: '1px solid #334155', color: '#cbd5e1', fontSize: 13, position: 'sticky', top: 0, background: '#0b1220', zIndex: 2 };
 const tdAdmin = { padding: '10px 8px', borderBottom: '1px solid #1f2937', fontSize: 14, verticalAlign: 'top' };
 const modalOverlay = { position: 'fixed', inset: 0, background: 'rgba(2,6,23,.6)', display: 'grid', placeItems: 'center', zIndex: 9999 };
 const modalCard = { width: 'min(460px,92vw)', border: '1px solid #334155', borderRadius: 'var(--nk-radius-lg)', padding: 16, background: '#0f172a', boxShadow: 'var(--nk-shadow-md)' };
