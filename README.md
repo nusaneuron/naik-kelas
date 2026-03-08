@@ -32,12 +32,13 @@ Aplikasi sederhana untuk menampilkan **list peserta** yang bergabung dari pendaf
 - `GET /participants`
 - `GET /participants/check?phone=0812xxxx`
 - `POST /participants`
-- `POST /bot/message` (flow chat Nala: /start, /daftar, /cek, /quiz, /tryout, /leaderbot, /batal)
+- `POST /bot/message` (flow chat Nala: /start, /daftar, /cek, /quiz, /tryout, /leaderbot, /jadwal_belajar, /batal)
   - `/quiz`: hanya untuk user yang sudah daftar; pilih kategori dulu, lalu jawab semua soal; cek hasil di akhir ronde
     - tersimpan: kategori, jumlah salah, status lulus, dan percobaan ke-berapa per kategori
   - `/tryout`: hanya untuk user yang sudah daftar; soal acak dari bank quiz, dinilai di akhir; hasil disimpan untuk leaderboard
     - tersimpan: durasi (detik) dan kecepatan (`speed_qpm`)
   - `/leaderbot`: ranking peserta dengan skor sempurna tercepat
+  - `/jadwal_belajar`: atur pengingat belajar harian (ingatkan, ingatkanku, ubahingat, hapusingat)
 - `POST /telegram/webhook` (endpoint webhook Telegram)
   - otomatis sinkron Telegram user ke akun web participant berdasarkan nomor HP pendaftaran
 - `POST /admin/bootstrap` (bootstrap/promote akun admin; butuh header `X-Admin-Bootstrap-Token`)

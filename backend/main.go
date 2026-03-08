@@ -149,6 +149,8 @@ func main() {
 		log.Fatalf("init database: %v", err)
 	}
 
+	go a.startReminderScheduler(context.Background())
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", a.handleHealth)
 	mux.HandleFunc("/participants", a.handleParticipants)
@@ -308,6 +310,21 @@ func (a *app) initDB(ctx context.Context) error {
 			telegram_user_id TEXT PRIMARY KEY,
 			user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 			telegram_display TEXT NOT NULL DEFAULT '',
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS study_reminders (
+			telegram_user_id TEXT PRIMARY KEY,
+			user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			time_of_day TEXT NOT NULL,
+			timezone TEXT NOT NULL DEFAULT 'Asia/Jakarta',
+			is_active BOOLEAN NOT NULL DEFAULT TRUE,
+			last_sent_at TIMESTAMPTZ,
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)
 	`)
@@ -1296,6 +1313,12 @@ func (a *app) sendTelegramMessage(ctx context.Context, chatID int64, text, state
 			"resize_keyboard":   true,
 			"one_time_keyboard": false,
 		}
+	} else if state == "jadwal_menu" {
+		payload["reply_markup"] = map[string]any{
+			"keyboard":          [][]string{{"ingatkan", "ingatkanku"}, {"ubahingat", "hapusingat"}},
+			"resize_keyboard":   true,
+			"one_time_keyboard": false,
+		}
 	} else {
 		payload["reply_markup"] = map[string]any{
 			"remove_keyboard": true,
@@ -1341,7 +1364,7 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 	}
 	if lower == "/start" {
 		a.resetSession(uid)
-		return "Selamat datang di Naik Kelas, perkenalkan saya Nala ✨\nAku siap bantu kamu daftar belajar dengan cepat.\n\nKetik /daftar untuk registrasi peserta baru 📚\nKetik /cek untuk cek apakah nomor HP sudah terdaftar ✅\nKetik /quiz untuk latihan per kategori 🧠\nKetik /tryout untuk simulasi soal acak 🚀\nKetik /leaderbot untuk lihat ranking tryout 🏆", "idle"
+		return "Selamat datang di Naik Kelas, perkenalkan saya Nala ✨\nAku siap bantu kamu daftar belajar dengan cepat.\n\nKetik /daftar untuk registrasi peserta baru 📚\nKetik /cek untuk cek apakah nomor HP sudah terdaftar ✅\nKetik /quiz untuk latihan per kategori 🧠\nKetik /tryout untuk simulasi soal acak 🚀\nKetik /leaderbot untuk lihat ranking tryout 🏆\nKetik /jadwal_belajar untuk atur pengingat belajar ⏰", "idle"
 	}
 	if lower == "/daftar" {
 		a.mu.Lock()
@@ -1398,6 +1421,58 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 			return "Leaderboard masih kosong. Yuk mulai dulu dengan /tryout 🔥", "idle"
 		}
 		return board, "idle"
+	}
+
+	if lower == "/jadwal_belajar" {
+		registered, err := a.isRegisteredBotUser(ctx, uid)
+		if err != nil {
+			return "Maaf, Nala lagi kesulitan cek data pendaftaran 🙏\nCoba lagi sebentar ya.", "idle"
+		}
+		if !registered {
+			return "Sebelum atur pengingat belajar, kamu perlu daftar dulu ya ✨\nKetik /daftar untuk registrasi dulu.", "idle"
+		}
+		a.mu.Lock()
+		s.State = "jadwal_menu"
+		s.UpdatedAt = time.Now()
+		a.mu.Unlock()
+		return "Menu Jadwal Belajar ⏰\nPilih salah satu:\n- ingatkan\n- ingatkanku\n- ubahingat\n- hapusingat", "jadwal_menu"
+	}
+	if lower == "ingatkanku" {
+		r, err := a.getStudyReminder(ctx, uid)
+		if err != nil {
+			return "Maaf, belum bisa ambil jadwalmu sekarang 🙏", "idle"
+		}
+		if !r.Active {
+			return "Kamu belum punya jadwal belajar aktif. Ketik /jadwal_belajar lalu pilih *ingatkan* ya ✨", "idle"
+		}
+		return fmt.Sprintf("Jadwal belajar kamu aktif setiap hari jam %s (%s) ✅", r.TimeOfDay, r.Timezone), "idle"
+	}
+	if lower == "ingatkan" {
+		a.mu.Lock()
+		s.State = "reminder_set_time"
+		s.UpdatedAt = time.Now()
+		a.mu.Unlock()
+		return "Siap! Kirim jam belajarmu dengan format HH:MM (contoh 19:00).", "reminder_set_time"
+	}
+	if lower == "ubahingat" {
+		r, err := a.getStudyReminder(ctx, uid)
+		if err != nil {
+			return "Maaf, belum bisa cek jadwalmu sekarang 🙏", "idle"
+		}
+		if !r.Active {
+			return "Belum ada jadwal aktif untuk diubah. Pilih *ingatkan* dulu ya ✨", "idle"
+		}
+		a.mu.Lock()
+		s.State = "reminder_update_time"
+		s.UpdatedAt = time.Now()
+		a.mu.Unlock()
+		return fmt.Sprintf("Jadwal saat ini %s. Kirim jam baru dengan format HH:MM.", r.TimeOfDay), "reminder_update_time"
+	}
+	if lower == "hapusingat" {
+		if err := a.disableStudyReminder(ctx, uid); err != nil {
+			return "Maaf, gagal hapus jadwal sekarang 🙏", "idle"
+		}
+		return "Oke, jadwal pengingat belajarmu sudah dinonaktifkan ✅", "idle"
 	}
 
 	a.mu.Lock()
@@ -1543,6 +1618,20 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		s.UpdatedAt = time.Now()
 		a.mu.Unlock()
 		return fmt.Sprintf("Semangat! Kamu masih punya %d jawaban yang belum tepat di kategori %s.\nIni percobaan ke-%d, kita ulang dari awal ya 🔁\n\n%s", wrong, cat.Name, attemptNo, formatQuizQuestion(cat, 0)), "quiz_answering"
+
+	case "reminder_set_time", "reminder_update_time":
+		tm, ok := normalizeTimeHHMM(text)
+		if !ok {
+			return "Format jam belum valid. Gunakan HH:MM ya (contoh 19:00).", curState
+		}
+		if err := a.upsertStudyReminder(ctx, uid, tm, "Asia/Jakarta"); err != nil {
+			return "Maaf, belum bisa simpan jadwal sekarang 🙏", curState
+		}
+		a.mu.Lock()
+		s.State = "idle"
+		s.UpdatedAt = time.Now()
+		a.mu.Unlock()
+		return fmt.Sprintf("Siap! Mulai sekarang Nala akan mengingatkan kamu belajar setiap hari jam %s WIB ⏰", tm), "idle"
 
 	case "tryout_answering":
 		ans := normalizeQuizAnswer(text)
@@ -1756,6 +1845,127 @@ func (a *app) isRegisteredBotUser(ctx context.Context, userID string) (bool, err
 	var exists bool
 	err := a.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM telegram_links WHERE telegram_user_id = $1)`, userID).Scan(&exists)
 	return exists, err
+}
+
+type studyReminder struct {
+	TelegramUserID string
+	UserID         int64
+	TimeOfDay      string
+	Timezone       string
+	Active         bool
+	LastSentAt     *time.Time
+}
+
+func (a *app) getStudyReminder(ctx context.Context, telegramUserID string) (studyReminder, error) {
+	var r studyReminder
+	var last sql.NullTime
+	err := a.db.QueryRowContext(ctx, `
+		SELECT telegram_user_id, user_id, time_of_day, timezone, is_active, last_sent_at
+		FROM study_reminders
+		WHERE telegram_user_id = $1
+	`, telegramUserID).Scan(&r.TelegramUserID, &r.UserID, &r.TimeOfDay, &r.Timezone, &r.Active, &last)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return studyReminder{}, nil
+		}
+		return studyReminder{}, err
+	}
+	if last.Valid {
+		t := last.Time
+		r.LastSentAt = &t
+	}
+	return r, nil
+}
+
+func (a *app) upsertStudyReminder(ctx context.Context, telegramUserID, timeOfDay, timezone string) error {
+	if strings.TrimSpace(timezone) == "" {
+		timezone = "Asia/Jakarta"
+	}
+	var userID int64
+	if err := a.db.QueryRowContext(ctx, `SELECT user_id FROM telegram_links WHERE telegram_user_id = $1`, telegramUserID).Scan(&userID); err != nil {
+		return err
+	}
+	_, err := a.db.ExecContext(ctx, `
+		INSERT INTO study_reminders (telegram_user_id, user_id, time_of_day, timezone, is_active, updated_at)
+		VALUES ($1,$2,$3,$4,TRUE,NOW())
+		ON CONFLICT (telegram_user_id)
+		DO UPDATE SET user_id=EXCLUDED.user_id, time_of_day=EXCLUDED.time_of_day, timezone=EXCLUDED.timezone, is_active=TRUE, updated_at=NOW()
+	`, telegramUserID, userID, timeOfDay, timezone)
+	return err
+}
+
+func (a *app) disableStudyReminder(ctx context.Context, telegramUserID string) error {
+	_, err := a.db.ExecContext(ctx, `UPDATE study_reminders SET is_active=FALSE, updated_at=NOW() WHERE telegram_user_id = $1`, telegramUserID)
+	return err
+}
+
+func normalizeTimeHHMM(v string) (string, bool) {
+	v = strings.TrimSpace(v)
+	if len(v) != 5 || v[2] != ':' {
+		return "", false
+	}
+	hh, err1 := strconv.Atoi(v[:2])
+	mm, err2 := strconv.Atoi(v[3:])
+	if err1 != nil || err2 != nil || hh < 0 || hh > 23 || mm < 0 || mm > 59 {
+		return "", false
+	}
+	return fmt.Sprintf("%02d:%02d", hh, mm), true
+}
+
+func (a *app) startReminderScheduler(ctx context.Context) {
+	if strings.TrimSpace(a.telegramBotToken) == "" {
+		return
+	}
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		a.runReminderTick(ctx)
+		<-ticker.C
+	}
+}
+
+func (a *app) runReminderTick(ctx context.Context) {
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT telegram_user_id, user_id, time_of_day, timezone, is_active, last_sent_at
+		FROM study_reminders
+		WHERE is_active = TRUE
+	`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	nowUTC := time.Now().UTC()
+	for rows.Next() {
+		var r studyReminder
+		var last sql.NullTime
+		if rows.Scan(&r.TelegramUserID, &r.UserID, &r.TimeOfDay, &r.Timezone, &r.Active, &last) != nil {
+			continue
+		}
+		if last.Valid {
+			t := last.Time
+			r.LastSentAt = &t
+		}
+		loc, err := time.LoadLocation(r.Timezone)
+		if err != nil {
+			loc = time.FixedZone("WIB", 7*3600)
+		}
+		nowLocal := nowUTC.In(loc)
+		if nowLocal.Format("15:04") != r.TimeOfDay {
+			continue
+		}
+		if r.LastSentAt != nil {
+			lastLocal := r.LastSentAt.In(loc)
+			if lastLocal.Year() == nowLocal.Year() && lastLocal.YearDay() == nowLocal.YearDay() {
+				continue
+			}
+		}
+		chatID, err := strconv.ParseInt(strings.TrimSpace(r.TelegramUserID), 10, 64)
+		if err != nil {
+			continue
+		}
+		_ = a.sendTelegramMessage(ctx, chatID, "📚 Waktunya belajar, semangat ya! Nala percaya kamu bisa konsisten hari ini ✨", "idle")
+		_, _ = a.db.ExecContext(ctx, `UPDATE study_reminders SET last_sent_at=NOW(), updated_at=NOW() WHERE telegram_user_id=$1`, r.TelegramUserID)
+	}
 }
 
 func (a *app) getTryoutLeaderboard(ctx context.Context, limit int) (string, error) {
