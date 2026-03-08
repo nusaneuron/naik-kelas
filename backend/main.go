@@ -818,7 +818,8 @@ func (a *app) getTryoutLeaderboard(ctx context.Context, limit int) (string, erro
 		if err := rows.Scan(&userID, &name, &tg, &bestSec, &perfectCount); err != nil {
 			return "", err
 		}
-		lines = append(lines, fmt.Sprintf("%d. %s | TG: %s — %ds (perfect: %dx)", rank, name, tg, bestSec, perfectCount))
+		_ = tg
+		lines = append(lines, fmt.Sprintf("%d. %s — %ds (perfect: %dx)", rank, name, bestSec, perfectCount))
 		rank++
 	}
 	if err := rows.Err(); err != nil {
