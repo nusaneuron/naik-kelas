@@ -33,6 +33,7 @@ export default function Page() {
   const [pointPhone, setPointPhone] = useState('');
   const [pointDelta, setPointDelta] = useState('');
   const [pointReason, setPointReason] = useState('');
+  const [editingPointEntryId, setEditingPointEntryId] = useState('');
 
   const [newCategoryCode, setNewCategoryCode] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -276,9 +277,14 @@ export default function Page() {
       return;
     }
     setBusy(true); setActionMsg('');
-    const res = await fetch(`${apiBase}/admin/points/adjust`, {
+    const endpoint = editingPointEntryId ? '/admin/points/update' : '/admin/points/adjust';
+    const payload = editingPointEntryId
+      ? { id: Number(editingPointEntryId), delta: Number(pointDelta), reason: pointReason }
+      : { user_id: Number(target.id), delta: Number(pointDelta), reason: pointReason };
+
+    const res = await fetch(`${apiBase}${endpoint}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-      body: JSON.stringify({ user_id: Number(target.id), delta: Number(pointDelta), reason: pointReason })
+      body: JSON.stringify(payload)
     });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -286,10 +292,53 @@ export default function Page() {
       setBusy(false);
       return;
     }
-    setPointPhone(''); setPointDelta(''); setPointReason('');
+    setPointPhone(''); setPointDelta(''); setPointReason(''); setEditingPointEntryId('');
     await loadAdmin();
     await loadParticipant();
-    setActionType('success'); setActionMsg('Poin peserta berhasil diperbarui.');
+    setActionType('success'); setActionMsg(editingPointEntryId ? 'Entry poin berhasil diupdate.' : 'Poin peserta berhasil diperbarui.');
+    setBusy(false);
+  }
+
+  function startEditPointEntry(entry) {
+    setEditingPointEntryId(String(entry.id));
+    setPointPhone(entry.phone || '');
+    setPointDelta(String(entry.delta ?? ''));
+    setPointReason(entry.reason || '');
+  }
+
+  async function deletePointEntry(entryId) {
+    setBusy(true); setActionMsg('');
+    const res = await fetch(`${apiBase}/admin/points/delete`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ id: Number(entryId) })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setActionType('error'); setActionMsg(d.error || 'Gagal menghapus entry poin.');
+      setBusy(false);
+      return;
+    }
+    await loadAdmin();
+    await loadParticipant();
+    setActionType('success'); setActionMsg('Entry poin berhasil dihapus.');
+    setBusy(false);
+  }
+
+  async function recalculatePoints() {
+    setBusy(true); setActionMsg('');
+    const res = await fetch(`${apiBase}/admin/points/recalculate`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({})
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setActionType('error'); setActionMsg(d.error || 'Gagal hitung ulang poin.');
+      setBusy(false);
+      return;
+    }
+    await loadAdmin();
+    await loadParticipant();
+    setActionType('success'); setActionMsg(`Recalculate selesai. User dihitung ulang: ${d.recalculated_users ?? '-'}`);
     setBusy(false);
   }
 
@@ -427,7 +476,7 @@ export default function Page() {
                 ) : null}
 
                 {adminSection === 'poin' ? (
-                  <section style={card2}><h2>Admin · Poin Peserta</h2><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><input style={inputSmall} placeholder='nomor telepon peserta' value={pointPhone} onChange={(e)=>setPointPhone(e.target.value)} /><input style={inputSmall} placeholder='delta (+/-)' value={pointDelta} onChange={(e)=>setPointDelta(e.target.value)} /><input style={inputSmall} placeholder='reason' value={pointReason} onChange={(e)=>setPointReason(e.target.value)} /><button style={btnMini} disabled={busy} onClick={adjustPoints}>{busy?'Proses...':'Submit Poin'}</button></div><p className='nk-muted' style={{ marginTop:8 }}>Nama terdeteksi: <b>{matchedParticipant?.name || '-'}</b>{matchedParticipant?.phone ? ` (${matchedParticipant.phone})` : ''}</p><ul>{adminPointHistory.slice(0,20).map((p,i)=><li key={i}>{p.name || '-'} ({p.phone || '-'}) · {p.delta>0?`+${p.delta}`:p.delta} · {p.reason} · {p.type}</li>)}{!adminPointHistory.length?<li className='nk-empty'>Belum ada transaksi poin.</li>:null}</ul></section>
+                  <section style={card2}><h2>Admin · Poin Peserta</h2><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><input style={inputSmall} placeholder='nomor telepon peserta' value={pointPhone} onChange={(e)=>setPointPhone(e.target.value)} /><input style={inputSmall} placeholder='delta (+/-)' value={pointDelta} onChange={(e)=>setPointDelta(e.target.value)} /><input style={inputSmall} placeholder='reason' value={pointReason} onChange={(e)=>setPointReason(e.target.value)} /><button style={btnMini} disabled={busy} onClick={adjustPoints}>{busy?'Proses...':(editingPointEntryId ? 'Update Entry' : 'Submit Poin')}</button>{editingPointEntryId ? <button style={btnMini} disabled={busy} onClick={() => { setEditingPointEntryId(''); setPointPhone(''); setPointDelta(''); setPointReason(''); }}>Batal</button> : null}<button style={btnMini} disabled={busy} onClick={recalculatePoints}>{busy?'Proses...':'Hitung Ulang Poin'}</button></div><p className='nk-muted' style={{ marginTop:8 }}>Nama terdeteksi: <b>{matchedParticipant?.name || '-'}</b>{matchedParticipant?.phone ? ` (${matchedParticipant.phone})` : ''}</p>{adminPointHistory.length ? <div style={{overflowX:'auto',overflowY:'auto',maxHeight:420,border:'1px solid #22304d',borderRadius:'var(--nk-radius-md)'}}><table style={{width:'max-content',minWidth:980,borderCollapse:'collapse'}}><thead><tr><th style={thAdmin}>Nama</th><th style={thAdmin}>No. HP</th><th style={thAdmin}>Delta</th><th style={thAdmin}>Reason</th><th style={thAdmin}>Type</th><th style={thAdmin}>Waktu</th><th style={thAdmin}>Aksi</th></tr></thead><tbody>{adminPointHistory.slice(0,100).map((p)=><tr key={p.id}><td style={tdAdmin}>{p.name || '-'}</td><td style={tdAdmin}>{p.phone || '-'}</td><td style={tdAdmin}>{p.delta>0?`+${p.delta}`:p.delta}</td><td style={tdAdmin}>{p.reason}</td><td style={tdAdmin}>{p.type}</td><td style={tdAdmin}>{new Date(p.created_at).toLocaleString('id-ID')}</td><td style={tdAdmin}><div style={{display:'flex',gap:6}}><button style={btnMini} disabled={busy} onClick={()=>startEditPointEntry(p)}>Edit</button><button style={{...btnMini, background:'#7f1d1d', borderColor:'#b91c1c'}} disabled={busy} onClick={()=>deletePointEntry(p.id)}>Hapus</button></div></td></tr>)}</tbody></table></div> : <div className='nk-empty'>Belum ada transaksi poin.</div>}</section>
                 ) : null}
               </div>
             </div>

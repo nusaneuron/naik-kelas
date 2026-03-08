@@ -173,6 +173,9 @@ func main() {
 	mux.HandleFunc("/admin/reminders", a.handleAdminReminders)
 	mux.HandleFunc("/admin/points/adjust", a.handleAdminPointsAdjust)
 	mux.HandleFunc("/admin/points/history", a.handleAdminPointsHistory)
+	mux.HandleFunc("/admin/points/update", a.handleAdminPointsUpdate)
+	mux.HandleFunc("/admin/points/delete", a.handleAdminPointsDelete)
+	mux.HandleFunc("/admin/points/recalculate", a.handleAdminPointsRecalculate)
 	mux.HandleFunc("/admin/participants/reset-password", a.handleAdminResetPassword)
 	mux.HandleFunc("/admin/participants/toggle-active", a.handleAdminToggleActive)
 	mux.HandleFunc("/admin/participants/set-role", a.handleAdminSetRole)
@@ -1030,6 +1033,113 @@ func (a *app) handleAdminPointsHistory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
+func (a *app) handleAdminPointsUpdate(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req struct {
+		ID     int64  `json:"id"`
+		Delta  int64  `json:"delta"`
+		Reason string `json:"reason"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || req.ID == 0 || req.Delta == 0 || strings.TrimSpace(req.Reason) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id, delta, reason wajib"})
+		return
+	}
+	var userID int64
+	if err := a.db.QueryRowContext(r.Context(), `SELECT user_id FROM point_ledger WHERE id=$1`, req.ID).Scan(&userID); err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "point entry tidak ditemukan"})
+		return
+	}
+	_, err = a.db.ExecContext(r.Context(), `UPDATE point_ledger SET delta=$1, reason=$2 WHERE id=$3`, req.Delta, strings.TrimSpace(req.Reason), req.ID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed update point entry"})
+		return
+	}
+	newBal, err := a.recalculateWalletByUserID(r.Context(), userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed recalculate wallet"})
+		return
+	}
+	_ = a.logAdminAction(r.Context(), admin.ID, "points.update", fmt.Sprint(req.ID), req)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "new_balance": newBal})
+}
+
+func (a *app) handleAdminPointsDelete(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req struct {
+		ID int64 `json:"id"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || req.ID == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id wajib"})
+		return
+	}
+	var userID int64
+	if err := a.db.QueryRowContext(r.Context(), `SELECT user_id FROM point_ledger WHERE id=$1`, req.ID).Scan(&userID); err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "point entry tidak ditemukan"})
+		return
+	}
+	_, err = a.db.ExecContext(r.Context(), `DELETE FROM point_ledger WHERE id=$1`, req.ID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed delete point entry"})
+		return
+	}
+	newBal, err := a.recalculateWalletByUserID(r.Context(), userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed recalculate wallet"})
+		return
+	}
+	_ = a.logAdminAction(r.Context(), admin.ID, "points.delete", fmt.Sprint(req.ID), req)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "new_balance": newBal})
+}
+
+func (a *app) handleAdminPointsRecalculate(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req struct {
+		UserID int64 `json:"user_id"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	if req.UserID > 0 {
+		bal, err := a.recalculateWalletByUserID(r.Context(), req.UserID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed recalculate user"})
+			return
+		}
+		_ = a.logAdminAction(r.Context(), admin.ID, "points.recalculate_user", fmt.Sprint(req.UserID), req)
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "user_id": req.UserID, "balance": bal})
+		return
+	}
+	count, err := a.recalculateAllWallets(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed recalculate all"})
+		return
+	}
+	_ = a.logAdminAction(r.Context(), admin.ID, "points.recalculate_all", "all", map[string]any{"count": count})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "recalculated_users": count})
+}
+
 func (a *app) getPointBalance(ctx context.Context, userID int64) (int64, error) {
 	_, err := a.db.ExecContext(ctx, `INSERT INTO point_wallets (user_id, balance, updated_at) VALUES ($1,0,NOW()) ON CONFLICT (user_id) DO NOTHING`, userID)
 	if err != nil {
@@ -1072,6 +1182,43 @@ func (a *app) adjustPoints(ctx context.Context, userID, delta int64, typ, reason
 		return 0, err
 	}
 	return newBal, nil
+}
+
+func (a *app) recalculateWalletByUserID(ctx context.Context, userID int64) (int64, error) {
+	var sum sql.NullInt64
+	if err := a.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(delta),0) FROM point_ledger WHERE user_id=$1`, userID).Scan(&sum); err != nil {
+		return 0, err
+	}
+	bal := int64(0)
+	if sum.Valid {
+		bal = sum.Int64
+	}
+	if _, err := a.db.ExecContext(ctx, `
+		INSERT INTO point_wallets (user_id, balance, updated_at)
+		VALUES ($1,$2,NOW())
+		ON CONFLICT (user_id) DO UPDATE SET balance=EXCLUDED.balance, updated_at=NOW()
+	`, userID, bal); err != nil {
+		return 0, err
+	}
+	return bal, nil
+}
+
+func (a *app) recalculateAllWallets(ctx context.Context) (int, error) {
+	rows, err := a.db.QueryContext(ctx, `SELECT DISTINCT user_id FROM point_ledger`)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	count := 0
+	for rows.Next() {
+		var uid int64
+		if rows.Scan(&uid) == nil {
+			if _, err := a.recalculateWalletByUserID(ctx, uid); err == nil {
+				count++
+			}
+		}
+	}
+	return count, rows.Err()
 }
 
 func (a *app) handleAdminPing(w http.ResponseWriter, r *http.Request) {
