@@ -38,6 +38,7 @@ export default function Page() {
   const [editingCategoryId, setEditingCategoryId] = useState('');
 
   const [qCategoryId, setQCategoryId] = useState('');
+  const [editingQuestionId, setEditingQuestionId] = useState('');
   const [questionFilterCategoryId, setQuestionFilterCategoryId] = useState('');
   const [qText, setQText] = useState('');
   const [qA, setQA] = useState('');
@@ -167,15 +168,43 @@ export default function Page() {
     setBusy(false);
   }
 
-  async function addQuestion() {
+  function startEditQuestion(q) {
+    setEditingQuestionId(String(q.id));
+    setQCategoryId(String(q.category_id));
+    setQText(q.question_text || '');
+    setQA(q.option_a || '');
+    setQB(q.option_b || '');
+    setQC(q.option_c || '');
+    setQD(q.option_d || '');
+    setQCorrect((q.correct_option || 'A').toUpperCase());
+  }
+
+  async function deleteQuestion(qId) {
     setBusy(true); setActionMsg('');
     await fetch(`${apiBase}/admin/questions`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-      body: JSON.stringify({ action: 'create', category_id: Number(qCategoryId), question_text: qText, option_a: qA, option_b: qB, option_c: qC, option_d: qD, correct_option: qCorrect })
+      body: JSON.stringify({ action: 'delete', id: Number(qId) })
     });
-    setQText(''); setQA(''); setQB(''); setQC(''); setQD(''); setQCorrect('A');
+    if (String(editingQuestionId) === String(qId)) {
+      setEditingQuestionId(''); setQCategoryId(''); setQText(''); setQA(''); setQB(''); setQC(''); setQD(''); setQCorrect('A');
+    }
     await loadAdmin();
-    setActionType('success'); setActionMsg('Soal berhasil ditambahkan.');
+    setActionType('success'); setActionMsg('Soal berhasil dihapus.');
+    setBusy(false);
+  }
+
+  async function addQuestion() {
+    setBusy(true); setActionMsg('');
+    const isEdit = !!editingQuestionId;
+    await fetch(`${apiBase}/admin/questions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify(isEdit
+        ? { action: 'update', id: Number(editingQuestionId), category_id: Number(qCategoryId), question_text: qText, option_a: qA, option_b: qB, option_c: qC, option_d: qD, correct_option: qCorrect, is_active: true }
+        : { action: 'create', category_id: Number(qCategoryId), question_text: qText, option_a: qA, option_b: qB, option_c: qC, option_d: qD, correct_option: qCorrect })
+    });
+    setQText(''); setQA(''); setQB(''); setQC(''); setQD(''); setQCorrect('A'); setQCategoryId(''); setEditingQuestionId('');
+    await loadAdmin();
+    setActionType('success'); setActionMsg(isEdit ? 'Soal berhasil diupdate.' : 'Soal berhasil ditambahkan.');
     setBusy(false);
   }
 
@@ -298,7 +327,7 @@ export default function Page() {
                 {adminSection === 'bank' ? (
                   <>
                     <section style={card2}><h2>Admin · Kategori Soal</h2><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><input style={inputSmall} placeholder='code' value={newCategoryCode} onChange={(e)=>setNewCategoryCode(e.target.value)} /><input style={inputSmall} placeholder='name' value={newCategoryName} onChange={(e)=>setNewCategoryName(e.target.value)} /><button style={btnMini} disabled={busy} onClick={addCategory}>{busy?'Proses...':(editingCategoryId ? 'Update' : 'Tambah')}</button>{editingCategoryId ? <button style={btnMini} disabled={busy} onClick={() => { setEditingCategoryId(''); setNewCategoryCode(''); setNewCategoryName(''); }}>Batal</button> : null}</div><div style={{display:'grid',gap:10,gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',marginTop:12}}>{categories.map((c)=><div key={c.id} style={{border:'1px solid #334155',borderRadius:'var(--nk-radius-md)',padding:12,background:'#111827'}}><div style={{fontWeight:700}}>{c.name}</div><div className='nk-muted' style={{marginBottom:8}}>{c.code}</div><div style={{display:'flex',gap:8}}><button style={btnMini} disabled={busy} onClick={()=>startEditCategory(c)}>Edit</button><button style={{...btnMini, background:'#7f1d1d', borderColor:'#b91c1c'}} disabled={busy} onClick={()=>deleteCategory(c.id)}>Delete</button></div></div>)}{!categories.length?<div className='nk-empty'>Belum ada kategori.</div>:null}</div></section>
-                    <section style={card2}><h2>Admin · Bank Soal</h2><div style={{display:'grid',gap:8}}><select style={input} value={qCategoryId} onChange={(e)=>setQCategoryId(e.target.value)}><option value=''>Pilih kategori</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select><input style={input} placeholder='Pertanyaan' value={qText} onChange={(e)=>setQText(e.target.value)} /><input style={input} placeholder='Opsi A' value={qA} onChange={(e)=>setQA(e.target.value)} /><input style={input} placeholder='Opsi B' value={qB} onChange={(e)=>setQB(e.target.value)} /><input style={input} placeholder='Opsi C' value={qC} onChange={(e)=>setQC(e.target.value)} /><input style={input} placeholder='Opsi D' value={qD} onChange={(e)=>setQD(e.target.value)} /><select style={input} value={qCorrect} onChange={(e)=>setQCorrect(e.target.value)}><option>A</option><option>B</option><option>C</option><option>D</option></select><button style={btnMini} disabled={busy} onClick={addQuestion}>{busy?'Proses...':'Tambah Soal'}</button></div><p className='nk-muted'>Total soal: {questions.length}</p><div style={{marginTop:12}}><label style={{display:'block',marginBottom:6}}>Filter daftar soal berdasarkan kategori</label><select style={input} value={questionFilterCategoryId} onChange={(e)=>setQuestionFilterCategoryId(e.target.value)}><option value=''>Semua kategori</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div><ul style={{marginTop:10}}>{filteredQuestions.map((q)=><li key={q.id}><b>{q.category_name}</b> · {q.question_text}</li>)}{!filteredQuestions.length?<li className='nk-empty'>Tidak ada soal untuk kategori ini.</li>:null}</ul></section>
+                    <section style={card2}><h2>Admin · Bank Soal</h2><div style={{display:'grid',gap:8}}><select style={input} value={qCategoryId} onChange={(e)=>setQCategoryId(e.target.value)}><option value=''>Pilih kategori</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select><input style={input} placeholder='Pertanyaan' value={qText} onChange={(e)=>setQText(e.target.value)} /><input style={input} placeholder='Opsi A' value={qA} onChange={(e)=>setQA(e.target.value)} /><input style={input} placeholder='Opsi B' value={qB} onChange={(e)=>setQB(e.target.value)} /><input style={input} placeholder='Opsi C' value={qC} onChange={(e)=>setQC(e.target.value)} /><input style={input} placeholder='Opsi D' value={qD} onChange={(e)=>setQD(e.target.value)} /><select style={input} value={qCorrect} onChange={(e)=>setQCorrect(e.target.value)}><option>A</option><option>B</option><option>C</option><option>D</option></select><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><button style={btnMini} disabled={busy} onClick={addQuestion}>{busy?'Proses...':(editingQuestionId ? 'Update Soal' : 'Tambah Soal')}</button>{editingQuestionId ? <button style={btnMini} disabled={busy} onClick={() => { setEditingQuestionId(''); setQCategoryId(''); setQText(''); setQA(''); setQB(''); setQC(''); setQD(''); setQCorrect('A'); }}>Batal</button> : null}</div></div><p className='nk-muted'>Total soal: {questions.length}</p><div style={{marginTop:12}}><label style={{display:'block',marginBottom:6}}>Filter daftar soal berdasarkan kategori</label><select style={input} value={questionFilterCategoryId} onChange={(e)=>setQuestionFilterCategoryId(e.target.value)}><option value=''>Semua kategori</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div><div style={{display:'grid',gap:10,gridTemplateColumns:'repeat(auto-fit,minmax(260px,1fr))',marginTop:10}}>{filteredQuestions.map((q)=><div key={q.id} style={{border:'1px solid #334155',borderRadius:'var(--nk-radius-md)',padding:12,background:'#111827'}}><div style={{fontWeight:700,marginBottom:4}}>{q.category_name}</div><div style={{marginBottom:8}}>{q.question_text}</div><div className='nk-muted' style={{fontSize:13,marginBottom:8}}>A. {q.option_a} | B. {q.option_b} | C. {q.option_c} | D. {q.option_d} | Jawaban: {q.correct_option}</div><div style={{display:'flex',gap:8}}><button style={btnMini} disabled={busy} onClick={()=>startEditQuestion(q)}>Edit</button><button style={{...btnMini, background:'#7f1d1d', borderColor:'#b91c1c'}} disabled={busy} onClick={()=>deleteQuestion(q.id)}>Delete</button></div></div>)}{!filteredQuestions.length?<div className='nk-empty'>Tidak ada soal untuk kategori ini.</div>:null}</div></section>
                   </>
                 ) : null}
 
