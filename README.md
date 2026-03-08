@@ -32,7 +32,7 @@ Aplikasi sederhana untuk menampilkan **list peserta** yang bergabung dari pendaf
 - `GET /participants`
 - `GET /participants/check?phone=0812xxxx`
 - `POST /participants`
-- `POST /bot/message` (flow chat Nala: /start, /daftar, /cek, /quiz, /tryout, /leaderbot, /jadwal_belajar, /batal)
+- `POST /bot/message` (flow chat Nala: /start, /daftar, /cek, /quiz, /tryout, /leaderbot, /poin, /jadwal_belajar, /batal)
   - `/quiz`: hanya untuk user yang sudah daftar; pilih kategori dulu, lalu jawab semua soal; cek hasil di akhir ronde
     - tersimpan: kategori, jumlah salah, status lulus, dan percobaan ke-berapa per kategori
   - `/tryout`: hanya untuk user yang sudah daftar; soal acak dari bank quiz, dinilai di akhir; hasil disimpan untuk leaderboard
@@ -58,9 +58,13 @@ Aplikasi sederhana untuk menampilkan **list peserta** yang bergabung dari pendaf
 - `GET /participant/history` (role participant/admin)
 - `GET /participant/leaderboard` (role participant/admin)
 - `GET /participant/reminder` (role participant/admin)
+- `GET /participant/points` (role participant/admin)
+- `GET /participant/points/history` (role participant/admin)
 - `GET /admin/ping` (role admin)
 - `GET /admin/participants` (role admin)
 - `GET /admin/reminders` (role admin)
+- `POST /admin/points/adjust` (role admin)
+- `GET /admin/points/history` (role admin)
 - `POST /admin/participants/reset-password` (role admin)
 - `POST /admin/participants/toggle-active` (role admin)
 - `GET|POST /admin/categories` (role admin; action create/update/delete)

@@ -166,9 +166,13 @@ func main() {
 	mux.HandleFunc("/participant/history", a.handleParticipantHistory)
 	mux.HandleFunc("/participant/leaderboard", a.handleParticipantLeaderboard)
 	mux.HandleFunc("/participant/reminder", a.handleParticipantReminder)
+	mux.HandleFunc("/participant/points", a.handleParticipantPoints)
+	mux.HandleFunc("/participant/points/history", a.handleParticipantPointsHistory)
 	mux.HandleFunc("/admin/ping", a.handleAdminPing)
 	mux.HandleFunc("/admin/participants", a.handleAdminParticipants)
 	mux.HandleFunc("/admin/reminders", a.handleAdminReminders)
+	mux.HandleFunc("/admin/points/adjust", a.handleAdminPointsAdjust)
+	mux.HandleFunc("/admin/points/history", a.handleAdminPointsHistory)
 	mux.HandleFunc("/admin/participants/reset-password", a.handleAdminResetPassword)
 	mux.HandleFunc("/admin/participants/toggle-active", a.handleAdminToggleActive)
 	mux.HandleFunc("/admin/categories", a.handleAdminCategories)
@@ -387,6 +391,32 @@ func (a *app) initDB(ctx context.Context) error {
 			is_active BOOLEAN NOT NULL DEFAULT TRUE,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS point_wallets (
+			user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+			balance BIGINT NOT NULL DEFAULT 0,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS point_ledger (
+			id BIGSERIAL PRIMARY KEY,
+			user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			delta BIGINT NOT NULL,
+			type TEXT NOT NULL,
+			reason TEXT NOT NULL,
+			created_by_admin BIGINT,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)
 	`)
 	if err != nil {
@@ -891,6 +921,155 @@ func (a *app) handleAdminReminders(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (a *app) handleParticipantPoints(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant", "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	bal, err := a.getPointBalance(r.Context(), u.ID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load points"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"balance": bal})
+}
+
+func (a *app) handleParticipantPointsHistory(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant", "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	rows, err := a.db.QueryContext(r.Context(), `
+		SELECT delta, type, reason, created_at FROM point_ledger
+		WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100
+	`, u.ID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load point history"})
+		return
+	}
+	defer rows.Close()
+	items := []map[string]any{}
+	for rows.Next() {
+		var delta int64
+		var typ, reason string
+		var created time.Time
+		if rows.Scan(&delta, &typ, &reason, &created) == nil {
+			items = append(items, map[string]any{"delta": delta, "type": typ, "reason": reason, "created_at": created})
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (a *app) handleAdminPointsAdjust(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req struct {
+		UserID int64  `json:"user_id"`
+		Delta  int64  `json:"delta"`
+		Reason string `json:"reason"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || req.UserID == 0 || req.Delta == 0 || strings.TrimSpace(req.Reason) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "user_id, delta, reason wajib"})
+		return
+	}
+	newBal, err := a.adjustPoints(r.Context(), req.UserID, req.Delta, "admin_adjust", req.Reason, &admin.ID)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	_ = a.logAdminAction(r.Context(), admin.ID, "points.adjust", fmt.Sprint(req.UserID), req)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "new_balance": newBal})
+}
+
+func (a *app) handleAdminPointsHistory(w http.ResponseWriter, r *http.Request) {
+	_, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	rows, err := a.db.QueryContext(r.Context(), `
+		SELECT l.id, l.user_id, COALESCE(p.name,''), COALESCE(u.phone,''), l.delta, l.type, l.reason, l.created_by_admin, l.created_at
+		FROM point_ledger l
+		LEFT JOIN users u ON u.id = l.user_id
+		LEFT JOIN participant_profiles p ON p.user_id = l.user_id
+		ORDER BY l.created_at DESC LIMIT 300
+	`)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed point history"})
+		return
+	}
+	defer rows.Close()
+	items := []map[string]any{}
+	for rows.Next() {
+		var id, uid int64
+		var name, phone, typ, reason string
+		var delta int64
+		var adminID sql.NullInt64
+		var created time.Time
+		if rows.Scan(&id, &uid, &name, &phone, &delta, &typ, &reason, &adminID, &created) == nil {
+			it := map[string]any{"id": id, "user_id": uid, "name": name, "phone": phone, "delta": delta, "type": typ, "reason": reason, "created_at": created}
+			if adminID.Valid {
+				it["created_by_admin"] = adminID.Int64
+			}
+			items = append(items, it)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (a *app) getPointBalance(ctx context.Context, userID int64) (int64, error) {
+	_, err := a.db.ExecContext(ctx, `INSERT INTO point_wallets (user_id, balance, updated_at) VALUES ($1,0,NOW()) ON CONFLICT (user_id) DO NOTHING`, userID)
+	if err != nil {
+		return 0, err
+	}
+	var bal int64
+	err = a.db.QueryRowContext(ctx, `SELECT balance FROM point_wallets WHERE user_id = $1`, userID).Scan(&bal)
+	return bal, err
+}
+
+func (a *app) adjustPoints(ctx context.Context, userID, delta int64, typ, reason string, adminID *int64) (int64, error) {
+	tx, err := a.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `INSERT INTO point_wallets (user_id, balance, updated_at) VALUES ($1,0,NOW()) ON CONFLICT (user_id) DO NOTHING`, userID); err != nil {
+		return 0, err
+	}
+	var bal int64
+	if err := tx.QueryRowContext(ctx, `SELECT balance FROM point_wallets WHERE user_id=$1 FOR UPDATE`, userID).Scan(&bal); err != nil {
+		return 0, err
+	}
+	newBal := bal + delta
+	if newBal < 0 {
+		return 0, errors.New("insufficient points")
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE point_wallets SET balance=$1, updated_at=NOW() WHERE user_id=$2`, newBal, userID); err != nil {
+		return 0, err
+	}
+	var adminVal any = nil
+	if adminID != nil {
+		adminVal = *adminID
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO point_ledger (user_id, delta, type, reason, created_by_admin) VALUES ($1,$2,$3,$4,$5)`, userID, delta, typ, reason, adminVal); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return newBal, nil
 }
 
 func (a *app) handleAdminPing(w http.ResponseWriter, r *http.Request) {
@@ -1485,6 +1664,25 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 			return "Leaderboard masih kosong. Yuk mulai dulu dengan /tryout 🔥", "idle"
 		}
 		return board, "idle"
+	}
+	if lower == "/poin" {
+		registered, err := a.isRegisteredBotUser(ctx, uid)
+		if err != nil {
+			return "Maaf, Nala lagi kesulitan cek akunmu 🙏", "idle"
+		}
+		if !registered {
+			return "Kamu belum terdaftar. Ketik /daftar dulu ya ✨", "idle"
+		}
+		var webUserID int64
+		err = a.db.QueryRowContext(ctx, `SELECT user_id FROM telegram_links WHERE telegram_user_id = $1`, uid).Scan(&webUserID)
+		if err != nil {
+			return "Akunmu belum tersinkron. Coba /daftar ulang ya 🙏", "idle"
+		}
+		bal, err := a.getPointBalance(ctx, webUserID)
+		if err != nil {
+			return "Maaf, belum bisa ambil saldo poin sekarang 🙏", "idle"
+		}
+		return fmt.Sprintf("Saldo poin kamu saat ini: %d poin 🌟", bal), "idle"
 	}
 
 	if lower == "/jadwal_belajar" {
