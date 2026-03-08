@@ -184,6 +184,7 @@ func main() {
 	mux.HandleFunc("/admin/exp/rules", a.handleAdminExpRules)
 	mux.HandleFunc("/admin/exp/history", a.handleAdminExpHistory)
 	mux.HandleFunc("/admin/exp/status", a.handleAdminExpStatus)
+	mux.HandleFunc("/admin/exp/report-setting", a.handleAdminExpReportSetting)
 	mux.HandleFunc("/admin/participants/reset-password", a.handleAdminResetPassword)
 	mux.HandleFunc("/admin/participants/toggle-active", a.handleAdminToggleActive)
 	mux.HandleFunc("/admin/participants/set-role", a.handleAdminSetRole)
@@ -479,6 +480,25 @@ func (a *app) initDB(ctx context.Context) error {
 		('tryout_perfect', 20),
 		('level_step', 100)
 	ON CONFLICT (rule_key) DO NOTHING`)
+
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS exp_report_settings (
+			id INT PRIMARY KEY,
+			time_of_day TEXT NOT NULL DEFAULT '10:00',
+			timezone TEXT NOT NULL DEFAULT 'Asia/Jakarta',
+			is_active BOOLEAN NOT NULL DEFAULT TRUE,
+			last_sent_at TIMESTAMPTZ,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+	_, _ = a.db.ExecContext(ctx, `
+		INSERT INTO exp_report_settings (id, time_of_day, timezone, is_active, updated_at)
+		VALUES (1, '10:00', 'Asia/Jakarta', TRUE, NOW())
+		ON CONFLICT (id) DO NOTHING
+	`)
 
 	if err := a.seedQuestionBankIfEmpty(ctx); err != nil {
 		return err
@@ -1310,6 +1330,63 @@ func (a *app) handleAdminExpStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "level_step": levelStep})
+}
+
+func (a *app) handleAdminExpReportSetting(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method == http.MethodGet {
+		var tm, tz string
+		var active bool
+		var last sql.NullTime
+		err := a.db.QueryRowContext(r.Context(), `SELECT time_of_day, timezone, is_active, last_sent_at FROM exp_report_settings WHERE id=1`).Scan(&tm, &tz, &active, &last)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed load exp report setting"})
+			return
+		}
+		resp := map[string]any{"time_of_day": tm, "timezone": tz, "is_active": active}
+		if last.Valid {
+			resp["last_sent_at"] = last.Time
+		}
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req struct {
+		TimeOfDay string `json:"time_of_day"`
+		Timezone  string `json:"timezone"`
+		IsActive  *bool  `json:"is_active"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
+		return
+	}
+	tm, ok := normalizeTimeHHMM(req.TimeOfDay)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "time_of_day wajib format HH:MM"})
+		return
+	}
+	tz := strings.TrimSpace(req.Timezone)
+	if tz == "" {
+		tz = "Asia/Jakarta"
+	}
+	active := true
+	if req.IsActive != nil {
+		active = *req.IsActive
+	}
+	_, err = a.db.ExecContext(r.Context(), `UPDATE exp_report_settings SET time_of_day=$1, timezone=$2, is_active=$3, updated_at=NOW() WHERE id=1`, tm, tz, active)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed update exp report setting"})
+		return
+	}
+	_ = a.logAdminAction(r.Context(), admin.ID, "exp.report_setting.update", "exp_report_settings", map[string]any{"time_of_day": tm, "timezone": tz, "is_active": active})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (a *app) handleAdminPointBalances(w http.ResponseWriter, r *http.Request) {
@@ -2835,7 +2912,86 @@ func (a *app) startReminderScheduler(ctx context.Context) {
 	}
 }
 
+func (a *app) runExpReportTick(ctx context.Context) {
+	var tm, tz string
+	var active bool
+	var last sql.NullTime
+	if err := a.db.QueryRowContext(ctx, `SELECT time_of_day, timezone, is_active, last_sent_at FROM exp_report_settings WHERE id=1`).Scan(&tm, &tz, &active, &last); err != nil {
+		return
+	}
+	if !active {
+		return
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		loc = time.FixedZone("WIB", 7*3600)
+	}
+	nowUTC := time.Now().UTC()
+	nowLocal := nowUTC.In(loc)
+	if nowLocal.Format("15:04") != tm {
+		return
+	}
+	if last.Valid {
+		lastLocal := last.Time.In(loc)
+		if lastLocal.Year() == nowLocal.Year() && lastLocal.YearDay() == nowLocal.YearDay() {
+			return
+		}
+	}
+	levelStep := a.getExpRuleValue(ctx, "level_step", 100)
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT COALESCE(p.name,''), COALESCE(u.phone,''), COALESCE(w.total_exp,0)
+		FROM users u
+		LEFT JOIN participant_profiles p ON p.user_id=u.id
+		LEFT JOIN exp_wallets w ON w.user_id=u.id
+		WHERE u.role='participant'
+		ORDER BY COALESCE(w.total_exp,0) DESC, u.created_at ASC
+		LIMIT 50
+	`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	lines := []string{"📊 Laporan EXP Peserta", fmt.Sprintf("Waktu: %s (%s)", nowLocal.Format("02 Jan 2006 15:04"), tz), ""}
+	i := 0
+	for rows.Next() {
+		var name, phone string
+		var exp int64
+		if rows.Scan(&name, &phone, &exp) == nil {
+			i++
+			lv, prog := calcLevel(exp, levelStep)
+			if name == "" {
+				name = phone
+			}
+			lines = append(lines, fmt.Sprintf("%d. %s (%s) — Lv %d | EXP %d (%d/%d)", i, name, phone, lv, exp, prog, levelStep))
+		}
+	}
+	if i == 0 {
+		lines = append(lines, "Belum ada data peserta.")
+	}
+	msg := strings.Join(lines, "\n")
+	adminRows, err := a.db.QueryContext(ctx, `
+		SELECT tl.telegram_user_id
+		FROM users u
+		JOIN telegram_links tl ON tl.user_id=u.id
+		WHERE u.role='admin' AND u.is_active=TRUE
+	`)
+	if err == nil {
+		defer adminRows.Close()
+		for adminRows.Next() {
+			var tg string
+			if adminRows.Scan(&tg) == nil {
+				chatID, err := strconv.ParseInt(strings.TrimSpace(tg), 10, 64)
+				if err == nil {
+					_ = a.sendTelegramMessage(ctx, chatID, msg, "idle")
+				}
+			}
+		}
+	}
+	_, _ = a.db.ExecContext(ctx, `UPDATE exp_report_settings SET last_sent_at=NOW(), updated_at=NOW() WHERE id=1`)
+}
+
 func (a *app) runReminderTick(ctx context.Context) {
+	a.runExpReportTick(ctx)
 	rows, err := a.db.QueryContext(ctx, `
 		SELECT telegram_user_id, user_id, time_of_day, timezone, is_active, last_sent_at
 		FROM study_reminders

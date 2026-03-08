@@ -34,6 +34,7 @@ export default function Page() {
   const [adminExpRules, setAdminExpRules] = useState([]);
   const [adminExpHistory, setAdminExpHistory] = useState([]);
   const [adminExpStatus, setAdminExpStatus] = useState([]);
+  const [expReportSetting, setExpReportSetting] = useState({ time_of_day: '10:00', timezone: 'Asia/Jakarta', is_active: true });
   const [pointPhone, setPointPhone] = useState('');
   const [pointDelta, setPointDelta] = useState('');
   const [pointReason, setPointReason] = useState('');
@@ -80,7 +81,7 @@ export default function Page() {
   }
 
   async function loadAdmin() {
-    const [pRes, cRes, qRes, rRes, phRes, pbRes, erRes, ehRes, esRes] = await Promise.all([
+    const [pRes, cRes, qRes, rRes, phRes, pbRes, erRes, ehRes, esRes, ersRes] = await Promise.all([
       fetch(`${apiBase}/admin/participants`, { credentials: 'include' }),
       fetch(`${apiBase}/admin/categories`, { credentials: 'include' }),
       fetch(`${apiBase}/admin/questions`, { credentials: 'include' }),
@@ -89,7 +90,8 @@ export default function Page() {
       fetch(`${apiBase}/admin/points/balances`, { credentials: 'include' }),
       fetch(`${apiBase}/admin/exp/rules`, { credentials: 'include' }),
       fetch(`${apiBase}/admin/exp/history`, { credentials: 'include' }),
-      fetch(`${apiBase}/admin/exp/status`, { credentials: 'include' })
+      fetch(`${apiBase}/admin/exp/status`, { credentials: 'include' }),
+      fetch(`${apiBase}/admin/exp/report-setting`, { credentials: 'include' })
     ]);
     if (pRes.ok) setParticipants((await pRes.json()).items || []);
     if (cRes.ok) setCategories((await cRes.json()).items || []);
@@ -100,6 +102,7 @@ export default function Page() {
     if (erRes.ok) setAdminExpRules((await erRes.json()).items || []);
     if (ehRes.ok) setAdminExpHistory((await ehRes.json()).items || []);
     if (esRes.ok) setAdminExpStatus((await esRes.json()).items || []);
+    if (ersRes.ok) setExpReportSetting(await ersRes.json());
   }
 
   async function loadPortal(role) {
@@ -354,6 +357,23 @@ export default function Page() {
     setBusy(false);
   }
 
+  async function saveExpReportSetting() {
+    setBusy(true); setActionMsg('');
+    const res = await fetch(`${apiBase}/admin/exp/report-setting`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ time_of_day: expReportSetting.time_of_day, timezone: expReportSetting.timezone, is_active: !!expReportSetting.is_active })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setActionType('error'); setActionMsg(d.error || 'Gagal simpan setting laporan EXP.');
+      setBusy(false);
+      return;
+    }
+    await loadAdmin();
+    setActionType('success'); setActionMsg('Setting laporan EXP berhasil disimpan.');
+    setBusy(false);
+  }
+
   async function updateExpRule(ruleKey, ruleValue) {
     setBusy(true); setActionMsg('');
     const res = await fetch(`${apiBase}/admin/exp/rules`, {
@@ -601,6 +621,16 @@ export default function Page() {
                 {adminSection === 'exp' ? (
                   <section style={card2}>
                     <h2>Admin · EXP Peserta</h2>
+
+                    <h3 style={{ marginTop: 10, marginBottom: 8 }}>Setting Laporan EXP Harian</h3>
+                    <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',marginBottom:10}}>
+                      <input style={inputSmall} type='time' value={expReportSetting.time_of_day || '10:00'} onChange={(e)=>setExpReportSetting((s)=>({...s,time_of_day:e.target.value}))} />
+                      <input style={inputSmall} placeholder='Timezone (contoh: Asia/Jakarta)' value={expReportSetting.timezone || 'Asia/Jakarta'} onChange={(e)=>setExpReportSetting((s)=>({...s,timezone:e.target.value}))} />
+                      <label style={{display:'flex',alignItems:'center',gap:6,fontSize:14}}><input type='checkbox' checked={!!expReportSetting.is_active} onChange={(e)=>setExpReportSetting((s)=>({...s,is_active:e.target.checked}))} /> Aktif</label>
+                      <button style={btnMini} disabled={busy} onClick={saveExpReportSetting}>{busy?'Proses...':'Simpan Setting Laporan'}</button>
+                    </div>
+                    <p className='nk-muted'>Laporan level+EXP seluruh peserta otomatis dikirim ke akun admin Telegram tiap hari sesuai jam di atas (default 10:00).</p>
+
                     <h3 style={{ marginTop: 10, marginBottom: 8 }}>Rules EXP (editable)</h3>
                     {adminExpRules.length ? (
                       <div style={{overflowX:'auto',border:'1px solid #22304d',borderRadius:'var(--nk-radius-md)'}}>
