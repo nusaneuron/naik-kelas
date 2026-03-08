@@ -383,17 +383,10 @@ func (a *app) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uid := strconv.FormatInt(upd.Message.From.ID, 10)
-	firstName := strings.TrimSpace(upd.Message.From.FirstName)
 	username := strings.TrimSpace(upd.Message.From.Username)
-	displayName := ""
-	if firstName != "" && username != "" {
-		displayName = firstName + " (@" + username + ")"
-	} else if username != "" {
+	displayName := uid
+	if username != "" {
 		displayName = "@" + username
-	} else if firstName != "" {
-		displayName = firstName
-	} else {
-		displayName = uid
 	}
 	reply, state := a.processBotText(r.Context(), uid, displayName, text)
 	if strings.TrimSpace(reply) != "" {
@@ -818,6 +811,7 @@ func (a *app) getTryoutLeaderboard(ctx context.Context, limit int) (string, erro
 		if err := rows.Scan(&userID, &name, &tg, &bestSec, &perfectCount); err != nil {
 			return "", err
 		}
+		tg = cleanTelegramHandle(tg)
 		lines = append(lines, fmt.Sprintf("%d. %s (%s) — %ds (perfect: %dx)", rank, name, tg, bestSec, perfectCount))
 		rank++
 	}
@@ -894,6 +888,33 @@ func normalizeQuizAnswer(v string) string {
 	default:
 		return ""
 	}
+}
+
+func cleanTelegramHandle(v string) string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return "-"
+	}
+	at := strings.Index(v, "@")
+	if at < 0 {
+		return v
+	}
+	tail := v[at:]
+	end := len(tail)
+	for i, r := range tail {
+		if i == 0 {
+			continue
+		}
+		ok := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
+		if !ok {
+			end = i
+			break
+		}
+	}
+	if end <= 1 {
+		return v
+	}
+	return tail[:end]
 }
 
 func normalizePhone(v string) string {
