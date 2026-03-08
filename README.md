@@ -39,20 +39,21 @@ Aplikasi sederhana untuk menampilkan **list peserta** yang bergabung dari pendaf
     - tersimpan: durasi (detik) dan kecepatan (`speed_qpm`)
   - `/leaderbot`: ranking peserta dengan skor sempurna tercepat
 - `POST /telegram/webhook` (endpoint webhook Telegram)
-- `POST /admin/bootstrap` (bootstrap/promote akun admin; butuh header token)
+- `POST /admin/bootstrap` (bootstrap/promote akun admin; butuh header `X-Admin-Bootstrap-Token`)
   - body JSON:
     ```json
     {
-      "name": "Nama Lengkap",
+      "name": "Nama Admin",
       "phone": "0812xxxx",
-      "email": "email@contoh.com",
-      "source": "bot-naik-kelas"
+      "password": "opsional-default-dibuatkan"
     }
     ```
-  - validasi:
-    - wajib `name`, `phone`, `email`
-    - cek format email
-    - cek duplikasi `phone` (kalau sudah ada → 409 Conflict)
+- `POST /auth/login` (login no HP + password)
+- `POST /auth/logout`
+- `GET /auth/me`
+- `POST /auth/change-password`
+- `GET /participant/me` (role participant/admin)
+- `GET /admin/ping` (role admin)
 
 ## Jalankan lokal
 
@@ -62,6 +63,10 @@ cd backend
 export DATABASE_URL='postgres://admin:admin123@localhost:5432/db-naik-kelas?sslmode=disable'
 go run .
 ```
+
+Catatan default password peserta migrasi:
+- format: `NK-<4 digit akhir no HP>!`
+- user diminta ganti password saat first login (`must_change_password=true`).
 
 ### 2) Frontend
 ```bash

@@ -156,6 +156,12 @@ func main() {
 	mux.HandleFunc("/bot/message", a.handleBotMessage)
 	mux.HandleFunc("/telegram/webhook", a.handleTelegramWebhook)
 	mux.HandleFunc("/admin/bootstrap", a.handleAdminBootstrap)
+	mux.HandleFunc("/auth/login", a.handleAuthLogin)
+	mux.HandleFunc("/auth/logout", a.handleAuthLogout)
+	mux.HandleFunc("/auth/me", a.handleAuthMe)
+	mux.HandleFunc("/auth/change-password", a.handleAuthChangePassword)
+	mux.HandleFunc("/participant/me", a.handleParticipantMe)
+	mux.HandleFunc("/admin/ping", a.handleAdminPing)
 
 	port := getenv("PORT", "8080")
 	addr := ":" + port
@@ -272,6 +278,18 @@ func (a *app) initDB(ctx context.Context) error {
 			source TEXT NOT NULL DEFAULT 'bot-naik-kelas',
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS user_sessions (
+			token TEXT PRIMARY KEY,
+			user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			expires_at TIMESTAMPTZ NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)
 	`)
 	if err != nil {
@@ -401,6 +419,192 @@ func (a *app) handleAdminBootstrap(w http.ResponseWriter, r *http.Request) {
 		`, userID, strings.TrimSpace(req.Name))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "user_id": userID, "phone": phone, "role": "admin", "default_password": req.Password})
+}
+
+func (a *app) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req struct {
+		Phone    string `json:"phone"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+	phone := normalizePhone(req.Phone)
+	if phone == "" || req.Password == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "phone and password are required"})
+		return
+	}
+
+	var userID int64
+	var hash, role string
+	var mustChange, isActive bool
+	err := a.db.QueryRowContext(r.Context(), `SELECT id, password_hash, role, must_change_password, is_active FROM users WHERE phone=$1`, phone).Scan(&userID, &hash, &role, &mustChange, &isActive)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
+		return
+	}
+	if !isActive {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "account disabled"})
+		return
+	}
+	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.Password)) != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
+		return
+	}
+
+	tok := randomToken(32)
+	expires := time.Now().Add(7 * 24 * time.Hour)
+	_, err = a.db.ExecContext(r.Context(), `INSERT INTO user_sessions (token, user_id, expires_at) VALUES ($1,$2,$3)`, tok, userID, expires)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create session"})
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{Name: "nk_session", Value: tok, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: false, Expires: expires})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "role": role, "must_change_password": mustChange})
+}
+
+func (a *app) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	if c, err := r.Cookie("nk_session"); err == nil {
+		_, _ = a.db.ExecContext(r.Context(), `DELETE FROM user_sessions WHERE token=$1`, c.Value)
+	}
+	http.SetCookie(w, &http.Cookie{Name: "nk_session", Value: "", Path: "/", HttpOnly: true, MaxAge: -1, Expires: time.Unix(0, 0)})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *app) handleAuthMe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	u, err := a.currentUser(r.Context(), r)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	writeJSON(w, http.StatusOK, u)
+}
+
+func (a *app) handleAuthChangePassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	u, err := a.currentUser(r.Context(), r)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	var req struct {
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+	if len(req.NewPassword) < 6 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "new password minimal 6 karakter"})
+		return
+	}
+	var hash string
+	if err := a.db.QueryRowContext(r.Context(), `SELECT password_hash FROM users WHERE id=$1`, u.ID).Scan(&hash); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load user"})
+		return
+	}
+	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.OldPassword)) != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "old password salah"})
+		return
+	}
+	newHash, _ := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	_, err = a.db.ExecContext(r.Context(), `UPDATE users SET password_hash=$1, must_change_password=FALSE, updated_at=NOW() WHERE id=$2`, string(newHash), u.ID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update password"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *app) handleParticipantMe(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant", "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	var name, email, source string
+	_ = a.db.QueryRowContext(r.Context(), `SELECT COALESCE(name,''), COALESCE(email,''), COALESCE(source,'') FROM participant_profiles WHERE user_id=$1`, u.ID).Scan(&name, &email, &source)
+	writeJSON(w, http.StatusOK, map[string]any{"id": u.ID, "phone": u.Phone, "role": u.Role, "must_change_password": u.MustChangePassword, "name": name, "email": email, "source": source})
+}
+
+func (a *app) handleAdminPing(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "admin_id": u.ID})
+}
+
+type authUser struct {
+	ID                 int64  `json:"id"`
+	Phone              string `json:"phone"`
+	Role               string `json:"role"`
+	MustChangePassword bool   `json:"must_change_password"`
+}
+
+func (a *app) currentUser(ctx context.Context, r *http.Request) (authUser, error) {
+	c, err := r.Cookie("nk_session")
+	if err != nil || strings.TrimSpace(c.Value) == "" {
+		return authUser{}, errors.New("no session")
+	}
+	var u authUser
+	var expires time.Time
+	err = a.db.QueryRowContext(ctx, `
+		SELECT u.id, u.phone, u.role, u.must_change_password, s.expires_at
+		FROM user_sessions s
+		JOIN users u ON u.id = s.user_id
+		WHERE s.token = $1
+	`, c.Value).Scan(&u.ID, &u.Phone, &u.Role, &u.MustChangePassword, &expires)
+	if err != nil {
+		return authUser{}, err
+	}
+	if time.Now().After(expires) {
+		_, _ = a.db.ExecContext(ctx, `DELETE FROM user_sessions WHERE token=$1`, c.Value)
+		return authUser{}, errors.New("session expired")
+	}
+	return u, nil
+}
+
+func (a *app) requireRole(ctx context.Context, r *http.Request, roles ...string) (authUser, error) {
+	u, err := a.currentUser(ctx, r)
+	if err != nil {
+		return authUser{}, err
+	}
+	for _, role := range roles {
+		if u.Role == role {
+			return u, nil
+		}
+	}
+	return authUser{}, errors.New("forbidden")
+}
+
+func randomToken(n int) string {
+	letters := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[r.Intn(len(letters))]
+	}
+	return string(b)
 }
 
 func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
