@@ -176,6 +176,7 @@ func main() {
 	mux.HandleFunc("/admin/points/update", a.handleAdminPointsUpdate)
 	mux.HandleFunc("/admin/points/delete", a.handleAdminPointsDelete)
 	mux.HandleFunc("/admin/points/recalculate", a.handleAdminPointsRecalculate)
+	mux.HandleFunc("/admin/points/balances", a.handleAdminPointBalances)
 	mux.HandleFunc("/admin/participants/reset-password", a.handleAdminResetPassword)
 	mux.HandleFunc("/admin/participants/toggle-active", a.handleAdminToggleActive)
 	mux.HandleFunc("/admin/participants/set-role", a.handleAdminSetRole)
@@ -1138,6 +1139,37 @@ func (a *app) handleAdminPointsRecalculate(w http.ResponseWriter, r *http.Reques
 	}
 	_ = a.logAdminAction(r.Context(), admin.ID, "points.recalculate_all", "all", map[string]any{"count": count})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "recalculated_users": count})
+}
+
+func (a *app) handleAdminPointBalances(w http.ResponseWriter, r *http.Request) {
+	_, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	rows, err := a.db.QueryContext(r.Context(), `
+		SELECT u.id, COALESCE(p.name,''), COALESCE(u.phone,''), COALESCE(w.balance,0)
+		FROM users u
+		LEFT JOIN participant_profiles p ON p.user_id = u.id
+		LEFT JOIN point_wallets w ON w.user_id = u.id
+		ORDER BY COALESCE(w.balance,0) DESC, u.created_at ASC
+		LIMIT 500
+	`)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed load balances"})
+		return
+	}
+	defer rows.Close()
+	items := []map[string]any{}
+	for rows.Next() {
+		var id int64
+		var name, phone string
+		var balance int64
+		if rows.Scan(&id, &name, &phone, &balance) == nil {
+			items = append(items, map[string]any{"user_id": id, "name": name, "phone": phone, "balance": balance})
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func (a *app) getPointBalance(ctx context.Context, userID int64) (int64, error) {

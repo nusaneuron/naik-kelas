@@ -67,6 +67,7 @@ Aplikasi sederhana untuk menampilkan **list peserta** yang bergabung dari pendaf
 - `POST /admin/points/update` (role admin)
 - `POST /admin/points/delete` (role admin)
 - `POST /admin/points/recalculate` (role admin)
+- `GET /admin/points/balances` (role admin)
 - `GET /admin/points/history` (role admin)
 - `POST /admin/participants/reset-password` (role admin)
 - `POST /admin/participants/toggle-active` (role admin)

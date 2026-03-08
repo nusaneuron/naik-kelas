@@ -30,6 +30,7 @@ export default function Page() {
   const [questions, setQuestions] = useState([]);
   const [adminReminders, setAdminReminders] = useState([]);
   const [adminPointHistory, setAdminPointHistory] = useState([]);
+  const [adminPointBalances, setAdminPointBalances] = useState([]);
   const [pointPhone, setPointPhone] = useState('');
   const [pointDelta, setPointDelta] = useState('');
   const [pointReason, setPointReason] = useState('');
@@ -76,18 +77,20 @@ export default function Page() {
   }
 
   async function loadAdmin() {
-    const [pRes, cRes, qRes, rRes, phRes] = await Promise.all([
+    const [pRes, cRes, qRes, rRes, phRes, pbRes] = await Promise.all([
       fetch(`${apiBase}/admin/participants`, { credentials: 'include' }),
       fetch(`${apiBase}/admin/categories`, { credentials: 'include' }),
       fetch(`${apiBase}/admin/questions`, { credentials: 'include' }),
       fetch(`${apiBase}/admin/reminders`, { credentials: 'include' }),
-      fetch(`${apiBase}/admin/points/history`, { credentials: 'include' })
+      fetch(`${apiBase}/admin/points/history`, { credentials: 'include' }),
+      fetch(`${apiBase}/admin/points/balances`, { credentials: 'include' })
     ]);
     if (pRes.ok) setParticipants((await pRes.json()).items || []);
     if (cRes.ok) setCategories((await cRes.json()).items || []);
     if (qRes.ok) setQuestions((await qRes.json()).items || []);
     if (rRes.ok) setAdminReminders((await rRes.json()).items || []);
     if (phRes.ok) setAdminPointHistory((await phRes.json()).items || []);
+    if (pbRes.ok) setAdminPointBalances((await pbRes.json()).items || []);
   }
 
   async function loadPortal(role) {
@@ -476,7 +479,46 @@ export default function Page() {
                 ) : null}
 
                 {adminSection === 'poin' ? (
-                  <section style={card2}><h2>Admin · Poin Peserta</h2><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><input style={inputSmall} placeholder='nomor telepon peserta' value={pointPhone} onChange={(e)=>setPointPhone(e.target.value)} /><input style={inputSmall} placeholder='delta (+/-)' value={pointDelta} onChange={(e)=>setPointDelta(e.target.value)} /><input style={inputSmall} placeholder='reason' value={pointReason} onChange={(e)=>setPointReason(e.target.value)} /><button style={btnMini} disabled={busy} onClick={adjustPoints}>{busy?'Proses...':(editingPointEntryId ? 'Update Entry' : 'Submit Poin')}</button>{editingPointEntryId ? <button style={btnMini} disabled={busy} onClick={() => { setEditingPointEntryId(''); setPointPhone(''); setPointDelta(''); setPointReason(''); }}>Batal</button> : null}<button style={btnMini} disabled={busy} onClick={recalculatePoints}>{busy?'Proses...':'Hitung Ulang Poin'}</button></div><p className='nk-muted' style={{ marginTop:8 }}>Nama terdeteksi: <b>{matchedParticipant?.name || '-'}</b>{matchedParticipant?.phone ? ` (${matchedParticipant.phone})` : ''}</p>{adminPointHistory.length ? <div style={{overflowX:'auto',overflowY:'auto',maxHeight:420,border:'1px solid #22304d',borderRadius:'var(--nk-radius-md)'}}><table style={{width:'max-content',minWidth:980,borderCollapse:'collapse'}}><thead><tr><th style={thAdmin}>Nama</th><th style={thAdmin}>No. HP</th><th style={thAdmin}>Delta</th><th style={thAdmin}>Reason</th><th style={thAdmin}>Type</th><th style={thAdmin}>Waktu</th><th style={thAdmin}>Aksi</th></tr></thead><tbody>{adminPointHistory.slice(0,100).map((p)=><tr key={p.id}><td style={tdAdmin}>{p.name || '-'}</td><td style={tdAdmin}>{p.phone || '-'}</td><td style={tdAdmin}>{p.delta>0?`+${p.delta}`:p.delta}</td><td style={tdAdmin}>{p.reason}</td><td style={tdAdmin}>{p.type}</td><td style={tdAdmin}>{new Date(p.created_at).toLocaleString('id-ID')}</td><td style={tdAdmin}><div style={{display:'flex',gap:6}}><button style={btnMini} disabled={busy} onClick={()=>startEditPointEntry(p)}>Edit</button><button style={{...btnMini, background:'#7f1d1d', borderColor:'#b91c1c'}} disabled={busy} onClick={()=>deletePointEntry(p.id)}>Hapus</button></div></td></tr>)}</tbody></table></div> : <div className='nk-empty'>Belum ada transaksi poin.</div>}</section>
+                  <section style={card2}>
+                    <h2>Admin · Poin Peserta</h2>
+                    <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                      <input style={inputSmall} placeholder='nomor telepon peserta' value={pointPhone} onChange={(e)=>setPointPhone(e.target.value)} />
+                      <input style={inputSmall} placeholder='delta (+/-)' value={pointDelta} onChange={(e)=>setPointDelta(e.target.value)} />
+                      <input style={inputSmall} placeholder='reason' value={pointReason} onChange={(e)=>setPointReason(e.target.value)} />
+                      <button style={btnMini} disabled={busy} onClick={adjustPoints}>{busy?'Proses...':(editingPointEntryId ? 'Update Entry' : 'Submit Poin')}</button>
+                      {editingPointEntryId ? <button style={btnMini} disabled={busy} onClick={() => { setEditingPointEntryId(''); setPointPhone(''); setPointDelta(''); setPointReason(''); }}>Batal</button> : null}
+                      <button style={btnMini} disabled={busy} onClick={recalculatePoints}>{busy?'Proses...':'Hitung Ulang Poin'}</button>
+                    </div>
+                    <p className='nk-muted' style={{ marginTop:8 }}>Nama terdeteksi: <b>{matchedParticipant?.name || '-'}</b>{matchedParticipant?.phone ? ` (${matchedParticipant.phone})` : ''}</p>
+
+                    <h3 style={{ marginTop: 14, marginBottom: 8 }}>Saldo Akhir Tiap Peserta</h3>
+                    {adminPointBalances.length ? (
+                      <div style={{overflowX:'auto',overflowY:'auto',maxHeight:260,border:'1px solid #22304d',borderRadius:'var(--nk-radius-md)'}}>
+                        <table style={{width:'max-content',minWidth:760,borderCollapse:'collapse'}}>
+                          <thead><tr><th style={thAdmin}>Nama</th><th style={thAdmin}>No. HP</th><th style={thAdmin}>Saldo Akhir</th></tr></thead>
+                          <tbody>
+                            {adminPointBalances.map((b)=> (
+                              <tr key={b.user_id}>
+                                <td style={tdAdmin}>{b.name || '-'}</td>
+                                <td style={tdAdmin}>{b.phone || '-'}</td>
+                                <td style={tdAdmin}><b>{b.balance}</b> poin</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : <div className='nk-empty'>Belum ada saldo poin peserta.</div>}
+
+                    <h3 style={{ marginTop: 16, marginBottom: 8 }}>Riwayat Transaksi Poin</h3>
+                    {adminPointHistory.length ? (
+                      <div style={{overflowX:'auto',overflowY:'auto',maxHeight:420,border:'1px solid #22304d',borderRadius:'var(--nk-radius-md)'}}>
+                        <table style={{width:'max-content',minWidth:980,borderCollapse:'collapse'}}>
+                          <thead><tr><th style={thAdmin}>Nama</th><th style={thAdmin}>No. HP</th><th style={thAdmin}>Delta</th><th style={thAdmin}>Reason</th><th style={thAdmin}>Type</th><th style={thAdmin}>Waktu</th><th style={thAdmin}>Aksi</th></tr></thead>
+                          <tbody>{adminPointHistory.slice(0,100).map((p)=><tr key={p.id}><td style={tdAdmin}>{p.name || '-'}</td><td style={tdAdmin}>{p.phone || '-'}</td><td style={tdAdmin}>{p.delta>0?`+${p.delta}`:p.delta}</td><td style={tdAdmin}>{p.reason}</td><td style={tdAdmin}>{p.type}</td><td style={tdAdmin}>{new Date(p.created_at).toLocaleString('id-ID')}</td><td style={tdAdmin}><div style={{display:'flex',gap:6}}><button style={btnMini} disabled={busy} onClick={()=>startEditPointEntry(p)}>Edit</button><button style={{...btnMini, background:'#7f1d1d', borderColor:'#b91c1c'}} disabled={busy} onClick={()=>deletePointEntry(p.id)}>Hapus</button></div></td></tr>)}</tbody>
+                        </table>
+                      </div>
+                    ) : <div className='nk-empty'>Belum ada transaksi poin.</div>}
+                  </section>
                 ) : null}
               </div>
             </div>
