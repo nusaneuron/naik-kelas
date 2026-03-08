@@ -629,7 +629,7 @@ export default function Page() {
                       <label style={{display:'flex',alignItems:'center',gap:6,fontSize:14}}><input type='checkbox' checked={!!expReportSetting.is_active} onChange={(e)=>setExpReportSetting((s)=>({...s,is_active:e.target.checked}))} /> Aktif</label>
                       <button style={btnMini} disabled={busy} onClick={saveExpReportSetting}>{busy?'Proses...':'Simpan Setting Laporan'}</button>
                     </div>
-                    <p className='nk-muted'>Laporan level+EXP seluruh peserta otomatis dikirim ke akun admin Telegram tiap hari sesuai jam di atas (default 10:00).</p>
+                    <p className='nk-muted'>Laporan level+EXP seluruh peserta otomatis dikirim ke seluruh peserta Telegram tiap hari sesuai jam di atas (default 10:00).</p>
 
                     <h3 style={{ marginTop: 10, marginBottom: 8 }}>Rules EXP (editable)</h3>
                     {adminExpRules.length ? (

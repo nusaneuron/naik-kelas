@@ -2969,17 +2969,17 @@ func (a *app) runExpReportTick(ctx context.Context) {
 		lines = append(lines, "Belum ada data peserta.")
 	}
 	msg := strings.Join(lines, "\n")
-	adminRows, err := a.db.QueryContext(ctx, `
+	participantRows, err := a.db.QueryContext(ctx, `
 		SELECT tl.telegram_user_id
 		FROM users u
 		JOIN telegram_links tl ON tl.user_id=u.id
-		WHERE u.role='admin' AND u.is_active=TRUE
+		WHERE u.role='participant' AND u.is_active=TRUE
 	`)
 	if err == nil {
-		defer adminRows.Close()
-		for adminRows.Next() {
+		defer participantRows.Close()
+		for participantRows.Next() {
 			var tg string
-			if adminRows.Scan(&tg) == nil {
+			if participantRows.Scan(&tg) == nil {
 				chatID, err := strconv.ParseInt(strings.TrimSpace(tg), 10, 64)
 				if err == nil {
 					_ = a.sendTelegramMessage(ctx, chatID, msg, "idle")
