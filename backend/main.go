@@ -2939,10 +2939,11 @@ func (a *app) runExpReportTick(ctx context.Context) {
 	}
 	levelStep := a.getExpRuleValue(ctx, "level_step", 100)
 	rows, err := a.db.QueryContext(ctx, `
-		SELECT COALESCE(p.name,''), COALESCE(u.phone,''), COALESCE(w.total_exp,0)
+		SELECT COALESCE(p.name,''), COALESCE(w.total_exp,0), COALESCE(pw.balance,0)
 		FROM users u
 		LEFT JOIN participant_profiles p ON p.user_id=u.id
 		LEFT JOIN exp_wallets w ON w.user_id=u.id
+		LEFT JOIN point_wallets pw ON pw.user_id=u.id
 		WHERE u.role='participant'
 		ORDER BY COALESCE(w.total_exp,0) DESC, u.created_at ASC
 		LIMIT 50
@@ -2954,15 +2955,15 @@ func (a *app) runExpReportTick(ctx context.Context) {
 	lines := []string{"📊 Laporan EXP Peserta", fmt.Sprintf("Waktu: %s (%s)", nowLocal.Format("02 Jan 2006 15:04"), tz), ""}
 	i := 0
 	for rows.Next() {
-		var name, phone string
-		var exp int64
-		if rows.Scan(&name, &phone, &exp) == nil {
+		var name string
+		var exp, points int64
+		if rows.Scan(&name, &exp, &points) == nil {
 			i++
 			lv, prog := calcLevel(exp, levelStep)
-			if name == "" {
-				name = phone
+			if strings.TrimSpace(name) == "" {
+				name = "Peserta"
 			}
-			lines = append(lines, fmt.Sprintf("%d. %s (%s) — Lv %d | EXP %d (%d/%d)", i, name, phone, lv, exp, prog, levelStep))
+			lines = append(lines, fmt.Sprintf("%d. %s — Lv %d | EXP %d (%d/%d) | Poin %d", i, name, lv, exp, prog, levelStep, points))
 		}
 	}
 	if i == 0 {
