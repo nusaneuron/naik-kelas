@@ -429,6 +429,32 @@ func (a *app) initDB(ctx context.Context) error {
 		return err
 	}
 
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS exp_wallets (
+			user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+			total_exp BIGINT NOT NULL DEFAULT 0,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS exp_ledger (
+			id BIGSERIAL PRIMARY KEY,
+			user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			delta BIGINT NOT NULL,
+			type TEXT NOT NULL,
+			reason TEXT NOT NULL,
+			source_ref TEXT,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
 	if err := a.seedQuestionBankIfEmpty(ctx); err != nil {
 		return err
 	}
@@ -768,7 +794,9 @@ func (a *app) handleParticipantMe(w http.ResponseWriter, r *http.Request) {
 	}
 	var name, email, source string
 	_ = a.db.QueryRowContext(r.Context(), `SELECT COALESCE(name,''), COALESCE(email,''), COALESCE(source,'') FROM participant_profiles WHERE user_id=$1`, u.ID).Scan(&name, &email, &source)
-	writeJSON(w, http.StatusOK, map[string]any{"id": u.ID, "phone": u.Phone, "role": u.Role, "must_change_password": u.MustChangePassword, "name": name, "email": email, "source": source})
+	totalExp, _ := a.getExpTotal(r.Context(), u.ID)
+	level := (totalExp / 100) + 1
+	writeJSON(w, http.StatusOK, map[string]any{"id": u.ID, "phone": u.Phone, "role": u.Role, "must_change_password": u.MustChangePassword, "name": name, "email": email, "source": source, "exp": totalExp, "level": level})
 }
 
 func (a *app) handleParticipantHistory(w http.ResponseWriter, r *http.Request) {
@@ -1251,6 +1279,66 @@ func (a *app) recalculateAllWallets(ctx context.Context) (int, error) {
 		}
 	}
 	return count, rows.Err()
+}
+
+func (a *app) resolveWebUserIDByExternal(ctx context.Context, externalUserID string) (int64, error) {
+	externalUserID = strings.TrimSpace(externalUserID)
+	if externalUserID == "" {
+		return 0, sql.ErrNoRows
+	}
+	if id, err := strconv.ParseInt(externalUserID, 10, 64); err == nil {
+		var exists int64
+		err = a.db.QueryRowContext(ctx, `SELECT id FROM users WHERE id=$1`, id).Scan(&exists)
+		if err == nil {
+			return exists, nil
+		}
+	}
+	var userID int64
+	err := a.db.QueryRowContext(ctx, `SELECT user_id FROM telegram_links WHERE telegram_user_id=$1`, externalUserID).Scan(&userID)
+	return userID, err
+}
+
+func (a *app) getExpTotal(ctx context.Context, userID int64) (int64, error) {
+	_, err := a.db.ExecContext(ctx, `INSERT INTO exp_wallets (user_id, total_exp, updated_at) VALUES ($1,0,NOW()) ON CONFLICT (user_id) DO NOTHING`, userID)
+	if err != nil {
+		return 0, err
+	}
+	var total int64
+	err = a.db.QueryRowContext(ctx, `SELECT total_exp FROM exp_wallets WHERE user_id=$1`, userID).Scan(&total)
+	return total, err
+}
+
+func (a *app) addExpByExternalUser(ctx context.Context, externalUserID string, delta int64, typ, reason, sourceRef string) (int64, error) {
+	if delta <= 0 {
+		return 0, nil
+	}
+	webUserID, err := a.resolveWebUserIDByExternal(ctx, externalUserID)
+	if err != nil {
+		return 0, err
+	}
+	tx, err := a.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `INSERT INTO exp_wallets (user_id, total_exp, updated_at) VALUES ($1,0,NOW()) ON CONFLICT (user_id) DO NOTHING`, webUserID); err != nil {
+		return 0, err
+	}
+	var total int64
+	if err := tx.QueryRowContext(ctx, `SELECT total_exp FROM exp_wallets WHERE user_id=$1 FOR UPDATE`, webUserID).Scan(&total); err != nil {
+		return 0, err
+	}
+	next := total + delta
+	if _, err := tx.ExecContext(ctx, `UPDATE exp_wallets SET total_exp=$1, updated_at=NOW() WHERE user_id=$2`, next, webUserID); err != nil {
+		return 0, err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO exp_ledger (user_id, delta, type, reason, source_ref) VALUES ($1,$2,$3,$4,$5)`, webUserID, delta, typ, reason, sourceRef); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return next, nil
 }
 
 func (a *app) handleAdminPing(w http.ResponseWriter, r *http.Request) {
@@ -1856,7 +1944,7 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 	}
 	if lower == "/start" {
 		a.resetSession(uid)
-		return "Selamat datang di Naik Kelas, perkenalkan saya Nala ✨\nAku siap bantu kamu daftar belajar dengan cepat.\n\nKetik /daftar untuk registrasi peserta baru 📚\nKetik /cek untuk cek apakah nomor HP sudah terdaftar ✅\nKetik /quiz untuk latihan per kategori 🧠\nKetik /tryout untuk simulasi soal acak 🚀\nKetik /leaderbot untuk lihat ranking tryout 🏆\nKetik /jadwal_belajar untuk atur pengingat belajar ⏰", "idle"
+		return "Selamat datang di Naik Kelas, perkenalkan saya Nala ✨\nAku siap bantu kamu daftar belajar dengan cepat.\n\nKetik /daftar untuk registrasi peserta baru 📚\nKetik /cek untuk cek apakah nomor HP sudah terdaftar ✅\nKetik /quiz untuk latihan per kategori 🧠\nKetik /tryout untuk simulasi soal acak 🚀\nKetik /leaderbot untuk lihat ranking tryout 🏆\nKetik /poin untuk cek menu poin 🌟\nKetik /exp untuk cek EXP & level kamu ✨\nKetik /jadwal_belajar untuk atur pengingat belajar ⏰", "idle"
 	}
 	if lower == "/daftar" {
 		a.mu.Lock()
@@ -1914,6 +2002,27 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		}
 		return board, "idle"
 	}
+	if lower == "/exp" {
+		registered, err := a.isRegisteredBotUser(ctx, uid)
+		if err != nil {
+			return "Maaf, Nala lagi kesulitan cek akunmu 🙏", "idle"
+		}
+		if !registered {
+			return "Kamu belum terdaftar. Ketik /daftar dulu ya ✨", "idle"
+		}
+		webUserID, err := a.resolveWebUserIDByExternal(ctx, uid)
+		if err != nil {
+			return "Akunmu belum tersinkron. Coba /daftar ulang ya 🙏", "idle"
+		}
+		totalExp, err := a.getExpTotal(ctx, webUserID)
+		if err != nil {
+			return "Maaf, belum bisa ambil data EXP sekarang 🙏", "idle"
+		}
+		level := (totalExp / 100) + 1
+		progress := totalExp % 100
+		return fmt.Sprintf("EXP kamu saat ini: %d ✨\nLevel: %d\nProgress ke level berikutnya: %d/100", totalExp, level, progress), "idle"
+	}
+
 	if lower == "/poin" {
 		registered, err := a.isRegisteredBotUser(ctx, uid)
 		if err != nil {
@@ -2306,7 +2415,17 @@ func (a *app) saveTryoutResult(ctx context.Context, userID, displayName string, 
 		INSERT INTO tryout_results (user_id, display_name, total_questions, correct_count, all_correct, duration_seconds, speed_qpm)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`, userID, displayName, total, correct, allCorrect, durationSec, speedQPM)
-	return err
+	if err != nil {
+		return err
+	}
+	delta := int64(8)
+	reason := "Selesai tryout"
+	if allCorrect {
+		delta = 20
+		reason = "Selesai tryout dengan hasil perfect"
+	}
+	_, _ = a.addExpByExternalUser(ctx, userID, delta, "tryout", reason, "tryout_results")
+	return nil
 }
 
 func (a *app) saveQuizAttempt(ctx context.Context, userID, displayName string, cat quizCategory, totalQuestions, wrongCount int, allCorrect bool) (int, error) {
@@ -2329,6 +2448,13 @@ func (a *app) saveQuizAttempt(ctx context.Context, userID, displayName string, c
 	if err != nil {
 		return 0, err
 	}
+	delta := int64(5)
+	reason := "Selesai latihan quiz"
+	if allCorrect {
+		delta = 15
+		reason = "Selesai latihan quiz dengan nilai sempurna"
+	}
+	_, _ = a.addExpByExternalUser(ctx, userID, delta, "quiz", reason, cat.Code)
 	return attemptNo, nil
 }
 
