@@ -35,6 +35,7 @@ export default function Page() {
 
   const [newCategoryCode, setNewCategoryCode] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState('');
 
   const [qCategoryId, setQCategoryId] = useState('');
   const [questionFilterCategoryId, setQuestionFilterCategoryId] = useState('');
@@ -133,13 +134,36 @@ export default function Page() {
 
   async function addCategory() {
     setBusy(true); setActionMsg('');
+    const isEdit = !!editingCategoryId;
     await fetch(`${apiBase}/admin/categories`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-      body: JSON.stringify({ action: 'create', code: newCategoryCode, name: newCategoryName })
+      body: JSON.stringify(isEdit
+        ? { action: 'update', id: Number(editingCategoryId), code: newCategoryCode, name: newCategoryName, is_active: true }
+        : { action: 'create', code: newCategoryCode, name: newCategoryName })
     });
-    setNewCategoryCode(''); setNewCategoryName('');
+    setNewCategoryCode(''); setNewCategoryName(''); setEditingCategoryId('');
     await loadAdmin();
-    setActionType('success'); setActionMsg('Kategori berhasil ditambahkan.');
+    setActionType('success'); setActionMsg(isEdit ? 'Kategori berhasil diupdate.' : 'Kategori berhasil ditambahkan.');
+    setBusy(false);
+  }
+
+  function startEditCategory(cat) {
+    setEditingCategoryId(String(cat.id));
+    setNewCategoryCode(cat.code || '');
+    setNewCategoryName(cat.name || '');
+  }
+
+  async function deleteCategory(catId) {
+    setBusy(true); setActionMsg('');
+    await fetch(`${apiBase}/admin/categories`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ action: 'delete', id: Number(catId) })
+    });
+    if (String(editingCategoryId) === String(catId)) {
+      setEditingCategoryId(''); setNewCategoryCode(''); setNewCategoryName('');
+    }
+    await loadAdmin();
+    setActionType('success'); setActionMsg('Kategori berhasil dihapus.');
     setBusy(false);
   }
 
@@ -273,7 +297,7 @@ export default function Page() {
 
                 {adminSection === 'bank' ? (
                   <>
-                    <section style={card2}><h2>Admin · Kategori Soal</h2><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><input style={inputSmall} placeholder='code' value={newCategoryCode} onChange={(e)=>setNewCategoryCode(e.target.value)} /><input style={inputSmall} placeholder='name' value={newCategoryName} onChange={(e)=>setNewCategoryName(e.target.value)} /><button style={btnMini} disabled={busy} onClick={addCategory}>{busy?'Proses...':'Tambah'}</button></div><ul>{categories.map((c)=><li key={c.id}>{c.code} · {c.name}</li>)}{!categories.length?<li className='nk-empty'>Belum ada kategori.</li>:null}</ul></section>
+                    <section style={card2}><h2>Admin · Kategori Soal</h2><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><input style={inputSmall} placeholder='code' value={newCategoryCode} onChange={(e)=>setNewCategoryCode(e.target.value)} /><input style={inputSmall} placeholder='name' value={newCategoryName} onChange={(e)=>setNewCategoryName(e.target.value)} /><button style={btnMini} disabled={busy} onClick={addCategory}>{busy?'Proses...':(editingCategoryId ? 'Update' : 'Tambah')}</button>{editingCategoryId ? <button style={btnMini} disabled={busy} onClick={() => { setEditingCategoryId(''); setNewCategoryCode(''); setNewCategoryName(''); }}>Batal</button> : null}</div><ul>{categories.map((c)=><li key={c.id}>{c.code} · {c.name} <button style={btnMini} disabled={busy} onClick={()=>startEditCategory(c)}>Edit</button> <button style={{...btnMini, background:'#7f1d1d', borderColor:'#b91c1c'}} disabled={busy} onClick={()=>deleteCategory(c.id)}>Delete</button></li>)}{!categories.length?<li className='nk-empty'>Belum ada kategori.</li>:null}</ul></section>
                     <section style={card2}><h2>Admin · Bank Soal</h2><div style={{display:'grid',gap:8}}><select style={input} value={qCategoryId} onChange={(e)=>setQCategoryId(e.target.value)}><option value=''>Pilih kategori</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select><input style={input} placeholder='Pertanyaan' value={qText} onChange={(e)=>setQText(e.target.value)} /><input style={input} placeholder='Opsi A' value={qA} onChange={(e)=>setQA(e.target.value)} /><input style={input} placeholder='Opsi B' value={qB} onChange={(e)=>setQB(e.target.value)} /><input style={input} placeholder='Opsi C' value={qC} onChange={(e)=>setQC(e.target.value)} /><input style={input} placeholder='Opsi D' value={qD} onChange={(e)=>setQD(e.target.value)} /><select style={input} value={qCorrect} onChange={(e)=>setQCorrect(e.target.value)}><option>A</option><option>B</option><option>C</option><option>D</option></select><button style={btnMini} disabled={busy} onClick={addQuestion}>{busy?'Proses...':'Tambah Soal'}</button></div><p className='nk-muted'>Total soal: {questions.length}</p><div style={{marginTop:12}}><label style={{display:'block',marginBottom:6}}>Filter daftar soal berdasarkan kategori</label><select style={input} value={questionFilterCategoryId} onChange={(e)=>setQuestionFilterCategoryId(e.target.value)}><option value=''>Semua kategori</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div><ul style={{marginTop:10}}>{filteredQuestions.map((q)=><li key={q.id}><b>{q.category_name}</b> · {q.question_text}</li>)}{!filteredQuestions.length?<li className='nk-empty'>Tidak ada soal untuk kategori ini.</li>:null}</ul></section>
                   </>
                 ) : null}
