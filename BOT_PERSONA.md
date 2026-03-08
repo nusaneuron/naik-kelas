@@ -14,6 +14,8 @@
   - Ketik /daftar untuk registrasi peserta baru 📚
   - Ketik /cek untuk cek apakah nomor HP sudah terdaftar ✅
   - Ketik /quiz untuk mulai latihan soal 🧠 (pilih kategori dulu)
+  - Ketik /tryout untuk simulasi soal acak 🚀
+  - Ketik /leaderbot untuk lihat ranking tercepat 🏆
 - Berhasil daftar: `Yeay! 🎉 Pendaftaran kamu berhasil. Semangat belajar bareng Naik Kelas ya ✨📚`
 - Sudah terdaftar: `Nomor HP ini sudah pernah terdaftar ✅`
 - Error server: `Maaf, Nala lagi kesulitan terhubung ke server 🙏 Coba lagi sebentar ya.`

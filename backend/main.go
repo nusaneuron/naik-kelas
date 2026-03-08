@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"net/mail"
 	"os"
@@ -46,13 +47,17 @@ type botMessageResponse struct {
 }
 
 type botSession struct {
-	State        string
-	Name         string
-	Phone        string
-	QuizCategory string
-	QuizIndex    int
-	QuizAnswers  []string
-	UpdatedAt    time.Time
+	State           string
+	Name            string
+	Phone           string
+	QuizCategory    string
+	QuizIndex       int
+	QuizAnswers     []string
+	TryoutQuestions []quizQuestion
+	TryoutAnswers   []string
+	TryoutStartedAt time.Time
+	DisplayName     string
+	UpdatedAt       time.Time
 }
 
 type quizQuestion struct {
@@ -93,7 +98,9 @@ type telegramUpdate struct {
 	Message  struct {
 		MessageID int `json:"message_id"`
 		From      struct {
-			ID int64 `json:"id"`
+			ID        int64  `json:"id"`
+			FirstName string `json:"first_name"`
+			Username  string `json:"username"`
 		} `json:"from"`
 		Chat struct {
 			ID int64 `json:"id"`
@@ -186,6 +193,22 @@ func (a *app) initDB(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS tryout_results (
+			id SERIAL PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			display_name TEXT NOT NULL DEFAULT '',
+			total_questions INT NOT NULL,
+			correct_count INT NOT NULL,
+			all_correct BOOLEAN NOT NULL,
+			duration_seconds INT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -315,7 +338,7 @@ func (a *app) handleBotMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reply, state := a.processBotText(r.Context(), uid, text)
+	reply, state := a.processBotText(r.Context(), uid, uid, text)
 	writeJSON(w, http.StatusOK, botMessageResponse{Reply: reply, State: state})
 }
 
@@ -348,7 +371,14 @@ func (a *app) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uid := strconv.FormatInt(upd.Message.From.ID, 10)
-	reply, state := a.processBotText(r.Context(), uid, text)
+	displayName := strings.TrimSpace(upd.Message.From.FirstName)
+	if u := strings.TrimSpace(upd.Message.From.Username); u != "" {
+		displayName = "@" + u
+	}
+	if displayName == "" {
+		displayName = uid
+	}
+	reply, state := a.processBotText(r.Context(), uid, displayName, text)
 	if strings.TrimSpace(reply) != "" {
 		if err := a.sendTelegramMessage(r.Context(), upd.Message.Chat.ID, reply, state); err != nil {
 			log.Printf("telegram send error: %v", err)
@@ -361,7 +391,7 @@ func (a *app) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 func (a *app) sendTelegramMessage(ctx context.Context, chatID int64, text, state string) error {
 	payload := map[string]any{"chat_id": chatID, "text": text}
 
-	if state == "quiz_answering" {
+	if state == "quiz_answering" || state == "tryout_answering" {
 		payload["reply_markup"] = map[string]any{
 			"keyboard":          [][]string{{"A", "B", "C", "D"}},
 			"resize_keyboard":   true,
@@ -402,7 +432,7 @@ func (a *app) sendTelegramMessage(ctx context.Context, chatID int64, text, state
 	return nil
 }
 
-func (a *app) processBotText(ctx context.Context, uid, text string) (reply, state string) {
+func (a *app) processBotText(ctx context.Context, uid, displayName, text string) (reply, state string) {
 	a.mu.Lock()
 	s := a.botSessions[uid]
 	if s == nil {
@@ -410,18 +440,19 @@ func (a *app) processBotText(ctx context.Context, uid, text string) (reply, stat
 		a.botSessions[uid] = s
 	}
 	if time.Since(s.UpdatedAt) > 15*time.Minute {
-		s.State, s.Name, s.Phone, s.QuizIndex, s.QuizAnswers = "idle", "", "", 0, nil
+		s.State, s.Name, s.Phone, s.QuizCategory, s.QuizIndex, s.QuizAnswers, s.TryoutQuestions, s.TryoutAnswers = "idle", "", "", "", 0, nil, nil, nil
+		s.TryoutStartedAt = time.Time{}
 	}
 	a.mu.Unlock()
 
 	lower := strings.ToLower(strings.TrimSpace(text))
 	if lower == "/batal" {
 		a.resetSession(uid)
-		return "Oke, proses dibatalkan dulu ya 🙂\nKapan pun siap, ketik /daftar atau /quiz untuk mulai lagi.", "idle"
+		return "Oke, proses dibatalkan dulu ya 🙂\nKapan pun siap, ketik /daftar, /quiz, atau /tryout untuk mulai lagi.", "idle"
 	}
 	if lower == "/start" {
 		a.resetSession(uid)
-		return "Selamat datang di Naik Kelas, perkenalkan saya Nala ✨\nAku siap bantu kamu daftar belajar dengan cepat.\n\nKetik /daftar untuk registrasi peserta baru 📚\nKetik /cek untuk cek apakah nomor HP sudah terdaftar ✅\nKetik /quiz untuk mulai latihan soal 🧠", "idle"
+		return "Selamat datang di Naik Kelas, perkenalkan saya Nala ✨\nAku siap bantu kamu daftar belajar dengan cepat.\n\nKetik /daftar untuk registrasi peserta baru 📚\nKetik /cek untuk cek apakah nomor HP sudah terdaftar ✅\nKetik /quiz untuk latihan per kategori 🧠\nKetik /tryout untuk simulasi soal acak 🚀\nKetik /leaderbot untuk lihat ranking tryout 🏆", "idle"
 	}
 	if lower == "/daftar" {
 		a.mu.Lock()
@@ -440,6 +471,23 @@ func (a *app) processBotText(ctx context.Context, uid, text string) (reply, stat
 		a.botSessions[uid] = &botSession{State: "quiz_choose_category", QuizIndex: 0, QuizAnswers: []string{}, UpdatedAt: time.Now()}
 		a.mu.Unlock()
 		return "Siap, kita mulai quiz Naik Kelas! 🔥\nPilih dulu kategori quiz yang kamu mau:\n\n" + formatQuizCategories(), "quiz_choose_category"
+	}
+	if lower == "/tryout" {
+		qs := shuffledTryoutQuestions()
+		a.mu.Lock()
+		a.botSessions[uid] = &botSession{State: "tryout_answering", TryoutQuestions: qs, TryoutAnswers: []string{}, TryoutStartedAt: time.Now(), DisplayName: displayName, UpdatedAt: time.Now()}
+		a.mu.Unlock()
+		return "Mode TRYOUT dimulai! 🚀\nJawab semua soal dulu, nanti Nala cek di akhir.\nKalau ada salah, kamu bisa coba lagi dari awal.\n\n" + formatTryoutQuestion(qs, 0), "tryout_answering"
+	}
+	if lower == "/leaderbot" || lower == "/leaderboard" {
+		board, err := a.getTryoutLeaderboard(ctx, 10)
+		if err != nil {
+			return "Maaf, Nala belum bisa ambil leaderboard saat ini 🙏", "idle"
+		}
+		if board == "" {
+			return "Leaderboard masih kosong. Yuk mulai dulu dengan /tryout 🔥", "idle"
+		}
+		return board, "idle"
 	}
 
 	a.mu.Lock()
@@ -569,8 +617,54 @@ func (a *app) processBotText(ctx context.Context, uid, text string) (reply, stat
 		a.mu.Unlock()
 		return fmt.Sprintf("Semangat! Kamu masih punya %d jawaban yang belum tepat di kategori %s. Kita ulang dari awal ya 🔁\n\n%s", wrong, cat.Name, formatQuizQuestion(cat, 0)), "quiz_answering"
 
+	case "tryout_answering":
+		ans := normalizeQuizAnswer(text)
+		if ans == "" {
+			return "Jawab dengan A, B, C, atau D ya ✍️", "tryout_answering"
+		}
+		if len(s.TryoutQuestions) == 0 {
+			a.resetSession(uid)
+			return "Soal tryout belum tersedia. Coba /tryout lagi ya.", "idle"
+		}
+
+		a.mu.Lock()
+		s.TryoutAnswers = append(s.TryoutAnswers, ans)
+		s.QuizIndex++
+		s.UpdatedAt = time.Now()
+		next := s.QuizIndex
+		answers := append([]string(nil), s.TryoutAnswers...)
+		questions := append([]quizQuestion(nil), s.TryoutQuestions...)
+		startedAt := s.TryoutStartedAt
+		dname := s.DisplayName
+		a.mu.Unlock()
+
+		if next < len(questions) {
+			return formatTryoutQuestion(questions, next), "tryout_answering"
+		}
+
+		correct := 0
+		for i, q := range questions {
+			if i < len(answers) && answers[i] == q.Answer {
+				correct++
+			}
+		}
+		dur := int(time.Since(startedAt).Seconds())
+		if dur < 1 {
+			dur = 1
+		}
+		allCorrect := correct == len(questions)
+		_ = a.saveTryoutResult(ctx, uid, dname, len(questions), correct, allCorrect, dur)
+
+		if allCorrect {
+			a.resetSession(uid)
+			return fmt.Sprintf("Tryout selesai! 🏁\nSkor: %d/%d (sempurna)\nWaktu: %d detik\n\nCek ranking dengan /leaderbot 🏆", correct, len(questions), dur), "idle"
+		}
+
+		a.resetSession(uid)
+		return fmt.Sprintf("Tryout selesai!\nSkor kamu: %d/%d\nWaktu: %d detik\nBelum sempurna, yuk coba lagi dengan /tryout 🔁", correct, len(questions), dur), "idle"
+
 	default:
-		return "Halo! Saya Nala ✨\nKetik /start untuk mulai, /daftar untuk registrasi, /cek untuk cek pendaftaran, atau /quiz untuk latihan soal.", "idle"
+		return "Halo! Saya Nala ✨\nKetik /start untuk mulai, /daftar untuk registrasi, /cek untuk cek pendaftaran, /quiz untuk latihan kategori, atau /tryout untuk simulasi acak.", "idle"
 	}
 }
 
@@ -631,10 +725,76 @@ func (a *app) findParticipantByPhone(ctx context.Context, phone string) (Partici
 	return p, true, nil
 }
 
+func (a *app) saveTryoutResult(ctx context.Context, userID, displayName string, total, correct int, allCorrect bool, durationSec int) error {
+	if strings.TrimSpace(displayName) == "" {
+		displayName = userID
+	}
+	_, err := a.db.ExecContext(ctx, `
+		INSERT INTO tryout_results (user_id, display_name, total_questions, correct_count, all_correct, duration_seconds)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, userID, displayName, total, correct, allCorrect, durationSec)
+	return err
+}
+
+func (a *app) getTryoutLeaderboard(ctx context.Context, limit int) (string, error) {
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT user_id,
+		       COALESCE(NULLIF(display_name, ''), user_id) as name,
+		       MIN(duration_seconds) as best_seconds,
+		       COUNT(*) FILTER (WHERE all_correct) as perfect_count
+		FROM tryout_results
+		WHERE all_correct = TRUE
+		GROUP BY user_id, name
+		ORDER BY best_seconds ASC, perfect_count DESC, name ASC
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+
+	lines := []string{"🏆 Leaderbot Tryout (Perfect Score)", ""}
+	rank := 1
+	for rows.Next() {
+		var userID, name string
+		var bestSec, perfectCount int
+		if err := rows.Scan(&userID, &name, &bestSec, &perfectCount); err != nil {
+			return "", err
+		}
+		lines = append(lines, fmt.Sprintf("%d. %s — %ds (perfect: %dx)", rank, name, bestSec, perfectCount))
+		rank++
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+	if rank == 1 {
+		return "", nil
+	}
+	return strings.Join(lines, "\n"), nil
+}
+
 func (a *app) resetSession(uid string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.botSessions[uid] = &botSession{State: "idle", UpdatedAt: time.Now()}
+}
+
+func shuffledTryoutQuestions() []quizQuestion {
+	all := make([]quizQuestion, 0)
+	for _, c := range quizCategories {
+		all = append(all, c.Items...)
+	}
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	r.Shuffle(len(all), func(i, j int) { all[i], all[j] = all[j], all[i] })
+	return all
+}
+
+func formatTryoutQuestion(items []quizQuestion, index int) string {
+	if index < 0 || index >= len(items) {
+		return "Soal tryout tidak ditemukan."
+	}
+	q := items[index]
+	return fmt.Sprintf("[Tryout] Soal %d/%d\n%s\n%s\n\nBalas dengan: A / B / C / D", index+1, len(items), q.Question, strings.Join(q.Options, "\n"))
 }
 
 func formatQuizQuestion(cat quizCategory, index int) string {

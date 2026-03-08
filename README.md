@@ -31,8 +31,10 @@ Aplikasi sederhana untuk menampilkan **list peserta** yang bergabung dari pendaf
 - `GET /participants`
 - `GET /participants/check?phone=0812xxxx`
 - `POST /participants`
-- `POST /bot/message` (flow chat Nala: /start, /daftar, /cek, /quiz, /batal)
+- `POST /bot/message` (flow chat Nala: /start, /daftar, /cek, /quiz, /tryout, /leaderbot, /batal)
   - `/quiz`: pilih kategori dulu, lalu jawab semua soal; cek hasil di akhir ronde
+  - `/tryout`: soal acak dari bank quiz, dinilai di akhir; hasil disimpan untuk leaderboard
+  - `/leaderbot`: ranking peserta dengan skor sempurna tercepat
 - `POST /telegram/webhook` (endpoint webhook Telegram)
   - body JSON:
     ```json
