@@ -484,12 +484,26 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		return "Siap, aku bantu cek ✅\nKirim nomor HP yang ingin dicek ya.", "check_phone"
 	}
 	if lower == "/quiz" {
+		registered, err := a.isRegisteredBotUser(ctx, uid)
+		if err != nil {
+			return "Maaf, Nala lagi kesulitan cek data pendaftaran 🙏\nCoba lagi sebentar ya.", "idle"
+		}
+		if !registered {
+			return "Sebelum ikut quiz, kamu perlu daftar dulu ya ✨\nKetik /daftar untuk registrasi dulu.", "idle"
+		}
 		a.mu.Lock()
 		a.botSessions[uid] = &botSession{State: "quiz_choose_category", QuizIndex: 0, QuizAnswers: []string{}, UpdatedAt: time.Now()}
 		a.mu.Unlock()
 		return "Siap, kita mulai quiz Naik Kelas! 🔥\nPilih dulu kategori quiz yang kamu mau:\n\n" + formatQuizCategories(), "quiz_choose_category"
 	}
 	if lower == "/tryout" {
+		registered, err := a.isRegisteredBotUser(ctx, uid)
+		if err != nil {
+			return "Maaf, Nala lagi kesulitan cek data pendaftaran 🙏\nCoba lagi sebentar ya.", "idle"
+		}
+		if !registered {
+			return "Sebelum ikut tryout, kamu perlu daftar dulu ya ✨\nKetik /daftar untuk registrasi dulu.", "idle"
+		}
 		qs := shuffledTryoutQuestions()
 		a.mu.Lock()
 		a.botSessions[uid] = &botSession{State: "tryout_answering", TryoutQuestions: qs, TryoutAnswers: []string{}, TryoutStartedAt: time.Now(), DisplayName: displayName, UpdatedAt: time.Now()}
@@ -768,6 +782,12 @@ func (a *app) saveBotProfile(ctx context.Context, userID, registeredName, telegr
 			updated_at = NOW()
 	`, userID, registeredName, telegramDisplay)
 	return err
+}
+
+func (a *app) isRegisteredBotUser(ctx context.Context, userID string) (bool, error) {
+	var exists bool
+	err := a.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM bot_profiles WHERE user_id = $1)`, userID).Scan(&exists)
+	return exists, err
 }
 
 func (a *app) getTryoutLeaderboard(ctx context.Context, limit int) (string, error) {
