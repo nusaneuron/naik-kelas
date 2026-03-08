@@ -505,7 +505,27 @@ export default function Page() {
                 ) : null}
 
                 {adminSection === 'jadwal' ? (
-                  <section style={card2}><h2>Admin · Jadwal Belajar Peserta</h2><ul>{adminReminders.map((r, i)=><li key={i}>{r.name || '-'} ({r.phone || '-'}) · {r.time_of_day} ({r.timezone}) · {r.is_active ? 'aktif' : 'nonaktif'}</li>)}{!adminReminders.length ? <li className='nk-empty'>Belum ada jadwal belajar yang diset.</li> : null}</ul></section>
+                  <section style={card2}>
+                    <h2>Admin · Jadwal Belajar Peserta</h2>
+                    {adminReminders.length ? (
+                      <div style={{overflowX:'auto',overflowY:'auto',maxHeight:420,border:'1px solid #22304d',borderRadius:'var(--nk-radius-md)'}}>
+                        <table style={{width:'max-content',minWidth:860,borderCollapse:'collapse'}}>
+                          <thead><tr><th style={thAdmin}>Nama</th><th style={thAdmin}>No. HP</th><th style={thAdmin}>Jam</th><th style={thAdmin}>Timezone</th><th style={thAdmin}>Status</th></tr></thead>
+                          <tbody>
+                            {adminReminders.map((r, i)=>(
+                              <tr key={i}>
+                                <td style={tdAdmin}>{r.name || '-'}</td>
+                                <td style={tdAdmin}>{r.phone || '-'}</td>
+                                <td style={tdAdmin}>{r.time_of_day}</td>
+                                <td style={tdAdmin}>{r.timezone}</td>
+                                <td style={tdAdmin}>{r.is_active ? 'aktif' : 'nonaktif'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : <div className='nk-empty'>Belum ada jadwal belajar yang diset.</div>}
+                  </section>
                 ) : null}
 
                 {adminSection === 'poin' ? (
