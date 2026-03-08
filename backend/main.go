@@ -728,9 +728,10 @@ func (a *app) handleParticipantHistory(w http.ResponseWriter, r *http.Request) {
 		SELECT category_name, attempt_no, total_questions, wrong_count, all_correct, created_at
 		FROM quiz_attempts
 		WHERE user_id = $1
+		   OR user_id IN (SELECT telegram_user_id FROM telegram_links WHERE user_id = $2)
 		ORDER BY created_at DESC
 		LIMIT 30
-	`, uid)
+	`, uid, u.ID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed quiz history"})
 		return
@@ -751,9 +752,10 @@ func (a *app) handleParticipantHistory(w http.ResponseWriter, r *http.Request) {
 		SELECT total_questions, correct_count, all_correct, duration_seconds, speed_qpm, created_at
 		FROM tryout_results
 		WHERE user_id = $1
+		   OR user_id IN (SELECT telegram_user_id FROM telegram_links WHERE user_id = $2)
 		ORDER BY created_at DESC
 		LIMIT 30
-	`, uid)
+	`, uid, u.ID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed tryout history"})
 		return
