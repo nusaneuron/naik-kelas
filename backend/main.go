@@ -627,7 +627,7 @@ func (a *app) recordFailedLogin(ctx context.Context, phone string) error {
 	}
 	failed++
 	if failed >= 5 {
-		_, err = a.db.ExecContext(ctx, `UPDATE auth_login_attempts SET failed_count=$1, locked_until=NOW() + interval '10 minutes', updated_at=NOW() WHERE phone=$2`, failed, phone)
+		_, err = a.db.ExecContext(ctx, `UPDATE auth_login_attempts SET failed_count=$1, locked_until=NOW() + interval '3 minutes', updated_at=NOW() WHERE phone=$2`, failed, phone)
 		return err
 	}
 	_, err = a.db.ExecContext(ctx, `UPDATE auth_login_attempts SET failed_count=$1, updated_at=NOW() WHERE phone=$2`, failed, phone)
