@@ -161,6 +161,8 @@ func main() {
 	mux.HandleFunc("/auth/me", a.handleAuthMe)
 	mux.HandleFunc("/auth/change-password", a.handleAuthChangePassword)
 	mux.HandleFunc("/participant/me", a.handleParticipantMe)
+	mux.HandleFunc("/participant/history", a.handleParticipantHistory)
+	mux.HandleFunc("/participant/leaderboard", a.handleParticipantLeaderboard)
 	mux.HandleFunc("/admin/ping", a.handleAdminPing)
 
 	port := getenv("PORT", "8080")
@@ -543,6 +545,100 @@ func (a *app) handleParticipantMe(w http.ResponseWriter, r *http.Request) {
 	var name, email, source string
 	_ = a.db.QueryRowContext(r.Context(), `SELECT COALESCE(name,''), COALESCE(email,''), COALESCE(source,'') FROM participant_profiles WHERE user_id=$1`, u.ID).Scan(&name, &email, &source)
 	writeJSON(w, http.StatusOK, map[string]any{"id": u.ID, "phone": u.Phone, "role": u.Role, "must_change_password": u.MustChangePassword, "name": name, "email": email, "source": source})
+}
+
+func (a *app) handleParticipantHistory(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant", "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	uid := strconv.FormatInt(u.ID, 10)
+
+	quizRows, err := a.db.QueryContext(r.Context(), `
+		SELECT category_name, attempt_no, total_questions, wrong_count, all_correct, created_at
+		FROM quiz_attempts
+		WHERE user_id = $1
+		ORDER BY created_at DESC
+		LIMIT 30
+	`, uid)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed quiz history"})
+		return
+	}
+	defer quizRows.Close()
+	quizHistory := make([]map[string]any, 0)
+	for quizRows.Next() {
+		var category string
+		var attemptNo, totalQ, wrong int
+		var allCorrect bool
+		var created time.Time
+		if err := quizRows.Scan(&category, &attemptNo, &totalQ, &wrong, &allCorrect, &created); err == nil {
+			quizHistory = append(quizHistory, map[string]any{"category": category, "attempt_no": attemptNo, "total_questions": totalQ, "wrong_count": wrong, "all_correct": allCorrect, "created_at": created})
+		}
+	}
+
+	tryRows, err := a.db.QueryContext(r.Context(), `
+		SELECT total_questions, correct_count, all_correct, duration_seconds, speed_qpm, created_at
+		FROM tryout_results
+		WHERE user_id = $1
+		ORDER BY created_at DESC
+		LIMIT 30
+	`, uid)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed tryout history"})
+		return
+	}
+	defer tryRows.Close()
+	tryHistory := make([]map[string]any, 0)
+	for tryRows.Next() {
+		var totalQ, correct, dur int
+		var allCorrect bool
+		var speed float64
+		var created time.Time
+		if err := tryRows.Scan(&totalQ, &correct, &allCorrect, &dur, &speed, &created); err == nil {
+			tryHistory = append(tryHistory, map[string]any{"total_questions": totalQ, "correct_count": correct, "all_correct": allCorrect, "duration_seconds": dur, "speed_qpm": speed, "created_at": created})
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"quiz": quizHistory, "tryout": tryHistory})
+}
+
+func (a *app) handleParticipantLeaderboard(w http.ResponseWriter, r *http.Request) {
+	_, err := a.requireRole(r.Context(), r, "participant", "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	rows, err := a.db.QueryContext(r.Context(), `
+		SELECT tr.user_id,
+		       COALESCE(NULLIF(bp.registered_name, ''), NULLIF(tr.display_name, ''), tr.user_id) as name,
+		       COALESCE(NULLIF(bp.telegram_display, ''), tr.user_id) as tg,
+		       MIN(tr.duration_seconds) as best_seconds,
+		       COUNT(*) FILTER (WHERE tr.all_correct) as perfect_count
+		FROM tryout_results tr
+		LEFT JOIN bot_profiles bp ON bp.user_id = tr.user_id
+		WHERE tr.all_correct = TRUE
+		GROUP BY tr.user_id, name, tg
+		ORDER BY best_seconds ASC, perfect_count DESC, name ASC
+		LIMIT 20
+	`)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed leaderboard"})
+		return
+	}
+	defer rows.Close()
+	items := make([]map[string]any, 0)
+	rank := 1
+	for rows.Next() {
+		var userID, name, tg string
+		var bestSec, perfectCount int
+		if err := rows.Scan(&userID, &name, &tg, &bestSec, &perfectCount); err == nil {
+			items = append(items, map[string]any{"rank": rank, "name": name, "telegram": cleanTelegramHandle(tg), "best_seconds": bestSec, "perfect_count": perfectCount})
+			rank++
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func (a *app) handleAdminPing(w http.ResponseWriter, r *http.Request) {
