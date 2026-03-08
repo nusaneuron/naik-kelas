@@ -171,19 +171,28 @@ export default function Page() {
   return (
     <main style={{ ...wrap, alignItems: 'start' }}>
       <div style={{ maxWidth: 1080, width: '100%', margin: '20px auto', padding: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div><h1 style={{ margin: 0 }}>Naik Kelas Portal</h1><p style={{ color: '#94a3b8' }}>{me.phone} · role: {me.role}</p></div>
+        <div style={{ ...hero, marginBottom: 16 }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: 34, color: 'var(--nk-ink)' }}>Naik Kelas Portal</h1>
+            <p style={{ margin: '6px 0 0', color: 'rgba(21,19,19,0.8)' }}>{profile?.name || me.phone} · role: {me.role}</p>
+          </div>
           <button onClick={logout} style={btn}>Logout</button>
         </div>
 
         {me.must_change_password ? <p style={{ color: '#facc15' }}>⚠️ Password default terdeteksi. Ganti via /auth/change-password.</p> : null}
 
-        <section style={card2}><h2>Profil</h2><p><b>Nama:</b> {profile?.name || '-'}</p><p><b>Email:</b> {profile?.email || '-'}</p><p><b>Sumber:</b> {profile?.source || '-'}</p></section>
-        <section style={card2}><h2>Jadwal Belajar Saya</h2>{myReminder?.active ? <p>Aktif tiap hari jam <b>{myReminder.time_of_day}</b> ({myReminder.timezone})</p> : <p>Belum aktif. Atur lewat bot Nala: <b>/jadwal_belajar</b></p>}</section>
-        <section style={card2}><h2>Saldo Poin Saya</h2><p style={{fontSize:28, margin:'8px 0'}}><b>{myPoints}</b> poin 🌟</p><ul>{myPointHistory.slice(0,10).map((p,i)=><li key={i}>{p.delta > 0 ? `+${p.delta}` : p.delta} · {p.reason} · {p.type}</li>)}{!myPointHistory.length?<li>Belum ada transaksi poin.</li>:null}</ul></section>
+        <div style={summaryGrid}>
+          <section style={card2}><h2>Profil</h2><p><b>Nama:</b> {profile?.name || '-'}</p><p><b>Email:</b> {profile?.email || '-'}</p><p><b>Sumber:</b> {profile?.source || '-'}</p></section>
+          <section style={card2}><h2>Jadwal Belajar</h2>{myReminder?.active ? <p>Aktif tiap hari jam <b>{myReminder.time_of_day}</b> ({myReminder.timezone})</p> : <p>Belum aktif. Atur lewat bot Nala: <b>/jadwal_belajar</b></p>}</section>
+          <section style={card2}><h2>Saldo Poin</h2><p style={{fontSize:30, margin:'8px 0'}}><b>{myPoints}</b> poin 🌟</p><p className='nk-muted'>Total poin yang bisa digunakan saat ini.</p></section>
+        </div>
+
+        <section style={card2}><h2>Riwayat Poin</h2><ul>{myPointHistory.slice(0,10).map((p,i)=><li key={i}>{p.delta > 0 ? `+${p.delta}` : p.delta} · {p.reason} · {p.type}</li>)}{!myPointHistory.length?<li>Belum ada transaksi poin.</li>:null}</ul></section>
         <section style={card2}><h2>Leaderbot Tryout</h2><ol>{leaderboard.map((it)=><li key={it.rank}>{it.name} ({it.telegram}) — {it.best_seconds}s (perfect: {it.perfect_count}x)</li>)}{!leaderboard.length?<li>Belum ada data.</li>:null}</ol></section>
-        <section style={card2}><h2>Riwayat Quiz</h2><ul>{(history.quiz||[]).map((q,i)=><li key={i}>{q.category} · attempt #{q.attempt_no} · wrong {q.wrong_count}/{q.total_questions} · {q.all_correct?'LULUS':'BELUM'}</li>)}{!history.quiz?.length?<li>Belum ada riwayat quiz.</li>:null}</ul></section>
-        <section style={card2}><h2>Riwayat Tryout</h2><ul>{(history.tryout||[]).map((t,i)=><li key={i}>{t.correct_count}/{t.total_questions} · {t.duration_seconds}s · speed {Number(t.speed_qpm||0).toFixed(2)} qpm · {t.all_correct?'PERFECT':'BELUM'}</li>)}{!history.tryout?.length?<li>Belum ada riwayat tryout.</li>:null}</ul></section>
+        <div style={summaryGrid}>
+          <section style={card2}><h2>Riwayat Quiz</h2><ul>{(history.quiz||[]).map((q,i)=><li key={i}>{q.category} · attempt #{q.attempt_no} · wrong {q.wrong_count}/{q.total_questions} · {q.all_correct?'LULUS':'BELUM'}</li>)}{!history.quiz?.length?<li>Belum ada riwayat quiz.</li>:null}</ul></section>
+          <section style={card2}><h2>Riwayat Tryout</h2><ul>{(history.tryout||[]).map((t,i)=><li key={i}>{t.correct_count}/{t.total_questions} · {t.duration_seconds}s · speed {Number(t.speed_qpm||0).toFixed(2)} qpm · {t.all_correct?'PERFECT':'BELUM'}</li>)}{!history.tryout?.length?<li>Belum ada riwayat tryout.</li>:null}</ul></section>
+        </div>
 
         {me.role === 'admin' ? (
           <>
@@ -202,6 +211,8 @@ export default function Page() {
 const wrap = { minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 16 };
 const card = { width: '100%', maxWidth: 420, border: '1px solid #334155', borderRadius: 'var(--nk-radius-lg)', padding: 20, background: 'var(--nk-bg-surface)', boxShadow: 'var(--nk-shadow-sm)' };
 const card2 = { border: '1px solid #334155', borderRadius: 'var(--nk-radius-lg)', padding: 16, background: 'var(--nk-bg-surface)', marginTop: 16, boxShadow: 'var(--nk-shadow-sm)' };
+const hero = { background: 'var(--nk-bg-main)', borderRadius: 'var(--nk-radius-xl)', padding: 20, boxShadow: 'var(--nk-shadow-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 };
+const summaryGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 };
 const input = { width: '100%', padding: 10, borderRadius: 'var(--nk-radius-sm)', border: '1px solid #334155', background: 'var(--nk-bg-elevated)', color: 'white' };
 const inputSmall = { padding: 10, borderRadius: 'var(--nk-radius-sm)', border: '1px solid #334155', background: 'var(--nk-bg-elevated)', color: 'white' };
 const btn = { border: 0, background: 'var(--nk-cta)', color: 'white', borderRadius: 'var(--nk-radius-md)', padding: '8px 14px', cursor: 'pointer', fontWeight: 600 };
