@@ -2172,17 +2172,6 @@ func (a *app) sendTelegramMessage(ctx context.Context, chatID int64, text, state
 			"resize_keyboard":   true,
 			"one_time_keyboard": false,
 		}
-	} else if state == "idle" {
-		payload["reply_markup"] = map[string]any{
-			"keyboard": [][]string{
-				{"/start", "/poin", "/exp"},
-				{"/status", "/daftar", "/cek"},
-				{"/quiz", "/tryout"},
-				{"/leaderbot", "/jadwal_belajar"},
-			},
-			"resize_keyboard":   true,
-			"one_time_keyboard": false,
-		}
 	} else {
 		payload["reply_markup"] = map[string]any{
 			"remove_keyboard": true,
