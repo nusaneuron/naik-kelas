@@ -2007,6 +2007,7 @@ func randomToken(n int) string {
 }
 
 func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
+	// version tag: v20260311-redeem-fix
 	if r.Method != http.MethodGet {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -2020,7 +2021,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-redeem-fix"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -3937,9 +3938,10 @@ func (a *app) handleAdminRedeemClaims(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := a.db.QueryContext(r.Context(), `
 		SELECT rc.id, rc.user_id, rc.item_id, rc.item_name, rc.point_cost, rc.status, rc.note, rc.claimed_at, rc.updated_at,
-		       COALESCE(pp.name, ''), COALESCE(pp.phone, '')
+		       COALESCE(pp.name, ''), COALESCE(u.phone, '')
 		FROM redeem_claims rc
 		LEFT JOIN participant_profiles pp ON pp.user_id = rc.user_id
+		LEFT JOIN users u ON u.id = rc.user_id
 		ORDER BY rc.claimed_at DESC
 		LIMIT 200
 	`)
