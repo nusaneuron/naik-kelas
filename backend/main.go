@@ -2872,11 +2872,15 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 			a.resetSession(uid)
 			return "Maaf, gagal memproses redeem sekarang 🙏\nCoba lagi sebentar ya.", "idle"
 		}
-		// Potong poin
-		_, _ = a.db.ExecContext(ctx, `
-			INSERT INTO point_ledger (user_id, delta, type, reason)
-			VALUES ($1, $2, 'redeem', $3)
-		`, webUserID, -itemCost, fmt.Sprintf("Redeem: %s", itemName))
+		// Potong poin via adjustPoints
+		if _, err2 := a.adjustPoints(ctx, webUserID, int64(-itemCost), "redeem", fmt.Sprintf("Redeem: %s", itemName), nil); err2 != nil {
+			_, _ = a.db.ExecContext(ctx, `DELETE FROM redeem_claims WHERE user_id=$1 AND item_id=$2 AND status='pending' ORDER BY claimed_at DESC LIMIT 1`, webUserID, itemID)
+			if itemCost > 0 {
+				_, _ = a.db.ExecContext(ctx, `UPDATE redeem_items SET stock = stock + 1 WHERE id = $1 AND stock >= 0`, itemID)
+			}
+			a.resetSession(uid)
+			return "Maaf, gagal memproses poin 🙏 Coba lagi sebentar ya.", "idle"
+		}
 		a.resetSession(uid)
 		return fmt.Sprintf("🎉 *Redeem berhasil!*\n\nHadiah: *%s*\nPoin dipotong: *%d*\n\nKlaim kamu sedang diproses admin ya 📋\nNala akan kabari kamu setelah dikonfirmasi!", itemName, itemCost), "idle"
 
@@ -3793,11 +3797,16 @@ func (a *app) handleParticipantRedeemClaim(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Potong poin
-	_, _ = a.db.ExecContext(ctx, `
-		INSERT INTO point_ledger (user_id, delta, type, reason)
-		VALUES ($1, $2, 'redeem', $3)
-	`, userID, -it.PointCost, fmt.Sprintf("Redeem: %s", it.Name))
+	// Potong poin via adjustPoints (update point_wallets + ledger)
+	if _, err := a.adjustPoints(ctx, userID, int64(-it.PointCost), "redeem", fmt.Sprintf("Redeem: %s", it.Name), nil); err != nil {
+		// Rollback: hapus klaim & kembalikan stok
+		_, _ = a.db.ExecContext(ctx, `DELETE FROM redeem_claims WHERE id = $1`, claimID)
+		if it.Stock > 0 {
+			_, _ = a.db.ExecContext(ctx, `UPDATE redeem_items SET stock = stock + 1 WHERE id = $1`, it.ID)
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal potong poin"})
+		return
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "claim_id": claimID, "message": "Klaim berhasil! Menunggu konfirmasi admin."})
 }
@@ -4013,11 +4022,8 @@ func (a *app) handleAdminRedeemClaimAction(w http.ResponseWriter, r *http.Reques
 	}
 
 	if req.Action == "reject" {
-		// Kembalikan poin
-		_, _ = a.db.ExecContext(ctx, `
-			INSERT INTO point_ledger (user_id, delta, type, reason)
-			VALUES ($1, $2, 'redeem_refund', $3)
-		`, c.UserID, c.PointCost, fmt.Sprintf("Refund redeem: %s", c.ItemName))
+		// Kembalikan poin via adjustPoints
+		_, _ = a.adjustPoints(ctx, c.UserID, int64(c.PointCost), "redeem_refund", fmt.Sprintf("Refund redeem: %s", c.ItemName), nil)
 		// Kembalikan stok
 		_, _ = a.db.ExecContext(ctx, `UPDATE redeem_items SET stock = stock + 1 WHERE id = $1 AND stock >= 0`, c.ItemID)
 		// Notif user
