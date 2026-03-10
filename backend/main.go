@@ -202,6 +202,11 @@ func main() {
 	mux.HandleFunc("/admin/redeem/claims", a.handleAdminRedeemClaims)
 	mux.HandleFunc("/admin/redeem/claims/action", a.handleAdminRedeemClaimAction)
 
+	// Learning Materials
+	mux.HandleFunc("/admin/materials", a.handleAdminMaterials)
+	mux.HandleFunc("/participant/materials", a.handleParticipantMaterials)
+	mux.HandleFunc("/participant/materials/complete", a.handleParticipantMaterialComplete)
+
 	port := getenv("PORT", "8080")
 	addr := ":" + port
 
@@ -546,6 +551,37 @@ func (a *app) initDB(ctx context.Context) error {
 			note TEXT NOT NULL DEFAULT '',
 			claimed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS learning_materials (
+			id          SERIAL PRIMARY KEY,
+			category_id INT NOT NULL REFERENCES question_categories(id) ON DELETE CASCADE,
+			title       TEXT NOT NULL,
+			type        TEXT NOT NULL DEFAULT 'text',
+			content     TEXT NOT NULL DEFAULT '',
+			exp_reward  INT NOT NULL DEFAULT 10,
+			order_no    INT NOT NULL DEFAULT 0,
+			is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS material_progress (
+			id           BIGSERIAL PRIMARY KEY,
+			user_id      BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			material_id  INT NOT NULL REFERENCES learning_materials(id) ON DELETE CASCADE,
+			completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE(user_id, material_id)
 		)
 	`)
 	if err != nil {
@@ -1633,6 +1669,35 @@ func (a *app) addExpByExternalUser(ctx context.Context, externalUserID string, d
 		return 0, err
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO exp_ledger (user_id, delta, type, reason, source_ref) VALUES ($1,$2,$3,$4,$5)`, webUserID, delta, typ, reason, sourceRef); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return next, nil
+}
+
+func (a *app) adjustExp(ctx context.Context, userID int64, delta int64, reason string) (int64, error) {
+	if delta <= 0 {
+		return 0, nil
+	}
+	tx, err := a.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `INSERT INTO exp_wallets (user_id, total_exp, updated_at) VALUES ($1,0,NOW()) ON CONFLICT (user_id) DO NOTHING`, userID); err != nil {
+		return 0, err
+	}
+	var total int64
+	if err := tx.QueryRowContext(ctx, `SELECT total_exp FROM exp_wallets WHERE user_id=$1 FOR UPDATE`, userID).Scan(&total); err != nil {
+		return 0, err
+	}
+	next := total + delta
+	if _, err := tx.ExecContext(ctx, `UPDATE exp_wallets SET total_exp=$1, updated_at=NOW() WHERE user_id=$2`, next, userID); err != nil {
+		return 0, err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO exp_ledger (user_id, delta, type, reason, source_ref) VALUES ($1,$2,'materi',$3,'material_complete')`, userID, delta, reason); err != nil {
 		return 0, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -4044,4 +4109,266 @@ func (a *app) handleAdminRedeemClaimAction(w http.ResponseWriter, r *http.Reques
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "status": newStatus})
+}
+
+// ─── Learning Materials ────────────────────────────────────────────────────
+
+type learningMaterial struct {
+	ID         int    `json:"id"`
+	CategoryID int    `json:"category_id"`
+	Title      string `json:"title"`
+	Type       string `json:"type"`
+	Content    string `json:"content"`
+	ExpReward  int    `json:"exp_reward"`
+	OrderNo    int    `json:"order_no"`
+	IsActive   bool   `json:"is_active"`
+}
+
+type materialWithProgress struct {
+	learningMaterial
+	CategoryName string  `json:"category_name"`
+	IsCompleted  bool    `json:"is_completed"`
+	CompletedAt  *string `json:"completed_at,omitempty"`
+}
+
+// GET  /admin/materials?category_id=X  → list
+// POST /admin/materials                → create | update | delete
+func (a *app) handleAdminMaterials(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if _, err := a.requireRole(ctx, r, "admin"); err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	if r.Method == http.MethodGet {
+		catID := r.URL.Query().Get("category_id")
+		query := `
+			SELECT lm.id, lm.category_id, lm.title, lm.type, lm.content, lm.exp_reward, lm.order_no, lm.is_active,
+			       qc.name
+			FROM learning_materials lm
+			JOIN question_categories qc ON qc.id = lm.category_id`
+		args := []any{}
+		if catID != "" {
+			query += ` WHERE lm.category_id = $1`
+			args = append(args, catID)
+		}
+		query += ` ORDER BY lm.category_id, lm.order_no, lm.id`
+
+		rows, err := a.db.QueryContext(ctx, query, args...)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
+			return
+		}
+		defer rows.Close()
+
+		type adminItem struct {
+			learningMaterial
+			CategoryName  string `json:"category_name"`
+			CompletedCount int   `json:"completed_count"`
+		}
+		items := []adminItem{}
+		for rows.Next() {
+			var it adminItem
+			if err := rows.Scan(&it.ID, &it.CategoryID, &it.Title, &it.Type, &it.Content,
+				&it.ExpReward, &it.OrderNo, &it.IsActive, &it.CategoryName); err != nil {
+				continue
+			}
+			// hitung jumlah peserta yang sudah selesai
+			_ = a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM material_progress WHERE material_id=$1`, it.ID).Scan(&it.CompletedCount)
+			items = append(items, it)
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		var req struct {
+			Action     string `json:"action"`
+			ID         int    `json:"id"`
+			CategoryID int    `json:"category_id"`
+			Title      string `json:"title"`
+			Type       string `json:"type"`
+			Content    string `json:"content"`
+			ExpReward  int    `json:"exp_reward"`
+			OrderNo    int    `json:"order_no"`
+			IsActive   *bool  `json:"is_active"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			return
+		}
+
+		switch req.Action {
+		case "create":
+			if req.Title == "" || req.CategoryID == 0 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "title dan category_id wajib diisi"})
+				return
+			}
+			typ := req.Type
+			if typ == "" {
+				typ = "text"
+			}
+			expR := req.ExpReward
+			if expR <= 0 {
+				expR = 10
+			}
+			isActive := true
+			if req.IsActive != nil {
+				isActive = *req.IsActive
+			}
+			var newID int
+			err := a.db.QueryRowContext(ctx, `
+				INSERT INTO learning_materials (category_id, title, type, content, exp_reward, order_no, is_active)
+				VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id
+			`, req.CategoryID, req.Title, typ, req.Content, expR, req.OrderNo, isActive).Scan(&newID)
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal tambah materi"})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": newID})
+
+		case "update":
+			if req.ID == 0 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id wajib diisi"})
+				return
+			}
+			isActive := true
+			if req.IsActive != nil {
+				isActive = *req.IsActive
+			}
+			expR := req.ExpReward
+			if expR <= 0 {
+				expR = 10
+			}
+			_, err := a.db.ExecContext(ctx, `
+				UPDATE learning_materials
+				SET category_id=$1, title=$2, type=$3, content=$4, exp_reward=$5, order_no=$6, is_active=$7, updated_at=NOW()
+				WHERE id=$8
+			`, req.CategoryID, req.Title, req.Type, req.Content, expR, req.OrderNo, isActive, req.ID)
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal update materi"})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+
+		case "delete":
+			if req.ID == 0 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id wajib diisi"})
+				return
+			}
+			_, err := a.db.ExecContext(ctx, `DELETE FROM learning_materials WHERE id=$1`, req.ID)
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal hapus materi"})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+
+		default:
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "action tidak valid"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+}
+
+// GET /participant/materials?category_id=X
+func (a *app) handleParticipantMaterials(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	u, err := a.currentUser(ctx, r)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	catID := r.URL.Query().Get("category_id")
+	query := `
+		SELECT lm.id, lm.category_id, lm.title, lm.type, lm.content, lm.exp_reward, lm.order_no, lm.is_active,
+		       qc.name,
+		       CASE WHEN mp.material_id IS NOT NULL THEN TRUE ELSE FALSE END as is_completed,
+		       mp.completed_at
+		FROM learning_materials lm
+		JOIN question_categories qc ON qc.id = lm.category_id
+		LEFT JOIN material_progress mp ON mp.material_id = lm.id AND mp.user_id = $1
+		WHERE lm.is_active = TRUE`
+	args := []any{u.ID}
+	if catID != "" {
+		query += ` AND lm.category_id = $2`
+		args = append(args, catID)
+	}
+	query += ` ORDER BY lm.category_id, lm.order_no, lm.id`
+
+	rows, err := a.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
+		return
+	}
+	defer rows.Close()
+
+	items := []materialWithProgress{}
+	for rows.Next() {
+		var it materialWithProgress
+		var completedAt *string
+		if err := rows.Scan(&it.ID, &it.CategoryID, &it.Title, &it.Type, &it.Content,
+			&it.ExpReward, &it.OrderNo, &it.IsActive, &it.CategoryName,
+			&it.IsCompleted, &completedAt); err != nil {
+			continue
+		}
+		it.CompletedAt = completedAt
+		items = append(items, it)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+// POST /participant/materials/complete
+func (a *app) handleParticipantMaterialComplete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	ctx := r.Context()
+	u, err := a.currentUser(ctx, r)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	var req struct {
+		MaterialID int `json:"material_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.MaterialID == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "material_id wajib diisi"})
+		return
+	}
+
+	// Ambil data materi (exp_reward + judul)
+	var expReward int
+	var title string
+	err = a.db.QueryRowContext(ctx, `SELECT exp_reward, title FROM learning_materials WHERE id=$1 AND is_active=TRUE`, req.MaterialID).Scan(&expReward, &title)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "materi tidak ditemukan"})
+		return
+	}
+
+	// Insert progress (IGNORE jika sudah ada — no double EXP)
+	var inserted bool
+	err = a.db.QueryRowContext(ctx, `
+		INSERT INTO material_progress (user_id, material_id)
+		VALUES ($1, $2)
+		ON CONFLICT (user_id, material_id) DO NOTHING
+		RETURNING TRUE
+	`, u.ID, req.MaterialID).Scan(&inserted)
+
+	if err != nil || !inserted {
+		// Sudah selesai sebelumnya
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "exp_gained": 0, "already_completed": true})
+		return
+	}
+
+	// Berikan EXP
+	if expReward > 0 {
+		_, _ = a.adjustExp(ctx, u.ID, int64(expReward), fmt.Sprintf("Selesai materi: %s", title))
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "exp_gained": expReward, "already_completed": false})
 }
