@@ -67,6 +67,61 @@ CREATE TABLE material_progress (
 ### Phase 1 — Backend Foundation (Prioritas Tinggi)
 **Target:** API endpoint siap, database terbentuk
 
+#### 🧪 Testing Phase 1
+Sebelum lanjut ke Phase 2, semua poin ini harus lulus:
+
+```bash
+# 1. Health check — DB harus up
+curl https://<domain>/api/health
+
+# 2. Admin: tambah materi baru (teks)
+curl -b cookie.txt -X POST /api/admin/materials \
+  -d '{"action":"create","category_id":1,"title":"Pengenalan","type":"text","content":"Isi materi...","order_no":1}'
+# Expected: {"ok":true}
+
+# 3. Admin: list materi (harus tampil yang baru dibuat)
+curl -b cookie.txt /api/admin/materials?category_id=1
+# Expected: items[] berisi materi yang ditambahkan
+
+# 4. Admin: update materi
+curl -b cookie.txt -X POST /api/admin/materials \
+  -d '{"action":"update","id":1,"title":"Judul Baru",...}'
+# Expected: {"ok":true}
+
+# 5. Peserta: list materi (is_completed harus false)
+curl -b cookie.txt /api/participant/materials?category_id=1
+# Expected: items[] dengan is_completed: false
+
+# 6. Peserta: tandai selesai
+curl -b cookie.txt -X POST /api/participant/materials/complete \
+  -d '{"material_id":1}'
+# Expected: {"ok":true, "exp_gained":10}
+
+# 7. Peserta: cek progress (is_completed harus true)
+curl -b cookie.txt /api/participant/materials?category_id=1
+# Expected: item id=1 → is_completed: true
+
+# 8. Admin: hapus materi
+curl -b cookie.txt -X POST /api/admin/materials \
+  -d '{"action":"delete","id":1}'
+# Expected: {"ok":true}
+
+# 9. Akses tanpa login → harus unauthorized
+curl /api/participant/materials
+# Expected: {"error":"unauthorized"}
+```
+
+**Checklist Phase 1:**
+- [ ] Tabel `learning_materials` terbentuk di DB
+- [ ] Tabel `material_progress` terbentuk di DB
+- [ ] CRUD admin berfungsi (create/update/delete)
+- [ ] Endpoint peserta list & complete berfungsi
+- [ ] EXP diberikan saat materi selesai
+- [ ] Auth guard aktif (unauthorized tanpa session)
+- [ ] Deploy berhasil, health OK
+
+---
+
 #### 1.1 Database Migration
 - [ ] Tambah tabel `learning_materials` di `initDB`
 - [ ] Tambah tabel `material_progress` di `initDB`
@@ -120,6 +175,39 @@ Response contoh:
 
 ### Phase 2 — Bot Integration (Prioritas Tinggi)
 **Target:** Peserta bisa akses & tandai selesai materi via bot Nala
+
+#### 🧪 Testing Phase 2
+Semua skenario bot harus dicoba manual via Telegram:
+
+| Skenario | Input | Expected Output |
+|----------|-------|-----------------|
+| Akses materi | `/materi` | Keyboard pilih kategori muncul |
+| Pilih kategori valid | `Matematika Dasar` | List materi dengan ikon tipe + status ✅/○ |
+| Pilih kategori tidak ada materi | kategori kosong | Pesan "Belum ada materi tersedia" |
+| Buka materi teks | `1` | Konten teks dikirim, prompt "selesai" muncul |
+| Buka materi video | `2` | URL video + preview, prompt "selesai" muncul |
+| Buka materi audio | `3` | Audio/URL dikirim, prompt "selesai" muncul |
+| Tandai selesai | `selesai` | Konfirmasi ✅ + notif EXP gained |
+| Materi sudah selesai sebelumnya | buka materi yg sudah ✅ | Tetap tampil, tombol "selesai" tidak double EXP |
+| Input nomor tidak valid | `99` | Pesan error "Nomor tidak valid" |
+| Belum daftar akses /materi | `/materi` | Arahkan ke /daftar |
+| Teks > 4000 karakter | buka materi panjang | Dipecah otomatis jadi beberapa pesan |
+| /batal di tengah flow | `/batal` | Sesi direset, pesan konfirmasi |
+| /start — cek menu materi | `/start` | Ada entry /materi di menu |
+
+**Checklist Phase 2:**
+- [ ] `/materi` muncul di menu `/start`
+- [ ] Keyboard kategori muncul (sama seperti `/quiz`)
+- [ ] List materi tampil dengan ikon & status per peserta
+- [ ] Teks panjang dipecah otomatis
+- [ ] Video → URL terkirim dengan preview
+- [ ] Audio → file/URL terkirim
+- [ ] "selesai" memicu EXP & update progress
+- [ ] Materi sudah selesai tidak double EXP
+- [ ] `/batal` berfungsi di semua state materi
+- [ ] Peserta belum daftar diarahkan ke `/daftar`
+
+---
 
 #### 2.1 Command `/materi`
 Flow lengkap:
@@ -185,6 +273,42 @@ Tambahkan ke `syncTelegramBotCommands`:
 ### Phase 3 — Web Portal (Prioritas Menengah)
 **Target:** Peserta & admin bisa kelola materi via web
 
+#### 🧪 Testing Phase 3
+Testing dilakukan langsung di browser:
+
+**Participant View:**
+- [ ] Tab/section Materi muncul di portal peserta
+- [ ] Progress bar per kategori tampil dengan persentase benar
+- [ ] Materi teks: konten terbaca, tombol "Tandai Selesai" berfungsi
+- [ ] Materi video: URL/embed YouTube tampil, bisa diklik
+- [ ] Materi audio: audio player HTML5 berfungsi, bisa play
+- [ ] Tombol "Tandai Selesai" hilang/disable setelah diklik (tidak double klaim)
+- [ ] Saldo EXP bertambah setelah materi selesai (refresh data)
+- [ ] Jika semua materi kategori selesai → progress bar 100%
+- [ ] Tampilan mobile responsive (tidak overflow)
+
+**Admin View:**
+- [ ] Menu "Materi" muncul di sidebar admin
+- [ ] Form tambah materi berfungsi (semua tipe: text/video/audio)
+- [ ] Dropdown kategori terisi dari DB
+- [ ] Edit materi berfungsi (data pre-fill di form)
+- [ ] Hapus materi berfungsi (dengan konfirmasi)
+- [ ] Filter materi per kategori berfungsi
+- [ ] Urutan materi (order_no) tersimpan dan tampil sesuai urutan
+- [ ] Toggle aktif/nonaktif berfungsi (materi nonaktif tidak muncul di peserta)
+- [ ] Kolom "Selesai oleh" menampilkan jumlah peserta yang sudah tuntas
+
+**Smoke Test Akhir Phase 3:**
+```
+1. Login admin → tambah materi baru (text)
+2. Login peserta → lihat materi → tandai selesai
+3. Login admin → cek jumlah "selesai oleh" bertambah 1
+4. Admin nonaktifkan materi → peserta refresh → materi hilang
+5. Admin aktifkan kembali → peserta refresh → materi muncul lagi
+```
+
+---
+
 #### 3.1 Participant View — Tab Materi
 Tampilan di portal peserta:
 - **Summary card:** Total materi selesai / total materi
@@ -213,6 +337,44 @@ Tampilan di portal peserta:
 
 ### Phase 4 — Gamifikasi & Polish (Prioritas Rendah)
 **Target:** Pengalaman belajar lebih engaging
+
+#### 🧪 Testing Phase 4
+
+**EXP per Materi:**
+- [ ] Admin bisa set EXP reward per materi (default 10)
+- [ ] EXP sesuai nilai yang diset (bukan selalu 10)
+- [ ] EXP tidak diberikan dua kali untuk materi yang sama
+- [ ] Riwayat EXP peserta mencatat "Selesai materi: [judul]"
+
+**Notifikasi Tuntas Kategori (via Telegram):**
+- [ ] Setelah materi terakhir kategori selesai → notif Telegram terkirim
+- [ ] Notif tidak dikirim jika ada materi lain yang belum selesai
+- [ ] Notif berisi nama kategori & ajakan untuk /quiz
+
+**Rekomendasi Materi setelah Quiz Gagal:**
+- [ ] Setelah quiz gagal → bot sarankan /materi untuk kategori tersebut
+- [ ] Jika belum ada materi di kategori → tidak ada saran materi
+- [ ] Pesan rekomendasi tidak muncul jika semua materi sudah selesai
+
+**Admin Analytics:**
+- [ ] Tabel menampilkan materi dengan jumlah peserta selesai terbanyak
+- [ ] Materi dengan 0 peserta selesai teridentifikasi
+- [ ] Data akurat (sesuai jumlah real di DB)
+
+**Regression Test (Semua Phase):**
+Setelah Phase 4 selesai, lakukan full regression:
+```
+✅ /materi flow lengkap (pilih → buka → selesai → EXP)
+✅ /quiz masih berjalan normal
+✅ /tryout masih berjalan normal
+✅ /redeem masih berjalan normal
+✅ Web portal peserta: semua section tampil
+✅ Web portal admin: semua menu berfungsi
+✅ Health endpoint: status ok
+✅ Deploy tidak ada error di logs
+```
+
+---
 
 #### 4.1 EXP per Materi
 - Setiap materi selesai → dapat EXP (default: 10 EXP/materi)
