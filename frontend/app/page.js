@@ -486,39 +486,13 @@ export default function Page() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            {isAdmin && (
-              <>
-                <button
-                  onClick={() => setAdminViewMode('participant')}
-                  style={{
-                    ...btnOutline,
-                    background: adminViewMode === 'participant' ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)',
-                    borderColor: 'rgba(255,255,255,0.3)'
-                  }}
-                >
-                  👤 Peserta
-                </button>
-                <button
-                  onClick={() => setAdminViewMode('admin')}
-                  style={{
-                    ...btnOutline,
-                    background: adminViewMode === 'admin' ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)',
-                    borderColor: 'rgba(255,255,255,0.3)'
-                  }}
-                >
-                  ⚙️ Admin
-                </button>
-              </>
-            )}
-            <button onClick={logout} style={{
-              border: '1px solid rgba(255,255,255,0.3)',
-              background: 'rgba(255,255,255,0.1)', color: 'white',
-              borderRadius: 10, padding: '7px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600
-            }}>
-              Keluar
-            </button>
-          </div>
+          <button onClick={logout} style={{
+            border: '1px solid rgba(255,255,255,0.3)',
+            background: 'rgba(255,255,255,0.1)', color: 'white',
+            borderRadius: 10, padding: '7px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600
+          }}>
+            Keluar
+          </button>
         </div>
 
         {/* Warning & Banner */}
@@ -548,10 +522,36 @@ export default function Page() {
                 <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 10 }}>👤 Profil</div>
                 <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{profile?.name || '-'}</div>
                 <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 2 }}>{profile?.email || '-'}</div>
-                <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+                <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <span className="nk-badge nk-badge-purple">Lv. {profile?.level || 1}</span>
                   <span className="nk-badge nk-badge-yellow">⭐ {profile?.exp || 0} EXP</span>
                 </div>
+                {isAdmin && (
+                  <div style={{ marginTop: 14, display: 'flex', gap: 6 }}>
+                    <button
+                      onClick={() => setAdminViewMode('participant')}
+                      style={{
+                        flex: 1, border: '1px solid',
+                        borderColor: adminViewMode === 'participant' ? 'rgba(190,148,245,0.5)' : '#2d3f5a',
+                        background: adminViewMode === 'participant' ? 'rgba(190,148,245,0.15)' : 'transparent',
+                        color: adminViewMode === 'participant' ? '#be94f5' : '#94a3b8',
+                        borderRadius: 8, padding: '6px 0', cursor: 'pointer',
+                        fontSize: 12, fontWeight: 700, transition: 'all 160ms ease'
+                      }}
+                    >👤 Peserta</button>
+                    <button
+                      onClick={() => setAdminViewMode('admin')}
+                      style={{
+                        flex: 1, border: '1px solid',
+                        borderColor: adminViewMode === 'admin' ? 'rgba(255,87,52,0.5)' : '#2d3f5a',
+                        background: adminViewMode === 'admin' ? 'rgba(255,87,52,0.15)' : 'transparent',
+                        color: adminViewMode === 'admin' ? '#ff7a5c' : '#94a3b8',
+                        borderRadius: 8, padding: '6px 0', cursor: 'pointer',
+                        fontSize: 12, fontWeight: 700, transition: 'all 160ms ease'
+                      }}
+                    >⚙️ Admin</button>
+                  </div>
+                )}
               </div>
 
               <div className="nk-stat-card orange">
