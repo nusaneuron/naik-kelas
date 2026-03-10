@@ -2821,7 +2821,7 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		s.State = "redeem_confirm"
 		s.UpdatedAt = time.Now()
 		a.mu.Unlock()
-		return fmt.Sprintf("Konfirmasi penukaran 🎁\n\n*%s*\n_%s_\n\nHarga: *%d poin*\nSaldo kamu: *%d poin*\nSisa setelah redeem: *%d poin*\n\nKetik *ya* untuk konfirmasi, atau *tidak* untuk batal.", selected.Name, selected.Description, selected.PointCost, bal, bal-selected.PointCost), "redeem_confirm"
+		return fmt.Sprintf("Konfirmasi penukaran 🎁\n\n*%s*\n_%s_\n\nHarga: *%d poin*\nSaldo kamu: *%d poin*\nSisa setelah redeem: *%d poin*\n\nKetik *ya* untuk konfirmasi, atau *tidak* untuk batal.", selected.Name, selected.Description, selected.PointCost, bal, bal-int64(selected.PointCost)), "redeem_confirm"
 
 	case "redeem_confirm":
 		if lower == "tidak" || lower == "batal" {
