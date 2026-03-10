@@ -2811,7 +2811,7 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		if err2 != nil {
 			return "Maaf, belum bisa cek saldo poin sekarang 🙏", "redeem_choose"
 		}
-		if bal < selected.PointCost {
+		if bal < int64(selected.PointCost) {
 			return fmt.Sprintf("Poin kamu tidak cukup 😕\nSaldo: *%d poin* | Dibutuhkan: *%d poin*\n\nTerus semangat belajar untuk kumpulkan poin ya! 💪", bal, selected.PointCost), "redeem_choose"
 		}
 		a.mu.Lock()
@@ -2855,7 +2855,7 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 			return "Maaf, stok hadiah ini sudah habis 😕\nKetik /redeem untuk lihat hadiah lain.", "idle"
 		}
 		bal, err2 := a.getPointBalance(ctx, webUserID)
-		if err2 != nil || bal < itemCost {
+		if err2 != nil || bal < int64(itemCost) {
 			a.resetSession(uid)
 			return fmt.Sprintf("Poin tidak cukup untuk redeem ini 😕\nSaldo: *%d* | Dibutuhkan: *%d*", bal, itemCost), "idle"
 		}
@@ -3710,12 +3710,11 @@ func (a *app) notifyTelegramUser(ctx context.Context, webUserID int64, msg strin
 // ─── Participant redeem handlers ──────────────────────────────────────────────
 
 func (a *app) handleParticipantRedeemItems(w http.ResponseWriter, r *http.Request) {
-	userID, _, err := a.requireSession(r)
+	_, err := a.currentUser(r.Context(), r)
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
-	_ = userID
 	items, err := a.getActiveRedeemItems(r.Context())
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
@@ -3732,11 +3731,12 @@ func (a *app) handleParticipantRedeemClaim(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
 	}
-	userID, _, err := a.requireSession(r)
+	u, err := a.currentUser(r.Context(), r)
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
+	userID := u.ID
 	var req struct {
 		ItemID int `json:"item_id"`
 	}
@@ -3772,7 +3772,7 @@ func (a *app) handleParticipantRedeemClaim(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
 		return
 	}
-	if bal < it.PointCost {
+	if bal < int64(it.PointCost) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "poin tidak cukup"})
 		return
 	}
@@ -3803,11 +3803,12 @@ func (a *app) handleParticipantRedeemClaim(w http.ResponseWriter, r *http.Reques
 }
 
 func (a *app) handleParticipantRedeemClaims(w http.ResponseWriter, r *http.Request) {
-	userID, _, err := a.requireSession(r)
+	u, err := a.currentUser(r.Context(), r)
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
+	userID := u.ID
 	rows, err := a.db.QueryContext(r.Context(), `
 		SELECT id, item_id, item_name, point_cost, status, note, claimed_at, updated_at
 		FROM redeem_claims WHERE user_id = $1 ORDER BY claimed_at DESC LIMIT 50
@@ -3837,8 +3838,8 @@ func (a *app) handleParticipantRedeemClaims(w http.ResponseWriter, r *http.Reque
 // ─── Admin redeem handlers ────────────────────────────────────────────────────
 
 func (a *app) handleAdminRedeemItems(w http.ResponseWriter, r *http.Request) {
-	_, role, err := a.requireSession(r)
-	if err != nil || role != "admin" {
+	u, err := a.currentUser(r.Context(), r)
+	if err != nil || u.Role != "admin" {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
@@ -3920,8 +3921,8 @@ func (a *app) handleAdminRedeemItems(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleAdminRedeemClaims(w http.ResponseWriter, r *http.Request) {
-	_, role, err := a.requireSession(r)
-	if err != nil || role != "admin" {
+	u, err := a.currentUser(r.Context(), r)
+	if err != nil || u.Role != "admin" {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
@@ -3960,8 +3961,8 @@ func (a *app) handleAdminRedeemClaimAction(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
 	}
-	_, role, err := a.requireSession(r)
-	if err != nil || role != "admin" {
+	u, err := a.currentUser(r.Context(), r)
+	if err != nil || u.Role != "admin" {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
