@@ -672,6 +672,18 @@ export default function Page() {
           }}>
             {/* Sidebar */}
             <aside style={{ background: '#080d18', borderRight: '1px solid #1e2d45', padding: '20px 12px' }}>
+              <button
+                onClick={() => setAdminViewMode('participant')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                  padding: '9px 12px', borderRadius: 10, cursor: 'pointer', marginBottom: 16,
+                  border: '1px solid rgba(190,148,245,0.3)',
+                  background: 'rgba(190,148,245,0.12)',
+                  color: '#be94f5', fontWeight: 700, fontSize: 13
+                }}
+              >
+                ← Tampilan Peserta
+              </button>
               <p style={{ fontSize: 11, color: '#475569', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', margin: '0 0 12px 8px' }}>
                 Menu Admin
               </p>
