@@ -41,6 +41,19 @@ export default function Page() {
   const [redeemCost, setRedeemCost] = useState('');
   const [redeemStock, setRedeemStock] = useState('-1');
   const [redeemClaimNote, setRedeemClaimNote] = useState('');
+  // Materi
+  const [myMaterials, setMyMaterials] = useState([]);
+  const [adminMaterials, setAdminMaterials] = useState([]);
+  const [adminCategories, setAdminCategories] = useState([]);
+  const [materiFilterCat, setMateriFilterCat] = useState('');
+  const [editingMateriId, setEditingMateriId] = useState('');
+  const [materiCatId, setMateriCatId] = useState('');
+  const [materiTitle, setMateriTitle] = useState('');
+  const [materiType, setMateriType] = useState('text');
+  const [materiContent, setMateriContent] = useState('');
+  const [materiExp, setMateriExp] = useState('10');
+  const [materiOrder, setMateriOrder] = useState('0');
+  const [materiActive, setMateriActive] = useState(true);
   const [adminExpRules, setAdminExpRules] = useState([]);
   const [adminExpHistory, setAdminExpHistory] = useState([]);
   const [adminExpStatus, setAdminExpStatus] = useState([]);
@@ -71,7 +84,7 @@ export default function Page() {
   }
 
   async function loadParticipant() {
-    const [mRes, hRes, lRes, rRes, pRes, phRes, riRes, rcRes] = await Promise.all([
+    const [mRes, hRes, lRes, rRes, pRes, phRes, riRes, rcRes, matRes] = await Promise.all([
       fetch(`${apiBase}/participant/me`, { credentials: 'include' }),
       fetch(`${apiBase}/participant/history`, { credentials: 'include' }),
       fetch(`${apiBase}/participant/leaderboard`, { credentials: 'include' }),
@@ -80,6 +93,7 @@ export default function Page() {
       fetch(`${apiBase}/participant/points/history`, { credentials: 'include' }),
       fetch(`${apiBase}/participant/redeem/items`, { credentials: 'include' }),
       fetch(`${apiBase}/participant/redeem/claims`, { credentials: 'include' }),
+      fetch(`${apiBase}/participant/materials`, { credentials: 'include' }),
     ]);
     if (mRes.ok) setProfile(await mRes.json());
     if (hRes.ok) setHistory(await hRes.json());
@@ -89,6 +103,7 @@ export default function Page() {
     if (phRes.ok) setMyPointHistory((await phRes.json()).items || []);
     if (riRes.ok) setRedeemItems((await riRes.json()).items || []);
     if (rcRes.ok) setRedeemClaims((await rcRes.json()).items || []);
+    if (matRes.ok) setMyMaterials((await matRes.json()).items || []);
   }
 
   async function loadAdmin() {
@@ -114,12 +129,16 @@ export default function Page() {
     if (ehRes.ok) setAdminExpHistory((await ehRes.json()).items || []);
     if (esRes.ok) setAdminExpStatus((await esRes.json()).items || []);
     if (ersRes.ok) setExpReportSetting(await ersRes.json());
-    const [ariRes, arcRes] = await Promise.all([
+    const [ariRes, arcRes, amRes, catRes] = await Promise.all([
       fetch(`${apiBase}/admin/redeem/items`, { credentials: 'include' }),
       fetch(`${apiBase}/admin/redeem/claims`, { credentials: 'include' }),
+      fetch(`${apiBase}/admin/materials`, { credentials: 'include' }),
+      fetch(`${apiBase}/admin/categories`, { credentials: 'include' }),
     ]);
     if (ariRes.ok) setAdminRedeemItems((await ariRes.json()).items || []);
     if (arcRes.ok) setAdminRedeemClaims((await arcRes.json()).items || []);
+    if (amRes.ok) setAdminMaterials((await amRes.json()).items || []);
+    if (catRes.ok) setAdminCategories((await catRes.json()).categories || []);
   }
 
   async function loadPortal(role) {
@@ -411,6 +430,69 @@ export default function Page() {
     if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal.'); setBusy(false); return; }
     await loadAdmin();
     setActionType('success'); setActionMsg(`Klaim ${action === 'approve' ? 'disetujui' : 'ditolak'}.`); setBusy(false);
+  }
+
+  // ── Materi functions ─────────────────────────────────────
+  async function saveMateri() {
+    setBusy(true); setActionMsg('');
+    const isEdit = !!editingMateriId;
+    const body = {
+      action: isEdit ? 'update' : 'create',
+      ...(isEdit && { id: Number(editingMateriId) }),
+      category_id: Number(materiCatId), title: materiTitle,
+      type: materiType, content: materiContent,
+      exp_reward: Number(materiExp) || 10, order_no: Number(materiOrder) || 0,
+      is_active: materiActive,
+    };
+    const res = await fetch(`${apiBase}/admin/materials`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify(body),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal simpan.'); setBusy(false); return; }
+    resetMateriForm();
+    await loadAdmin();
+    setActionType('success'); setActionMsg(isEdit ? 'Materi diperbarui!' : 'Materi ditambahkan!'); setBusy(false);
+  }
+
+  function resetMateriForm() {
+    setEditingMateriId(''); setMateriCatId(''); setMateriTitle('');
+    setMateriType('text'); setMateriContent(''); setMateriExp('10');
+    setMateriOrder('0'); setMateriActive(true);
+  }
+
+  function startEditMateri(m) {
+    setEditingMateriId(String(m.id)); setMateriCatId(String(m.category_id));
+    setMateriTitle(m.title); setMateriType(m.type); setMateriContent(m.content);
+    setMateriExp(String(m.exp_reward)); setMateriOrder(String(m.order_no));
+    setMateriActive(m.is_active);
+    setAdminSection('materi');
+  }
+
+  async function deleteMateri(id) {
+    if (!confirm('Hapus materi ini?')) return;
+    setBusy(true);
+    const res = await fetch(`${apiBase}/admin/materials`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ action: 'delete', id }),
+    });
+    if (res.ok) { await loadAdmin(); setActionType('success'); setActionMsg('Materi dihapus.'); }
+    setBusy(false);
+  }
+
+  async function completeMaterial(materialId) {
+    setBusy(true);
+    const res = await fetch(`${apiBase}/participant/materials/complete`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ material_id: materialId }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal.'); setBusy(false); return; }
+    if (d.already_completed) { setActionType('error'); setActionMsg('Materi ini sudah kamu selesaikan sebelumnya ✅'); }
+    else { setActionType('success'); setActionMsg(`Materi selesai! +${d.exp_gained} EXP 🌟`); }
+    const matRes = await fetch(`${apiBase}/participant/materials`, { credentials: 'include' });
+    if (matRes.ok) setMyMaterials((await matRes.json()).items || []);
+    setBusy(false);
   }
 
   const matchedParticipant = participants.find((p) => ((p.phone || '').replace(/[^0-9]/g, '') === (pointPhone || '').replace(/[^0-9]/g, '')));
@@ -737,6 +819,67 @@ export default function Page() {
             </div>
 
             {/* Redeem Catalog */}
+            {/* ── Materi Belajar ── */}
+            <Section title="📚 Materi Belajar">
+              {(() => {
+                // Kelompokkan per kategori
+                const catMap = {};
+                (myMaterials || []).forEach(m => {
+                  if (!catMap[m.category_name]) catMap[m.category_name] = [];
+                  catMap[m.category_name].push(m);
+                });
+                const cats = Object.entries(catMap);
+                if (cats.length === 0) return <p style={{ fontSize: 13, color: '#64748b' }}>Belum ada materi tersedia.</p>;
+                return cats.map(([catName, items]) => {
+                  const done = items.filter(m => m.is_completed).length;
+                  const pct = Math.round((done / items.length) * 100);
+                  const typeIcon = { text: '📖', video: '🎬', audio: '🎵' };
+                  return (
+                    <div key={catName} style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 14 }}>
+                      {/* Header kategori + progress */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <span style={{ fontWeight: 700, fontSize: 15 }}>{catName}</span>
+                        <span style={{ fontSize: 12, color: '#94a3b8' }}>{done}/{items.length} selesai</span>
+                      </div>
+                      {/* Progress bar */}
+                      <div style={{ height: 6, background: '#1e2d45', borderRadius: 99, marginBottom: 12, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? '#22c55e' : '#be94f5', borderRadius: 99, transition: 'width 0.4s' }} />
+                      </div>
+                      {/* List materi */}
+                      {items.map(m => (
+                        <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, padding: '10px 0', borderTop: '1px solid #1e2d45' }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
+                              <span style={{ fontSize: 16 }}>{typeIcon[m.type] || '📄'}</span>
+                              <span style={{ fontSize: 14, fontWeight: m.is_completed ? 400 : 600, color: m.is_completed ? '#64748b' : '#f1f5f9' }}>{m.title}</span>
+                              {m.is_completed && <span style={{ fontSize: 12, color: '#22c55e' }}>✅</span>}
+                            </div>
+                            <div style={{ fontSize: 12, color: '#64748b', paddingLeft: 24 }}>+{m.exp_reward} EXP</div>
+                            {/* Konten materi */}
+                            {m.type === 'text' && (
+                              <div style={{ marginTop: 8, fontSize: 13, color: '#94a3b8', background: '#0a1628', borderRadius: 8, padding: '10px 12px', whiteSpace: 'pre-wrap', maxHeight: 200, overflowY: 'auto', paddingLeft: 24 }}>
+                                {m.content}
+                              </div>
+                            )}
+                            {(m.type === 'video' || m.type === 'audio') && (
+                              <a href={m.content} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 13, color: '#be94f5', textDecoration: 'none', paddingLeft: 24 }}>
+                                🔗 Buka {m.type === 'video' ? 'Video' : 'Audio'}
+                              </a>
+                            )}
+                          </div>
+                          {!m.is_completed && (
+                            <BtnSm onClick={() => completeMaterial(m.id)} disabled={busy} style={{ flexShrink: 0, marginTop: 4 }}>
+                              ✅ Selesai
+                            </BtnSm>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                });
+              })()}
+            </Section>
+
             <Section title="🎁 Redeem Poin">
               {redeemItems.length ? (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px,1fr))', gap: 12 }}>
@@ -835,6 +978,7 @@ export default function Page() {
                   ['jadwal', '📅', 'Jadwal Belajar'],
                   ['poin', '💰', 'Poin'],
                   ['exp', '⭐', 'EXP'],
+                  ['materi', '📚', 'Materi'],
                   ['redeem', '🎁', 'Redeem'],
                 ].map(([key, icon, label]) => (
                   <button
@@ -1153,6 +1297,111 @@ export default function Page() {
                     </div>
                   ) : <div className="nk-empty">Belum ada history EXP.</div>}
                 </AdminSection>
+              )}
+
+              {/* Admin — Materi */}
+              {adminSection === 'materi' && (
+                <>
+                  <AdminSection title="📚 Manajemen Materi Belajar">
+                    {/* Form tambah/edit */}
+                    <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                      <p style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>
+                        {editingMateriId ? '✏️ Edit Materi' : '➕ Tambah Materi Baru'}
+                      </p>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                        <div>
+                          <label style={fieldLbl}>Kategori</label>
+                          <select value={materiCatId} onChange={e => setMateriCatId(e.target.value)} style={inputSt}>
+                            <option value="">-- Pilih Kategori --</option>
+                            {adminCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={fieldLbl}>Tipe</label>
+                          <select value={materiType} onChange={e => setMateriType(e.target.value)} style={inputSt}>
+                            <option value="text">📖 Bacaan (Teks)</option>
+                            <option value="video">🎬 Video (URL)</option>
+                            <option value="audio">🎵 Audio (URL)</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div style={{ marginBottom: 10 }}>
+                        <label style={fieldLbl}>Judul Materi</label>
+                        <input value={materiTitle} onChange={e => setMateriTitle(e.target.value)} placeholder="Judul materi..." style={inputSt} />
+                      </div>
+                      <div style={{ marginBottom: 10 }}>
+                        <label style={fieldLbl}>{materiType === 'text' ? 'Isi Materi' : 'URL ' + (materiType === 'video' ? 'Video (YouTube/GDrive)' : 'Audio (MP3)')}</label>
+                        {materiType === 'text'
+                          ? <textarea value={materiContent} onChange={e => setMateriContent(e.target.value)} rows={5} placeholder="Tulis isi materi di sini..." style={{ ...inputSt, resize: 'vertical' }} />
+                          : <input value={materiContent} onChange={e => setMateriContent(e.target.value)} placeholder="https://..." style={inputSt} />
+                        }
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+                        <div>
+                          <label style={fieldLbl}>EXP Reward</label>
+                          <input type="number" value={materiExp} onChange={e => setMateriExp(e.target.value)} style={inputSt} />
+                        </div>
+                        <div>
+                          <label style={fieldLbl}>Urutan</label>
+                          <input type="number" value={materiOrder} onChange={e => setMateriOrder(e.target.value)} style={inputSt} />
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 2 }}>
+                          <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer', fontSize: 14 }}>
+                            <input type="checkbox" checked={materiActive} onChange={e => setMateriActive(e.target.checked)} />
+                            Aktif
+                          </label>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <BtnSm onClick={saveMateri} disabled={busy || !materiTitle || !materiCatId}>
+                          {editingMateriId ? 'Simpan Perubahan' : 'Tambah Materi'}
+                        </BtnSm>
+                        {editingMateriId && <BtnSm onClick={resetMateriForm} style={{ background: '#334155' }}>Batal Edit</BtnSm>}
+                      </div>
+                    </div>
+
+                    {/* Filter kategori */}
+                    <div style={{ marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <label style={{ fontSize: 13, color: '#94a3b8' }}>Filter:</label>
+                      <select value={materiFilterCat} onChange={e => setMateriFilterCat(e.target.value)} style={{ ...inputSt, width: 'auto' }}>
+                        <option value="">Semua Kategori</option>
+                        {adminCategories.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
+                      </select>
+                    </div>
+
+                    {/* List materi */}
+                    {adminMaterials
+                      .filter(m => !materiFilterCat || String(m.category_id) === materiFilterCat)
+                      .map(m => {
+                        const typeIcon = { text: '📖', video: '🎬', audio: '🎵' }[m.type] || '📄';
+                        return (
+                          <div key={m.id} style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 10, padding: '12px 14px', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
+                                <span>{typeIcon}</span>
+                                <span style={{ fontWeight: 600, fontSize: 14 }}>{m.title}</span>
+                                <span style={{ fontSize: 11, color: '#be94f5', background: 'rgba(190,148,245,0.1)', padding: '2px 8px', borderRadius: 20 }}>{m.category_name}</span>
+                                {!m.is_active && <span style={{ fontSize: 11, color: '#f87171', background: 'rgba(248,113,113,0.1)', padding: '2px 8px', borderRadius: 20 }}>Nonaktif</span>}
+                              </div>
+                              <div style={{ fontSize: 12, color: '#64748b', display: 'flex', gap: 12 }}>
+                                <span>+{m.exp_reward} EXP</span>
+                                <span>Urutan: {m.order_no}</span>
+                                <span>Selesai oleh: {m.completed_count} peserta</span>
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                              <BtnSm onClick={() => startEditMateri(m)} style={{ background: '#1e40af', fontSize: 12 }}>Edit</BtnSm>
+                              <BtnSm onClick={() => deleteMateri(m.id)} style={{ background: '#7f1d1d', fontSize: 12 }}>Hapus</BtnSm>
+                            </div>
+                          </div>
+                        );
+                      })
+                    }
+                    {adminMaterials.filter(m => !materiFilterCat || String(m.category_id) === materiFilterCat).length === 0 && (
+                      <p style={{ fontSize: 13, color: '#64748b' }}>Belum ada materi. Tambahkan di atas!</p>
+                    )}
+                  </AdminSection>
+                </>
               )}
 
               {/* Admin — Redeem */}
