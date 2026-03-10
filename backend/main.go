@@ -62,6 +62,22 @@ type botSession struct {
 	RedeemItemID      int64
 	RedeemItemName    string
 	RedeemItemCost    int
+	// Materi
+	MateriCategoryID   int
+	MateriCategoryName string
+	MateriList         []botMateriItem
+	MateriViewingID    int
+	MateriViewingExp   int
+}
+
+type botMateriItem struct {
+	ID          int
+	Title       string
+	Type        string
+	Content     string
+	ExpReward   int
+	OrderNo     int
+	IsCompleted bool
 }
 
 type quizQuestion struct {
@@ -2236,8 +2252,8 @@ func (a *app) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	reply, state := a.processBotText(r.Context(), uid, displayName, text)
 	if strings.TrimSpace(reply) != "" {
-		// Untuk state quiz_choose_category, kirim keyboard dinamis dari DB
-		if state == "quiz_choose_category" {
+		// Untuk state yang membutuhkan keyboard kategori
+		if state == "quiz_choose_category" || state == "materi_choose_category" {
 			cats, _ := a.getActiveCategoryNames(r.Context())
 			if len(cats) > 0 {
 				// Bagi keyboard jadi baris 2 kolom
@@ -2282,6 +2298,7 @@ func (a *app) syncTelegramBotCommands(ctx context.Context) error {
 		{"command": "tryout", "description": "Tryout soal acak"},
 		{"command": "leaderbot", "description": "Ranking tryout tercepat"},
 		{"command": "jadwal_belajar", "description": "Atur pengingat belajar"},
+		{"command": "materi", "description": "Akses materi belajar 📚"},
 		{"command": "redeem", "description": "Tukar poin dengan hadiah 🎁"},
 		{"command": "batal", "description": "Batalkan proses saat ini"},
 	}
@@ -2425,7 +2442,7 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 	}
 	if lower == "/start" {
 		a.resetSession(uid)
-		return "Halo! Perkenalkan saya *Nala* ✨\nAsisten belajarmu di *Naik Kelas* 🎓\n\n📚 *Belajar*\n/quiz — Latihan soal per kategori\n/tryout — Simulasi soal acak\n/leaderbot — Ranking tryout tercepat 🏆\n\n👤 *Akun*\n/daftar — Daftar peserta baru\n/cek — Cek status pendaftaran\n/status — Level, EXP & poin kamu\n/poin — Menu saldo & transaksi poin\n/exp — Detail EXP & level\n\n🎁 *Reward*\n/redeem — Tukar poin dengan hadiah\n\n⏰ *Pengingat*\n/jadwal\\_belajar — Atur jadwal belajar harian\n\n❌ /batal — Batalkan proses yang sedang berjalan\n\nAda yang bisa Nala bantu hari ini? 😊", "idle"
+		return "Halo! Perkenalkan saya *Nala* ✨\nAsisten belajarmu di *Naik Kelas* 🎓\n\n📚 *Belajar*\n/materi — Belajar materi per kategori\n/quiz — Latihan soal per kategori\n/tryout — Simulasi soal acak\n/leaderbot — Ranking tryout tercepat 🏆\n\n👤 *Akun*\n/daftar — Daftar peserta baru\n/cek — Cek status pendaftaran\n/status — Level, EXP & poin kamu\n/poin — Menu saldo & transaksi poin\n/exp — Detail EXP & level\n\n🎁 *Reward*\n/redeem — Tukar poin dengan hadiah\n\n⏰ *Pengingat*\n/jadwal\\_belajar — Atur jadwal belajar harian\n\n❌ /batal — Batalkan proses yang sedang berjalan\n\nAda yang bisa Nala bantu hari ini? 😊", "idle"
 	}
 	if lower == "/daftar" {
 		a.mu.Lock()
@@ -2452,6 +2469,26 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		a.mu.Unlock()
 		return "Siap, Nala bantu cek ✅\nKirim nomor HP yang ingin dicek ya.", "check_phone"
 	}
+	if lower == "/materi" {
+		registered, err := a.isRegisteredBotUser(ctx, uid)
+		if err != nil {
+			return "Maaf, Nala lagi kesulitan cek data pendaftaran 🙏\nCoba lagi sebentar ya.", "idle"
+		}
+		if !registered {
+			return "Sebelum akses materi, kamu perlu daftar dulu ya ✨\nKetik /daftar untuk registrasi.", "idle"
+		}
+		cats, err := a.getActiveCategoryNames(ctx)
+		if err != nil || len(cats) == 0 {
+			return "Maaf, belum ada materi tersedia saat ini 🙏", "idle"
+		}
+		catsText := ""
+		for i, c := range cats {
+			catsText += fmt.Sprintf("%d. %s\n", i+1, c)
+		}
+		a.botSessions[uid] = &botSession{State: "materi_choose_category", UpdatedAt: time.Now()}
+		return fmt.Sprintf("📚 *Materi Belajar Naik Kelas*\n\nPilih kategori yang ingin kamu pelajari:\n\n%s\nKetik nomor kategorinya ya!", catsText), "materi_choose_category"
+	}
+
 	if lower == "/quiz" {
 		registered, err := a.isRegisteredBotUser(ctx, uid)
 		if err != nil {
@@ -2853,6 +2890,185 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 			return "Belum ada transaksi poin untuk akunmu ya.", "poin_menu"
 		}
 		return strings.Join(lines, "\n"), "poin_menu"
+
+	case "materi_choose_category":
+		num, err2 := strconv.Atoi(strings.TrimSpace(text))
+		cats, err3 := a.getActiveCategoryNames(ctx)
+		if err2 != nil || err3 != nil || num < 1 || num > len(cats) {
+			catsText := ""
+			if err3 == nil {
+				for i, c := range cats {
+					catsText += fmt.Sprintf("%d. %s\n", i+1, c)
+				}
+			}
+			return fmt.Sprintf("Ketik nomor kategori yang valid ya 😊\n\n%s", catsText), "materi_choose_category"
+		}
+		chosenCat := cats[num-1]
+		// Ambil category_id
+		var catID int
+		if err4 := a.db.QueryRowContext(ctx, `SELECT id FROM question_categories WHERE name=$1 AND is_active=TRUE`, chosenCat).Scan(&catID); err4 != nil {
+			return "Maaf, kategori tidak ditemukan 🙏", "idle"
+		}
+		// Ambil materi + progress peserta
+		webUserID, _ := a.resolveWebUserIDByExternal(ctx, uid)
+		rows, err5 := a.db.QueryContext(ctx, `
+			SELECT lm.id, lm.title, lm.type, lm.content, lm.exp_reward, lm.order_no,
+			       CASE WHEN mp.material_id IS NOT NULL THEN TRUE ELSE FALSE END
+			FROM learning_materials lm
+			LEFT JOIN material_progress mp ON mp.material_id = lm.id AND mp.user_id = $1
+			WHERE lm.category_id = $2 AND lm.is_active = TRUE
+			ORDER BY lm.order_no, lm.id
+		`, webUserID, catID)
+		if err5 != nil {
+			return "Maaf, Nala lagi kesulitan ambil materi 🙏", "idle"
+		}
+		defer rows.Close()
+		var items []botMateriItem
+		for rows.Next() {
+			var it botMateriItem
+			if rows.Scan(&it.ID, &it.Title, &it.Type, &it.Content, &it.ExpReward, &it.OrderNo, &it.IsCompleted) == nil {
+				items = append(items, it)
+			}
+		}
+		if len(items) == 0 {
+			return fmt.Sprintf("Belum ada materi untuk kategori *%s* saat ini 🙏\nCoba cek lagi nanti ya!", chosenCat), "idle"
+		}
+		s.MateriCategoryID = catID
+		s.MateriCategoryName = chosenCat
+		s.MateriList = items
+		s.State = "materi_list"
+		// Build list
+		typeIcon := map[string]string{"text": "📖", "video": "🎬", "audio": "🎵"}
+		lines := []string{fmt.Sprintf("📂 *Materi: %s* (%d materi)\n", chosenCat, len(items))}
+		total, done := len(items), 0
+		for _, it := range items {
+			icon := typeIcon[it.Type]
+			if icon == "" {
+				icon = "📄"
+			}
+			status := "○"
+			if it.IsCompleted {
+				status = "✅"
+				done++
+			}
+			lines = append(lines, fmt.Sprintf("%d. %s %s %s", items[0].OrderNo+len(lines)-1, icon, it.Title, status))
+		}
+		lines = append(lines, fmt.Sprintf("\nProgress: %d/%d selesai", done, total))
+		lines = append(lines, "\nKetik *nomor* untuk membuka materi.")
+		return strings.Join(lines, "\n"), "materi_list"
+
+	case "materi_list":
+		num, err2 := strconv.Atoi(strings.TrimSpace(text))
+		if err2 != nil || num < 1 || num > len(s.MateriList) {
+			return fmt.Sprintf("Ketik nomor materi yang valid (1–%d) ya 😊", len(s.MateriList)), "materi_list"
+		}
+		chosen := s.MateriList[num-1]
+		s.MateriViewingID = chosen.ID
+		s.MateriViewingExp = chosen.ExpReward
+		s.State = "materi_viewing"
+		typeLabel := map[string]string{"text": "📖 Bacaan", "video": "🎬 Video", "audio": "🎵 Audio"}
+		label := typeLabel[chosen.Type]
+		if label == "" {
+			label = "📄 Materi"
+		}
+		var msg string
+		switch chosen.Type {
+		case "text":
+			// Pecah kalau > 3800 karakter
+			content := chosen.Content
+			header := fmt.Sprintf("%s: *%s*\n\n", label, chosen.Title)
+			full := header + content
+			if len(full) > 3800 {
+				// Kirim header dulu, konten nanti lewat mekanisme biasa (ambil 3800)
+				msg = full[:3800] + "\n\n_(lanjutan konten dipotong — buka web portal untuk materi lengkap)_"
+			} else {
+				msg = full
+			}
+		case "video":
+			msg = fmt.Sprintf("%s: *%s*\n\n🔗 %s\n\n_(Tonton videonya dulu ya! Klik link di atas)_", label, chosen.Title, chosen.Content)
+		case "audio":
+			msg = fmt.Sprintf("%s: *%s*\n\n🔗 %s\n\n_(Dengarkan audionya dulu ya! Klik link di atas)_", label, chosen.Title, chosen.Content)
+		default:
+			msg = fmt.Sprintf("*%s*\n\n%s", chosen.Title, chosen.Content)
+		}
+		alreadyDone := ""
+		if chosen.IsCompleted {
+			alreadyDone = "\n\n_Kamu sudah menyelesaikan materi ini sebelumnya ✅_"
+		}
+		msg += alreadyDone + "\n\n---\nKetik *selesai* jika sudah baca/tonton ✅\nKetik *kembali* untuk list materi\nKetik */batal* untuk keluar"
+		return msg, "materi_viewing"
+
+	case "materi_viewing":
+		lower2 := strings.ToLower(strings.TrimSpace(text))
+		if lower2 == "kembali" {
+			// Kembali ke list
+			s.State = "materi_list"
+			typeIcon := map[string]string{"text": "📖", "video": "🎬", "audio": "🎵"}
+			lines := []string{fmt.Sprintf("📂 *Materi: %s* (%d materi)\n", s.MateriCategoryName, len(s.MateriList))}
+			done := 0
+			for i, it := range s.MateriList {
+				icon := typeIcon[it.Type]
+				if icon == "" { icon = "📄" }
+				status := "○"
+				if it.IsCompleted { status = "✅"; done++ }
+				lines = append(lines, fmt.Sprintf("%d. %s %s %s", i+1, icon, it.Title, status))
+			}
+			lines = append(lines, fmt.Sprintf("\nProgress: %d/%d selesai", done, len(s.MateriList)))
+			lines = append(lines, "\nKetik *nomor* untuk membuka materi.")
+			return strings.Join(lines, "\n"), "materi_list"
+		}
+		if lower2 != "selesai" {
+			return "Ketik *selesai* jika sudah selesai, atau *kembali* untuk list materi 😊", "materi_viewing"
+		}
+		// Tandai selesai
+		webUserID, _ := a.resolveWebUserIDByExternal(ctx, uid)
+		var alreadyInserted bool
+		err2 := a.db.QueryRowContext(ctx, `
+			INSERT INTO material_progress (user_id, material_id)
+			VALUES ($1, $2) ON CONFLICT (user_id, material_id) DO NOTHING RETURNING TRUE
+		`, webUserID, s.MateriViewingID).Scan(&alreadyInserted)
+		if err2 != nil || !alreadyInserted {
+			// Sudah selesai sebelumnya
+			s.State = "materi_list"
+			return "Materi ini sudah kamu selesaikan sebelumnya ✅\nTidak ada EXP tambahan ya.\n\nKetik nomor materi lain untuk lanjut belajar!", "materi_list"
+		}
+		// Beri EXP
+		expGained := s.MateriViewingExp
+		if expGained > 0 && webUserID > 0 {
+			var matTitle string
+			for _, it := range s.MateriList {
+				if it.ID == s.MateriViewingID {
+					matTitle = it.Title
+					break
+				}
+			}
+			_, _ = a.adjustExp(ctx, webUserID, int64(expGained), fmt.Sprintf("Selesai materi: %s", matTitle))
+		}
+		// Update status lokal di sesi
+		for i := range s.MateriList {
+			if s.MateriList[i].ID == s.MateriViewingID {
+				s.MateriList[i].IsCompleted = true
+				break
+			}
+		}
+		// Cek apakah semua materi kategori selesai
+		allDone := true
+		for _, it := range s.MateriList {
+			if !it.IsCompleted {
+				allDone = false
+				break
+			}
+		}
+		s.State = "materi_list"
+		expMsg := ""
+		if expGained > 0 {
+			expMsg = fmt.Sprintf("\n+*%d EXP* kamu dapatkan 🌟", expGained)
+		}
+		bonusMsg := ""
+		if allDone {
+			bonusMsg = fmt.Sprintf("\n\n🎉 *Selamat!* Kamu sudah menyelesaikan semua materi *%s*!\nSekarang kamu siap untuk /quiz %s 🧠", s.MateriCategoryName, s.MateriCategoryName)
+		}
+		return fmt.Sprintf("✅ Materi selesai!%s%s\n\nKetik nomor materi lain untuk lanjut, atau /quiz untuk latihan soal 💪", expMsg, bonusMsg), "materi_list"
 
 	case "redeem_choose":
 		num, err2 := strconv.Atoi(strings.TrimSpace(text))
