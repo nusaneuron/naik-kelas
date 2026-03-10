@@ -25,12 +25,22 @@ export default function Page() {
   const [myPoints, setMyPoints] = useState(0);
   const [myPointHistory, setMyPointHistory] = useState([]);
 
+  const [redeemItems, setRedeemItems] = useState([]);
+  const [redeemClaims, setRedeemClaims] = useState([]);
   const [participants, setParticipants] = useState([]);
   const [categories, setCategories] = useState([]);
   const [questions, setQuestions] = useState([]);
   const [adminReminders, setAdminReminders] = useState([]);
   const [adminPointHistory, setAdminPointHistory] = useState([]);
   const [adminPointBalances, setAdminPointBalances] = useState([]);
+  const [adminRedeemItems, setAdminRedeemItems] = useState([]);
+  const [adminRedeemClaims, setAdminRedeemClaims] = useState([]);
+  const [editingRedeemId, setEditingRedeemId] = useState('');
+  const [redeemName, setRedeemName] = useState('');
+  const [redeemDesc, setRedeemDesc] = useState('');
+  const [redeemCost, setRedeemCost] = useState('');
+  const [redeemStock, setRedeemStock] = useState('-1');
+  const [redeemClaimNote, setRedeemClaimNote] = useState('');
   const [adminExpRules, setAdminExpRules] = useState([]);
   const [adminExpHistory, setAdminExpHistory] = useState([]);
   const [adminExpStatus, setAdminExpStatus] = useState([]);
@@ -61,13 +71,15 @@ export default function Page() {
   }
 
   async function loadParticipant() {
-    const [mRes, hRes, lRes, rRes, pRes, phRes] = await Promise.all([
+    const [mRes, hRes, lRes, rRes, pRes, phRes, riRes, rcRes] = await Promise.all([
       fetch(`${apiBase}/participant/me`, { credentials: 'include' }),
       fetch(`${apiBase}/participant/history`, { credentials: 'include' }),
       fetch(`${apiBase}/participant/leaderboard`, { credentials: 'include' }),
       fetch(`${apiBase}/participant/reminder`, { credentials: 'include' }),
       fetch(`${apiBase}/participant/points`, { credentials: 'include' }),
-      fetch(`${apiBase}/participant/points/history`, { credentials: 'include' })
+      fetch(`${apiBase}/participant/points/history`, { credentials: 'include' }),
+      fetch(`${apiBase}/participant/redeem/items`, { credentials: 'include' }),
+      fetch(`${apiBase}/participant/redeem/claims`, { credentials: 'include' }),
     ]);
     if (mRes.ok) setProfile(await mRes.json());
     if (hRes.ok) setHistory(await hRes.json());
@@ -75,6 +87,8 @@ export default function Page() {
     if (rRes.ok) setMyReminder(await rRes.json());
     if (pRes.ok) setMyPoints((await pRes.json()).balance || 0);
     if (phRes.ok) setMyPointHistory((await phRes.json()).items || []);
+    if (riRes.ok) setRedeemItems((await riRes.json()).items || []);
+    if (rcRes.ok) setRedeemClaims((await rcRes.json()).items || []);
   }
 
   async function loadAdmin() {
@@ -100,6 +114,12 @@ export default function Page() {
     if (ehRes.ok) setAdminExpHistory((await ehRes.json()).items || []);
     if (esRes.ok) setAdminExpStatus((await esRes.json()).items || []);
     if (ersRes.ok) setExpReportSetting(await ersRes.json());
+    const [ariRes, arcRes] = await Promise.all([
+      fetch(`${apiBase}/admin/redeem/items`, { credentials: 'include' }),
+      fetch(`${apiBase}/admin/redeem/claims`, { credentials: 'include' }),
+    ]);
+    if (ariRes.ok) setAdminRedeemItems((await ariRes.json()).items || []);
+    if (arcRes.ok) setAdminRedeemClaims((await arcRes.json()).items || []);
   }
 
   async function loadPortal(role) {
@@ -336,6 +356,61 @@ export default function Page() {
     if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal update rule EXP.'); setBusy(false); return; }
     await loadAdmin();
     setActionType('success'); setActionMsg(`Rule EXP ${ruleKey} berhasil diperbarui.`); setBusy(false);
+  }
+
+  async function claimRedeem(itemId) {
+    setBusy(true); setActionMsg('');
+    const res = await fetch(`${apiBase}/participant/redeem/claim`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ item_id: itemId })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal klaim.'); setBusy(false); return; }
+    await loadParticipant();
+    setActionType('success'); setActionMsg('Klaim berhasil! Menunggu konfirmasi admin 🎁'); setBusy(false);
+  }
+
+  async function saveRedeemItem() {
+    setBusy(true); setActionMsg('');
+    const isEdit = !!editingRedeemId;
+    const payload = isEdit
+      ? { action: 'update', id: Number(editingRedeemId), name: redeemName, description: redeemDesc, point_cost: Number(redeemCost), stock: Number(redeemStock), is_active: true, image_url: '' }
+      : { action: 'create', name: redeemName, description: redeemDesc, point_cost: Number(redeemCost), stock: Number(redeemStock), image_url: '' };
+    await fetch(`${apiBase}/admin/redeem/items`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify(payload)
+    });
+    setRedeemName(''); setRedeemDesc(''); setRedeemCost(''); setRedeemStock('-1'); setEditingRedeemId('');
+    await loadAdmin();
+    setActionType('success'); setActionMsg(isEdit ? 'Hadiah diupdate.' : 'Hadiah ditambahkan.'); setBusy(false);
+  }
+
+  function startEditRedeem(it) {
+    setEditingRedeemId(String(it.id));
+    setRedeemName(it.name); setRedeemDesc(it.description);
+    setRedeemCost(String(it.point_cost)); setRedeemStock(String(it.stock));
+  }
+
+  async function deleteRedeemItem(id) {
+    setBusy(true); setActionMsg('');
+    await fetch(`${apiBase}/admin/redeem/items`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ action: 'delete', id })
+    });
+    await loadAdmin();
+    setActionType('success'); setActionMsg('Hadiah dihapus.'); setBusy(false);
+  }
+
+  async function redeemClaimAction(claimId, action, note) {
+    setBusy(true); setActionMsg('');
+    const res = await fetch(`${apiBase}/admin/redeem/claims/action`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ claim_id: claimId, action, note: note || '' })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal.'); setBusy(false); return; }
+    await loadAdmin();
+    setActionType('success'); setActionMsg(`Klaim ${action === 'approve' ? 'disetujui' : 'ditolak'}.`); setBusy(false);
   }
 
   const matchedParticipant = participants.find((p) => ((p.phone || '').replace(/[^0-9]/g, '') === (pointPhone || '').replace(/[^0-9]/g, '')));
@@ -660,6 +735,72 @@ export default function Page() {
                 ) : <div className="nk-empty">🚀 Belum ada riwayat tryout.</div>}
               </Section>
             </div>
+
+            {/* Redeem Catalog */}
+            <Section title="🎁 Redeem Poin">
+              {redeemItems.length ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px,1fr))', gap: 12 }}>
+                  {redeemItems.map((it) => {
+                    const canClaim = myPoints >= it.point_cost && it.stock !== 0;
+                    return (
+                      <div key={it.id} style={{
+                        border: `1px solid ${canClaim ? 'rgba(255,87,52,0.25)' : '#1e2d45'}`,
+                        borderRadius: 14, padding: 16, background: '#0f172a',
+                        display: 'flex', flexDirection: 'column', gap: 8
+                      }}>
+                        <div style={{ fontSize: 28 }}>🎁</div>
+                        <div style={{ fontWeight: 700, fontSize: 15 }}>{it.name}</div>
+                        {it.description && <div style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.5 }}>{it.description}</div>}
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                          <span className="nk-badge nk-badge-orange">💰 {it.point_cost} poin</span>
+                          <span className={`nk-badge ${it.stock === -1 ? 'nk-badge-green' : it.stock > 0 ? 'nk-badge-yellow' : 'nk-badge-red'}`}>
+                            Stok: {it.stock === -1 ? '∞' : it.stock}
+                          </span>
+                        </div>
+                        <button
+                          disabled={busy || !canClaim}
+                          onClick={() => claimRedeem(it.id)}
+                          style={{
+                            marginTop: 8, border: 0, borderRadius: 10, padding: '9px 0',
+                            background: canClaim ? 'linear-gradient(135deg,#ff5734,#e8431f)' : '#1e2d45',
+                            color: canClaim ? 'white' : '#475569',
+                            fontWeight: 700, fontSize: 13, cursor: canClaim ? 'pointer' : 'not-allowed',
+                            boxShadow: canClaim ? '0 4px 12px rgba(255,87,52,0.3)' : 'none',
+                            transition: 'all 180ms ease'
+                          }}
+                        >
+                          {it.stock === 0 ? '✗ Stok Habis' : !canClaim ? `Kurang ${it.point_cost - myPoints} poin` : 'Tukar Sekarang 🎁'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : <div className="nk-empty">🎁 Belum ada hadiah tersedia. Terus kumpulkan poin ya!</div>}
+            </Section>
+
+            {/* Riwayat Klaim */}
+            <Section title="📋 Riwayat Klaim Redeem">
+              {redeemClaims.length ? (
+                <div className="nk-table-wrap" style={{ maxHeight: 280 }}>
+                  <table className="nk-table" style={{ minWidth: 600 }}>
+                    <thead><tr><th>Hadiah</th><th>Poin</th><th>Status</th><th>Catatan Admin</th><th>Waktu</th></tr></thead>
+                    <tbody>{redeemClaims.map((c) => (
+                      <tr key={c.id}>
+                        <td style={{ fontWeight: 600 }}>{c.item_name}</td>
+                        <td><span className="nk-badge nk-badge-red">-{c.point_cost}</span></td>
+                        <td>
+                          <span className={`nk-badge ${c.status === 'approved' ? 'nk-badge-green' : c.status === 'rejected' ? 'nk-badge-red' : 'nk-badge-yellow'}`}>
+                            {c.status === 'approved' ? '✓ Disetujui' : c.status === 'rejected' ? '✗ Ditolak' : '⏳ Pending'}
+                          </span>
+                        </td>
+                        <td style={{ color: '#94a3b8', fontSize: 13 }}>{c.note || '-'}</td>
+                        <td style={{ color: '#94a3b8', fontSize: 13 }}>{new Date(c.claimed_at).toLocaleString('id-ID')}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              ) : <div className="nk-empty">📋 Belum ada riwayat klaim.</div>}
+            </Section>
           </>
         )}
 
@@ -694,6 +835,7 @@ export default function Page() {
                   ['jadwal', '📅', 'Jadwal Belajar'],
                   ['poin', '💰', 'Poin'],
                   ['exp', '⭐', 'EXP'],
+                  ['redeem', '🎁', 'Redeem'],
                 ].map(([key, icon, label]) => (
                   <button
                     key={key}
@@ -1012,6 +1154,100 @@ export default function Page() {
                   ) : <div className="nk-empty">Belum ada history EXP.</div>}
                 </AdminSection>
               )}
+
+              {/* Admin — Redeem */}
+              {adminSection === 'redeem' && (
+                <>
+                  <AdminSection title="🎁 Manajemen Hadiah Redeem">
+                    {/* Form tambah/edit */}
+                    <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                      <p style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>
+                        {editingRedeemId ? '✏️ Edit Hadiah' : '➕ Tambah Hadiah Baru'}
+                      </p>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                        <div>
+                          <label style={fieldLbl}>Nama Hadiah</label>
+                          <input className="nk-input" placeholder="Contoh: Voucher Gopay 50rb" value={redeemName} onChange={(e) => setRedeemName(e.target.value)} />
+                        </div>
+                        <div>
+                          <label style={fieldLbl}>Harga Poin</label>
+                          <input className="nk-input" type="number" min="1" placeholder="contoh: 500" value={redeemCost} onChange={(e) => setRedeemCost(e.target.value)} />
+                        </div>
+                      </div>
+                      <div style={{ marginBottom: 10 }}>
+                        <label style={fieldLbl}>Deskripsi</label>
+                        <input className="nk-input" placeholder="Keterangan singkat hadiah" value={redeemDesc} onChange={(e) => setRedeemDesc(e.target.value)} />
+                      </div>
+                      <div style={{ marginBottom: 12 }}>
+                        <label style={fieldLbl}>Stok (-1 = unlimited)</label>
+                        <input className="nk-input" type="number" min="-1" placeholder="-1" value={redeemStock} onChange={(e) => setRedeemStock(e.target.value)} />
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <BtnSm disabled={busy} onClick={saveRedeemItem}>{busy ? '...' : (editingRedeemId ? 'Update Hadiah' : '+ Tambah')}</BtnSm>
+                        {editingRedeemId && <BtnSm disabled={busy} onClick={() => { setEditingRedeemId(''); setRedeemName(''); setRedeemDesc(''); setRedeemCost(''); setRedeemStock('-1'); }}>Batal</BtnSm>}
+                      </div>
+                    </div>
+
+                    {/* Daftar hadiah */}
+                    <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))' }}>
+                      {adminRedeemItems.map((it) => (
+                        <div key={it.id} style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 14, background: '#0b1220' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                            <div style={{ fontWeight: 700 }}>{it.name}</div>
+                            <span className={`nk-badge ${it.is_active ? 'nk-badge-green' : 'nk-badge-red'}`}>{it.is_active ? 'Aktif' : 'Nonaktif'}</span>
+                          </div>
+                          {it.description && <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 8 }}>{it.description}</div>}
+                          <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+                            <span className="nk-badge nk-badge-orange">💰 {it.point_cost} poin</span>
+                            <span className={`nk-badge ${it.stock === -1 ? 'nk-badge-purple' : it.stock > 0 ? 'nk-badge-yellow' : 'nk-badge-red'}`}>
+                              Stok: {it.stock === -1 ? '∞' : it.stock}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <BtnSm disabled={busy} onClick={() => startEditRedeem(it)}>Edit</BtnSm>
+                            <BtnSm disabled={busy} onClick={() => deleteRedeemItem(it.id)} danger>Hapus</BtnSm>
+                          </div>
+                        </div>
+                      ))}
+                      {!adminRedeemItems.length && <div className="nk-empty">Belum ada hadiah. Tambahkan di atas!</div>}
+                    </div>
+                  </AdminSection>
+
+                  <AdminSection title="📋 Klaim Masuk" style={{ marginTop: 14 }}>
+                    {adminRedeemClaims.length ? (
+                      <div className="nk-table-wrap" style={{ maxHeight: 480 }}>
+                        <table className="nk-table" style={{ minWidth: 900 }}>
+                          <thead><tr><th>Peserta</th><th>No. HP</th><th>Hadiah</th><th>Poin</th><th>Status</th><th>Catatan</th><th>Waktu</th><th>Aksi</th></tr></thead>
+                          <tbody>{adminRedeemClaims.map((c) => (
+                            <tr key={c.id}>
+                              <td style={{ fontWeight: 600 }}>{c.user_name || '-'}</td>
+                              <td style={{ color: '#94a3b8' }}>{c.user_phone || '-'}</td>
+                              <td style={{ fontWeight: 600 }}>{c.item_name}</td>
+                              <td><span className="nk-badge nk-badge-orange">{c.point_cost}</span></td>
+                              <td>
+                                <span className={`nk-badge ${c.status === 'approved' ? 'nk-badge-green' : c.status === 'rejected' ? 'nk-badge-red' : 'nk-badge-yellow'}`}>
+                                  {c.status === 'approved' ? '✓ Disetujui' : c.status === 'rejected' ? '✗ Ditolak' : '⏳ Pending'}
+                                </span>
+                              </td>
+                              <td style={{ color: '#94a3b8', fontSize: 13, maxWidth: 160 }}>{c.note || '-'}</td>
+                              <td style={{ color: '#94a3b8', fontSize: 13 }}>{new Date(c.claimed_at).toLocaleString('id-ID')}</td>
+                              <td>
+                                {c.status === 'pending' ? (
+                                  <div style={{ display: 'flex', gap: 6 }}>
+                                    <BtnSm disabled={busy} onClick={() => { const note = prompt('Catatan (opsional):') || ''; redeemClaimAction(c.id, 'approve', note); }}>✓ Approve</BtnSm>
+                                    <BtnSm disabled={busy} onClick={() => { const note = prompt('Alasan penolakan:') || ''; redeemClaimAction(c.id, 'reject', note); }} danger>✗ Tolak</BtnSm>
+                                  </div>
+                                ) : <span style={{ fontSize: 12, color: '#475569' }}>Selesai</span>}
+                              </td>
+                            </tr>
+                          ))}</tbody>
+                        </table>
+                      </div>
+                    ) : <div className="nk-empty">📋 Belum ada klaim masuk.</div>}
+                  </AdminSection>
+                </>
+              )}
+
             </div>
           </div>
         )}

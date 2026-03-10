@@ -48,17 +48,20 @@ type botMessageResponse struct {
 }
 
 type botSession struct {
-	State           string
-	Name            string
-	Phone           string
-	QuizCategory    string
-	QuizIndex       int
-	QuizAnswers     []string
-	TryoutQuestions []quizQuestion
-	TryoutAnswers   []string
-	TryoutStartedAt time.Time
-	DisplayName     string
-	UpdatedAt       time.Time
+	State             string
+	Name              string
+	Phone             string
+	QuizCategory      string
+	QuizIndex         int
+	QuizAnswers       []string
+	TryoutQuestions   []quizQuestion
+	TryoutAnswers     []string
+	TryoutStartedAt   time.Time
+	DisplayName       string
+	UpdatedAt         time.Time
+	RedeemItemID      int64
+	RedeemItemName    string
+	RedeemItemCost    int
 }
 
 type quizQuestion struct {
@@ -192,6 +195,12 @@ func main() {
 	mux.HandleFunc("/admin/participants/delete", a.handleAdminDeleteParticipant)
 	mux.HandleFunc("/admin/categories", a.handleAdminCategories)
 	mux.HandleFunc("/admin/questions", a.handleAdminQuestions)
+	mux.HandleFunc("/participant/redeem/items", a.handleParticipantRedeemItems)
+	mux.HandleFunc("/participant/redeem/claim", a.handleParticipantRedeemClaim)
+	mux.HandleFunc("/participant/redeem/claims", a.handleParticipantRedeemClaims)
+	mux.HandleFunc("/admin/redeem/items", a.handleAdminRedeemItems)
+	mux.HandleFunc("/admin/redeem/claims", a.handleAdminRedeemClaims)
+	mux.HandleFunc("/admin/redeem/claims/action", a.handleAdminRedeemClaimAction)
 
 	port := getenv("PORT", "8080")
 	addr := ":" + port
@@ -506,6 +515,40 @@ func (a *app) initDB(ctx context.Context) error {
 	}
 
 	if err := a.migrateParticipantsToUsers(ctx); err != nil {
+		return err
+	}
+
+	// Redeem tables
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS redeem_items (
+			id SERIAL PRIMARY KEY,
+			name TEXT NOT NULL,
+			description TEXT NOT NULL DEFAULT '',
+			point_cost INT NOT NULL,
+			stock INT NOT NULL DEFAULT -1,
+			is_active BOOLEAN NOT NULL DEFAULT TRUE,
+			image_url TEXT NOT NULL DEFAULT '',
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS redeem_claims (
+			id SERIAL PRIMARY KEY,
+			user_id BIGINT NOT NULL,
+			item_id INT NOT NULL,
+			item_name TEXT NOT NULL,
+			point_cost INT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'pending',
+			note TEXT NOT NULL DEFAULT '',
+			claimed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
 		return err
 	}
 
@@ -2173,6 +2216,7 @@ func (a *app) syncTelegramBotCommands(ctx context.Context) error {
 		{"command": "tryout", "description": "Tryout soal acak"},
 		{"command": "leaderbot", "description": "Ranking tryout tercepat"},
 		{"command": "jadwal_belajar", "description": "Atur pengingat belajar"},
+		{"command": "redeem", "description": "Tukar poin dengan hadiah 🎁"},
 		{"command": "batal", "description": "Batalkan proses saat ini"},
 	}
 	payload := map[string]any{"commands": commands}
@@ -2217,6 +2261,12 @@ func (a *app) sendTelegramMessage(ctx context.Context, chatID int64, text, state
 	case "poin_menu":
 		payload["reply_markup"] = map[string]any{
 			"keyboard":          [][]string{{"saldo saya", "transaksi saya"}},
+			"resize_keyboard":   true,
+			"one_time_keyboard": true,
+		}
+	case "redeem_confirm":
+		payload["reply_markup"] = map[string]any{
+			"keyboard":          [][]string{{"ya", "tidak"}},
 			"resize_keyboard":   true,
 			"one_time_keyboard": true,
 		}
@@ -2309,7 +2359,7 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 	}
 	if lower == "/start" {
 		a.resetSession(uid)
-		return "Halo! Perkenalkan saya *Nala* ✨\nAsisten belajarmu di *Naik Kelas* 🎓\n\n📚 *Belajar*\n/quiz — Latihan soal per kategori\n/tryout — Simulasi soal acak\n/leaderbot — Ranking tryout tercepat 🏆\n\n👤 *Akun*\n/daftar — Daftar peserta baru\n/cek — Cek status pendaftaran\n/status — Level, EXP & poin kamu\n/poin — Menu saldo & transaksi poin\n/exp — Detail EXP & level\n\n⏰ *Pengingat*\n/jadwal\\_belajar — Atur jadwal belajar harian\n\n❌ /batal — Batalkan proses yang sedang berjalan\n\nAda yang bisa Nala bantu hari ini? 😊", "idle"
+		return "Halo! Perkenalkan saya *Nala* ✨\nAsisten belajarmu di *Naik Kelas* 🎓\n\n📚 *Belajar*\n/quiz — Latihan soal per kategori\n/tryout — Simulasi soal acak\n/leaderbot — Ranking tryout tercepat 🏆\n\n👤 *Akun*\n/daftar — Daftar peserta baru\n/cek — Cek status pendaftaran\n/status — Level, EXP & poin kamu\n/poin — Menu saldo & transaksi poin\n/exp — Detail EXP & level\n\n🎁 *Reward*\n/redeem — Tukar poin dengan hadiah\n\n⏰ *Pengingat*\n/jadwal\\_belajar — Atur jadwal belajar harian\n\n❌ /batal — Batalkan proses yang sedang berjalan\n\nAda yang bisa Nala bantu hari ini? 😊", "idle"
 	}
 	if lower == "/daftar" {
 		a.mu.Lock()
@@ -2439,6 +2489,43 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		s.UpdatedAt = time.Now()
 		a.mu.Unlock()
 		return "Menu Poin 🌟\nPilih salah satu:\n- saldo saya\n- transaksi saya", "poin_menu"
+	}
+
+	if lower == "/redeem" {
+		registered, err := a.isRegisteredBotUser(ctx, uid)
+		if err != nil {
+			return "Maaf, Nala lagi kesulitan cek akunmu 🙏", "idle"
+		}
+		if !registered {
+			return "Sebelum redeem, kamu perlu daftar dulu ya ✨\nKetik /daftar untuk registrasi.", "idle"
+		}
+		webUserID, err := a.resolveWebUserIDByExternal(ctx, uid)
+		if err != nil {
+			return "Akunmu belum tersinkron. Coba /daftar ulang ya 🙏", "idle"
+		}
+		bal, err := a.getPointBalance(ctx, webUserID)
+		if err != nil {
+			return "Maaf, belum bisa ambil saldo poin sekarang 🙏", "idle"
+		}
+		items, err := a.getActiveRedeemItems(ctx)
+		if err != nil || len(items) == 0 {
+			return "Belum ada hadiah yang tersedia untuk ditukar saat ini 😕\nCek lagi nanti ya!", "idle"
+		}
+		var lines []string
+		lines = append(lines, fmt.Sprintf("🎁 *Menu Redeem Poin*\nSaldo kamu: *%d poin* 🌟\n", bal))
+		for i, it := range items {
+			stock := "∞"
+			if it.Stock >= 0 {
+				stock = fmt.Sprintf("%d", it.Stock)
+			}
+			lines = append(lines, fmt.Sprintf("%d. *%s*\n   💰 %d poin | Stok: %s\n   _%s_", i+1, it.Name, it.PointCost, stock, it.Description))
+		}
+		lines = append(lines, "\nKirim *nomor hadiah* yang ingin kamu tukar (contoh: 1)")
+		a.mu.Lock()
+		s.State = "redeem_choose"
+		s.UpdatedAt = time.Now()
+		a.mu.Unlock()
+		return strings.Join(lines, "\n"), "redeem_choose"
 	}
 
 	if lower == "/jadwal_belajar" {
@@ -2700,6 +2787,98 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 			return "Belum ada transaksi poin untuk akunmu ya.", "poin_menu"
 		}
 		return strings.Join(lines, "\n"), "poin_menu"
+
+	case "redeem_choose":
+		num, err2 := strconv.Atoi(strings.TrimSpace(text))
+		if err2 != nil || num < 1 {
+			return "Kirim nomor hadiah yang valid ya (contoh: 1) 😊", "redeem_choose"
+		}
+		items, err2 := a.getActiveRedeemItems(ctx)
+		if err2 != nil || len(items) == 0 {
+			a.resetSession(uid)
+			return "Maaf, daftar hadiah belum bisa dimuat 🙏", "idle"
+		}
+		if num > len(items) {
+			return fmt.Sprintf("Nomor tidak valid. Pilih antara 1 sampai %d ya.", len(items)), "redeem_choose"
+		}
+		selected := items[num-1]
+		webUserID, err2 := a.resolveWebUserIDByExternal(ctx, uid)
+		if err2 != nil {
+			a.resetSession(uid)
+			return "Akunmu belum tersinkron. Coba /daftar ulang ya 🙏", "idle"
+		}
+		bal, err2 := a.getPointBalance(ctx, webUserID)
+		if err2 != nil {
+			return "Maaf, belum bisa cek saldo poin sekarang 🙏", "redeem_choose"
+		}
+		if bal < selected.PointCost {
+			return fmt.Sprintf("Poin kamu tidak cukup 😕\nSaldo: *%d poin* | Dibutuhkan: *%d poin*\n\nTerus semangat belajar untuk kumpulkan poin ya! 💪", bal, selected.PointCost), "redeem_choose"
+		}
+		a.mu.Lock()
+		s.RedeemItemID = int64(selected.ID)
+		s.RedeemItemName = selected.Name
+		s.RedeemItemCost = selected.PointCost
+		s.State = "redeem_confirm"
+		s.UpdatedAt = time.Now()
+		a.mu.Unlock()
+		return fmt.Sprintf("Konfirmasi penukaran 🎁\n\n*%s*\n_%s_\n\nHarga: *%d poin*\nSaldo kamu: *%d poin*\nSisa setelah redeem: *%d poin*\n\nKetik *ya* untuk konfirmasi, atau *tidak* untuk batal.", selected.Name, selected.Description, selected.PointCost, bal, bal-selected.PointCost), "redeem_confirm"
+
+	case "redeem_confirm":
+		if lower == "tidak" || lower == "batal" {
+			a.resetSession(uid)
+			return "Penukaran dibatalkan. Poin kamu aman 😊\nKetik /redeem untuk lihat hadiah lain.", "idle"
+		}
+		if lower != "ya" {
+			return "Ketik *ya* untuk konfirmasi atau *tidak* untuk batal.", "redeem_confirm"
+		}
+		webUserID, err2 := a.resolveWebUserIDByExternal(ctx, uid)
+		if err2 != nil {
+			a.resetSession(uid)
+			return "Akunmu belum tersinkron. Coba /daftar ulang ya 🙏", "idle"
+		}
+		a.mu.Lock()
+		itemID := s.RedeemItemID
+		itemName := s.RedeemItemName
+		itemCost := s.RedeemItemCost
+		a.mu.Unlock()
+
+		// Cek stok & saldo lagi (double-check)
+		var stock int
+		var isActive bool
+		err2 = a.db.QueryRowContext(ctx, `SELECT stock, is_active FROM redeem_items WHERE id = $1`, itemID).Scan(&stock, &isActive)
+		if err2 != nil || !isActive {
+			a.resetSession(uid)
+			return "Maaf, hadiah ini sudah tidak tersedia 😕", "idle"
+		}
+		if stock == 0 {
+			a.resetSession(uid)
+			return "Maaf, stok hadiah ini sudah habis 😕\nKetik /redeem untuk lihat hadiah lain.", "idle"
+		}
+		bal, err2 := a.getPointBalance(ctx, webUserID)
+		if err2 != nil || bal < itemCost {
+			a.resetSession(uid)
+			return fmt.Sprintf("Poin tidak cukup untuk redeem ini 😕\nSaldo: *%d* | Dibutuhkan: *%d*", bal, itemCost), "idle"
+		}
+		// Kurangi stok jika bukan unlimited
+		if stock > 0 {
+			_, _ = a.db.ExecContext(ctx, `UPDATE redeem_items SET stock = stock - 1 WHERE id = $1 AND stock > 0`, itemID)
+		}
+		// Catat klaim
+		_, err2 = a.db.ExecContext(ctx, `
+			INSERT INTO redeem_claims (user_id, item_id, item_name, point_cost, status)
+			VALUES ($1, $2, $3, $4, 'pending')
+		`, webUserID, itemID, itemName, itemCost)
+		if err2 != nil {
+			a.resetSession(uid)
+			return "Maaf, gagal memproses redeem sekarang 🙏\nCoba lagi sebentar ya.", "idle"
+		}
+		// Potong poin
+		_, _ = a.db.ExecContext(ctx, `
+			INSERT INTO point_ledger (user_id, delta, type, reason)
+			VALUES ($1, $2, 'redeem', $3)
+		`, webUserID, -itemCost, fmt.Sprintf("Redeem: %s", itemName))
+		a.resetSession(uid)
+		return fmt.Sprintf("🎉 *Redeem berhasil!*\n\nHadiah: *%s*\nPoin dipotong: *%d*\n\nKlaim kamu sedang diproses admin ya 📋\nNala akan kabari kamu setelah dikonfirmasi!", itemName, itemCost), "idle"
 
 	case "reminder_set_time", "reminder_update_time":
 		tm, ok := normalizeTimeHHMM(text)
@@ -3461,4 +3640,399 @@ func getenv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// ─── Redeem structs ───────────────────────────────────────────────────────────
+
+type redeemItem struct {
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	PointCost   int    `json:"point_cost"`
+	Stock       int    `json:"stock"`
+	IsActive    bool   `json:"is_active"`
+	ImageURL    string `json:"image_url"`
+	CreatedAt   string `json:"created_at"`
+}
+
+type redeemClaim struct {
+	ID        int64  `json:"id"`
+	UserID    int64  `json:"user_id"`
+	ItemID    int    `json:"item_id"`
+	ItemName  string `json:"item_name"`
+	PointCost int    `json:"point_cost"`
+	Status    string `json:"status"`
+	Note      string `json:"note"`
+	ClaimedAt string `json:"claimed_at"`
+	UpdatedAt string `json:"updated_at"`
+	// joined
+	UserName  string `json:"user_name"`
+	UserPhone string `json:"user_phone"`
+}
+
+// ─── Redeem helpers ───────────────────────────────────────────────────────────
+
+func (a *app) getActiveRedeemItems(ctx context.Context) ([]redeemItem, error) {
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT id, name, description, point_cost, stock, is_active, image_url, created_at
+		FROM redeem_items WHERE is_active = TRUE ORDER BY id ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []redeemItem
+	for rows.Next() {
+		var it redeemItem
+		var ca time.Time
+		if err := rows.Scan(&it.ID, &it.Name, &it.Description, &it.PointCost, &it.Stock, &it.IsActive, &it.ImageURL, &ca); err != nil {
+			return nil, err
+		}
+		it.CreatedAt = ca.Format(time.RFC3339)
+		items = append(items, it)
+	}
+	return items, nil
+}
+
+func (a *app) notifyTelegramUser(ctx context.Context, webUserID int64, msg string) {
+	var telegramUserID string
+	err := a.db.QueryRowContext(ctx, `SELECT telegram_user_id FROM telegram_links WHERE user_id = $1 LIMIT 1`, webUserID).Scan(&telegramUserID)
+	if err != nil || telegramUserID == "" || a.telegramBotToken == "" {
+		return
+	}
+	chatID, err := strconv.ParseInt(telegramUserID, 10, 64)
+	if err != nil {
+		return
+	}
+	_ = a.sendTelegramMessage(ctx, chatID, msg, "idle")
+}
+
+// ─── Participant redeem handlers ──────────────────────────────────────────────
+
+func (a *app) handleParticipantRedeemItems(w http.ResponseWriter, r *http.Request) {
+	userID, _, err := a.requireSession(r)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	_ = userID
+	items, err := a.getActiveRedeemItems(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
+		return
+	}
+	if items == nil {
+		items = []redeemItem{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (a *app) handleParticipantRedeemClaim(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	userID, _, err := a.requireSession(r)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	var req struct {
+		ItemID int `json:"item_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ItemID == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "item_id required"})
+		return
+	}
+	ctx := r.Context()
+
+	// Load item
+	var it redeemItem
+	var ca time.Time
+	err = a.db.QueryRowContext(ctx, `
+		SELECT id, name, description, point_cost, stock, is_active, image_url, created_at
+		FROM redeem_items WHERE id = $1
+	`, req.ItemID).Scan(&it.ID, &it.Name, &it.Description, &it.PointCost, &it.Stock, &it.IsActive, &it.ImageURL, &ca)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "item not found"})
+		return
+	}
+	if !it.IsActive {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "item not available"})
+		return
+	}
+	if it.Stock == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "stok habis"})
+		return
+	}
+
+	// Cek saldo
+	bal, err := a.getPointBalance(ctx, userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
+		return
+	}
+	if bal < it.PointCost {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "poin tidak cukup"})
+		return
+	}
+
+	// Kurangi stok
+	if it.Stock > 0 {
+		_, _ = a.db.ExecContext(ctx, `UPDATE redeem_items SET stock = stock - 1 WHERE id = $1 AND stock > 0`, it.ID)
+	}
+
+	// Buat klaim
+	var claimID int64
+	err = a.db.QueryRowContext(ctx, `
+		INSERT INTO redeem_claims (user_id, item_id, item_name, point_cost, status)
+		VALUES ($1, $2, $3, $4, 'pending') RETURNING id
+	`, userID, it.ID, it.Name, it.PointCost).Scan(&claimID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal buat klaim"})
+		return
+	}
+
+	// Potong poin
+	_, _ = a.db.ExecContext(ctx, `
+		INSERT INTO point_ledger (user_id, delta, type, reason)
+		VALUES ($1, $2, 'redeem', $3)
+	`, userID, -it.PointCost, fmt.Sprintf("Redeem: %s", it.Name))
+
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "claim_id": claimID, "message": "Klaim berhasil! Menunggu konfirmasi admin."})
+}
+
+func (a *app) handleParticipantRedeemClaims(w http.ResponseWriter, r *http.Request) {
+	userID, _, err := a.requireSession(r)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	rows, err := a.db.QueryContext(r.Context(), `
+		SELECT id, item_id, item_name, point_cost, status, note, claimed_at, updated_at
+		FROM redeem_claims WHERE user_id = $1 ORDER BY claimed_at DESC LIMIT 50
+	`, userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
+		return
+	}
+	defer rows.Close()
+	var claims []redeemClaim
+	for rows.Next() {
+		var c redeemClaim
+		var claimedAt, updatedAt time.Time
+		if err := rows.Scan(&c.ID, &c.ItemID, &c.ItemName, &c.PointCost, &c.Status, &c.Note, &claimedAt, &updatedAt); err != nil {
+			continue
+		}
+		c.ClaimedAt = claimedAt.Format(time.RFC3339)
+		c.UpdatedAt = updatedAt.Format(time.RFC3339)
+		claims = append(claims, c)
+	}
+	if claims == nil {
+		claims = []redeemClaim{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": claims})
+}
+
+// ─── Admin redeem handlers ────────────────────────────────────────────────────
+
+func (a *app) handleAdminRedeemItems(w http.ResponseWriter, r *http.Request) {
+	_, role, err := a.requireSession(r)
+	if err != nil || role != "admin" {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	ctx := r.Context()
+	if r.Method == http.MethodGet {
+		rows, err := a.db.QueryContext(ctx, `
+			SELECT id, name, description, point_cost, stock, is_active, image_url, created_at
+			FROM redeem_items ORDER BY id DESC
+		`)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
+			return
+		}
+		defer rows.Close()
+		var items []redeemItem
+		for rows.Next() {
+			var it redeemItem
+			var ca time.Time
+			if err := rows.Scan(&it.ID, &it.Name, &it.Description, &it.PointCost, &it.Stock, &it.IsActive, &it.ImageURL, &ca); err != nil {
+				continue
+			}
+			it.CreatedAt = ca.Format(time.RFC3339)
+			items = append(items, it)
+		}
+		if items == nil {
+			items = []redeemItem{}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+		return
+	}
+	if r.Method == http.MethodPost {
+		var req struct {
+			Action      string `json:"action"`
+			ID          int    `json:"id"`
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			PointCost   int    `json:"point_cost"`
+			Stock       int    `json:"stock"`
+			IsActive    bool   `json:"is_active"`
+			ImageURL    string `json:"image_url"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+			return
+		}
+		switch req.Action {
+		case "create":
+			_, err := a.db.ExecContext(ctx, `
+				INSERT INTO redeem_items (name, description, point_cost, stock, is_active, image_url)
+				VALUES ($1, $2, $3, $4, TRUE, $5)
+			`, req.Name, req.Description, req.PointCost, req.Stock, req.ImageURL)
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal tambah hadiah"})
+				return
+			}
+		case "update":
+			_, err := a.db.ExecContext(ctx, `
+				UPDATE redeem_items SET name=$1, description=$2, point_cost=$3, stock=$4, is_active=$5, image_url=$6
+				WHERE id=$7
+			`, req.Name, req.Description, req.PointCost, req.Stock, req.IsActive, req.ImageURL, req.ID)
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal update hadiah"})
+				return
+			}
+		case "delete":
+			_, err := a.db.ExecContext(ctx, `DELETE FROM redeem_items WHERE id = $1`, req.ID)
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal hapus hadiah"})
+				return
+			}
+		default:
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "action tidak dikenal"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+		return
+	}
+	writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+}
+
+func (a *app) handleAdminRedeemClaims(w http.ResponseWriter, r *http.Request) {
+	_, role, err := a.requireSession(r)
+	if err != nil || role != "admin" {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	rows, err := a.db.QueryContext(r.Context(), `
+		SELECT rc.id, rc.user_id, rc.item_id, rc.item_name, rc.point_cost, rc.status, rc.note, rc.claimed_at, rc.updated_at,
+		       COALESCE(pp.name, ''), COALESCE(pp.phone, '')
+		FROM redeem_claims rc
+		LEFT JOIN participant_profiles pp ON pp.user_id = rc.user_id
+		ORDER BY rc.claimed_at DESC
+		LIMIT 200
+	`)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
+		return
+	}
+	defer rows.Close()
+	var claims []redeemClaim
+	for rows.Next() {
+		var c redeemClaim
+		var claimedAt, updatedAt time.Time
+		if err := rows.Scan(&c.ID, &c.UserID, &c.ItemID, &c.ItemName, &c.PointCost, &c.Status, &c.Note, &claimedAt, &updatedAt, &c.UserName, &c.UserPhone); err != nil {
+			continue
+		}
+		c.ClaimedAt = claimedAt.Format(time.RFC3339)
+		c.UpdatedAt = updatedAt.Format(time.RFC3339)
+		claims = append(claims, c)
+	}
+	if claims == nil {
+		claims = []redeemClaim{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": claims})
+}
+
+func (a *app) handleAdminRedeemClaimAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	_, role, err := a.requireSession(r)
+	if err != nil || role != "admin" {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	var req struct {
+		ClaimID int64  `json:"claim_id"`
+		Action  string `json:"action"` // approve | reject
+		Note    string `json:"note"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+		return
+	}
+	if req.Action != "approve" && req.Action != "reject" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "action harus approve atau reject"})
+		return
+	}
+	ctx := r.Context()
+
+	// Load klaim
+	var c redeemClaim
+	var claimedAt, updatedAt time.Time
+	err = a.db.QueryRowContext(ctx, `
+		SELECT id, user_id, item_id, item_name, point_cost, status, note, claimed_at, updated_at
+		FROM redeem_claims WHERE id = $1
+	`, req.ClaimID).Scan(&c.ID, &c.UserID, &c.ItemID, &c.ItemName, &c.PointCost, &c.Status, &c.Note, &claimedAt, &updatedAt)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "klaim tidak ditemukan"})
+		return
+	}
+	if c.Status != "pending" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "klaim sudah diproses sebelumnya"})
+		return
+	}
+
+	newStatus := req.Action
+	if req.Action == "approve" {
+		newStatus = "approved"
+	} else {
+		newStatus = "rejected"
+	}
+
+	_, err = a.db.ExecContext(ctx, `
+		UPDATE redeem_claims SET status=$1, note=$2, updated_at=NOW() WHERE id=$3
+	`, newStatus, req.Note, req.ClaimID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal update klaim"})
+		return
+	}
+
+	if req.Action == "reject" {
+		// Kembalikan poin
+		_, _ = a.db.ExecContext(ctx, `
+			INSERT INTO point_ledger (user_id, delta, type, reason)
+			VALUES ($1, $2, 'redeem_refund', $3)
+		`, c.UserID, c.PointCost, fmt.Sprintf("Refund redeem: %s", c.ItemName))
+		// Kembalikan stok
+		_, _ = a.db.ExecContext(ctx, `UPDATE redeem_items SET stock = stock + 1 WHERE id = $1 AND stock >= 0`, c.ItemID)
+		// Notif user
+		note := req.Note
+		if note == "" {
+			note = "Tidak ada keterangan"
+		}
+		a.notifyTelegramUser(ctx, c.UserID, fmt.Sprintf("😕 Klaim *%s* kamu ditolak.\nAlasan: _%s_\n\nPoin *%d* sudah dikembalikan ke saldo kamu.", c.ItemName, note, c.PointCost))
+	} else {
+		// Notif user approved
+		note := req.Note
+		if note == "" {
+			note = "Hubungi admin untuk pengambilan hadiah."
+		}
+		a.notifyTelegramUser(ctx, c.UserID, fmt.Sprintf("🎉 Klaim *%s* kamu disetujui!\n_%s_\n\nSelamat Tuanku! Terima kasih sudah semangat belajar 🎓", c.ItemName, note))
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "status": newStatus})
 }
