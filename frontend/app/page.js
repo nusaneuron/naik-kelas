@@ -71,10 +71,7 @@ export default function Page() {
     ]);
     if (mRes.ok) setProfile(await mRes.json());
     if (hRes.ok) setHistory(await hRes.json());
-    if (lRes.ok) {
-      const d = await lRes.json();
-      setLeaderboard(d.items || []);
-    }
+    if (lRes.ok) { const d = await lRes.json(); setLeaderboard(d.items || []); }
     if (rRes.ok) setMyReminder(await rRes.json());
     if (pRes.ok) setMyPoints((await pRes.json()).balance || 0);
     if (phRes.ok) setMyPointHistory((await phRes.json()).items || []);
@@ -135,13 +132,12 @@ export default function Page() {
 
   async function logout() {
     await fetch(`${apiBase}/auth/logout`, { method: 'POST', credentials: 'include' });
-    setMe(null);
-    setProfile(null);
+    setMe(null); setProfile(null);
   }
 
   function openConfirm(type, participant) {
     const actionMap = {
-      role: `Ubah role ${participant.phone} dari ${participant.role} ?`,
+      role: `Ubah role ${participant.phone} dari ${participant.role}?`,
       active: `${participant.is_active ? 'Nonaktifkan' : 'Aktifkan'} akun ${participant.phone}?`,
       delete: `Hapus permanen peserta ${participant.phone}?`
     };
@@ -164,8 +160,7 @@ export default function Page() {
       body: JSON.stringify({ user_id: userId })
     });
     await loadAdmin();
-    setActionType('success'); setActionMsg('Password peserta berhasil direset.');
-    setBusy(false);
+    setActionType('success'); setActionMsg('Password peserta berhasil direset.'); setBusy(false);
   }
 
   async function toggleRole(p) {
@@ -176,8 +171,7 @@ export default function Page() {
       body: JSON.stringify({ user_id: p.id, role: nextRole })
     });
     await loadAdmin();
-    setActionType('success'); setActionMsg(`Role ${p.phone} diubah ke ${nextRole}.`);
-    setBusy(false);
+    setActionType('success'); setActionMsg(`Role ${p.phone} diubah ke ${nextRole}.`); setBusy(false);
   }
 
   async function toggleActive(p) {
@@ -187,8 +181,7 @@ export default function Page() {
       body: JSON.stringify({ user_id: p.id, is_active: !p.is_active })
     });
     await loadAdmin();
-    setActionType('success'); setActionMsg(`Status ${p.phone} berhasil diperbarui.`);
-    setBusy(false);
+    setActionType('success'); setActionMsg(`Status ${p.phone} berhasil diperbarui.`); setBusy(false);
   }
 
   async function deleteParticipant(userId) {
@@ -198,14 +191,9 @@ export default function Page() {
       body: JSON.stringify({ user_id: userId })
     });
     const d = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setActionType('error'); setActionMsg(d.error || 'Gagal menghapus peserta.');
-      setBusy(false);
-      return;
-    }
+    if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal menghapus peserta.'); setBusy(false); return; }
     await loadAdmin();
-    setActionType('success'); setActionMsg('Peserta berhasil dihapus.');
-    setBusy(false);
+    setActionType('success'); setActionMsg('Peserta berhasil dihapus.'); setBusy(false);
   }
 
   async function addCategory() {
@@ -219,8 +207,7 @@ export default function Page() {
     });
     setNewCategoryCode(''); setNewCategoryName(''); setEditingCategoryId('');
     await loadAdmin();
-    setActionType('success'); setActionMsg(isEdit ? 'Kategori berhasil diupdate.' : 'Kategori berhasil ditambahkan.');
-    setBusy(false);
+    setActionType('success'); setActionMsg(isEdit ? 'Kategori berhasil diupdate.' : 'Kategori berhasil ditambahkan.'); setBusy(false);
   }
 
   function startEditCategory(cat) {
@@ -235,12 +222,9 @@ export default function Page() {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ action: 'delete', id: Number(catId) })
     });
-    if (String(editingCategoryId) === String(catId)) {
-      setEditingCategoryId(''); setNewCategoryCode(''); setNewCategoryName('');
-    }
+    if (String(editingCategoryId) === String(catId)) { setEditingCategoryId(''); setNewCategoryCode(''); setNewCategoryName(''); }
     await loadAdmin();
-    setActionType('success'); setActionMsg('Kategori berhasil dihapus.');
-    setBusy(false);
+    setActionType('success'); setActionMsg('Kategori berhasil dihapus.'); setBusy(false);
   }
 
   function startEditQuestion(q) {
@@ -260,12 +244,9 @@ export default function Page() {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ action: 'delete', id: Number(qId) })
     });
-    if (String(editingQuestionId) === String(qId)) {
-      setEditingQuestionId(''); setQCategoryId(''); setQText(''); setQA(''); setQB(''); setQC(''); setQD(''); setQCorrect('A');
-    }
+    if (String(editingQuestionId) === String(qId)) { setEditingQuestionId(''); setQCategoryId(''); setQText(''); setQA(''); setQB(''); setQC(''); setQD(''); setQCorrect('A'); }
     await loadAdmin();
-    setActionType('success'); setActionMsg('Soal berhasil dihapus.');
-    setBusy(false);
+    setActionType('success'); setActionMsg('Soal berhasil dihapus.'); setBusy(false);
   }
 
   async function addQuestion() {
@@ -279,39 +260,27 @@ export default function Page() {
     });
     setQText(''); setQA(''); setQB(''); setQC(''); setQD(''); setQCorrect('A'); setQCategoryId(''); setEditingQuestionId('');
     await loadAdmin();
-    setActionType('success'); setActionMsg(isEdit ? 'Soal berhasil diupdate.' : 'Soal berhasil ditambahkan.');
-    setBusy(false);
+    setActionType('success'); setActionMsg(isEdit ? 'Soal berhasil diupdate.' : 'Soal berhasil ditambahkan.'); setBusy(false);
   }
 
   async function adjustPoints() {
     const normalized = (pointPhone || '').replace(/[^0-9]/g, '');
     const target = participants.find((p) => (p.phone || '').replace(/[^0-9]/g, '') === normalized);
-    if (!target) {
-      setErr('Nomor telepon peserta tidak ditemukan.');
-      setActionType('error'); setActionMsg('Gagal: nomor telepon tidak ditemukan.');
-      return;
-    }
+    if (!target) { setActionType('error'); setActionMsg('Gagal: nomor telepon tidak ditemukan.'); return; }
     setBusy(true); setActionMsg('');
     const endpoint = editingPointEntryId ? '/admin/points/update' : '/admin/points/adjust';
     const payload = editingPointEntryId
       ? { id: Number(editingPointEntryId), delta: Number(pointDelta), reason: pointReason }
       : { user_id: Number(target.id), delta: Number(pointDelta), reason: pointReason };
-
     const res = await fetch(`${apiBase}${endpoint}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify(payload)
     });
     const d = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setActionType('error'); setActionMsg(d.error || 'Gagal update poin.');
-      setBusy(false);
-      return;
-    }
+    if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal update poin.'); setBusy(false); return; }
     setPointPhone(''); setPointDelta(''); setPointReason(''); setEditingPointEntryId('');
-    await loadAdmin();
-    await loadParticipant();
-    setActionType('success'); setActionMsg(editingPointEntryId ? 'Entry poin berhasil diupdate.' : 'Poin peserta berhasil diperbarui.');
-    setBusy(false);
+    await loadAdmin(); await loadParticipant();
+    setActionType('success'); setActionMsg(editingPointEntryId ? 'Entry poin berhasil diupdate.' : 'Poin peserta berhasil diperbarui.'); setBusy(false);
   }
 
   function startEditPointEntry(entry) {
@@ -328,15 +297,9 @@ export default function Page() {
       body: JSON.stringify({ id: Number(entryId) })
     });
     const d = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setActionType('error'); setActionMsg(d.error || 'Gagal menghapus entry poin.');
-      setBusy(false);
-      return;
-    }
-    await loadAdmin();
-    await loadParticipant();
-    setActionType('success'); setActionMsg('Entry poin berhasil dihapus.');
-    setBusy(false);
+    if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal menghapus entry poin.'); setBusy(false); return; }
+    await loadAdmin(); await loadParticipant();
+    setActionType('success'); setActionMsg('Entry poin berhasil dihapus.'); setBusy(false);
   }
 
   async function recalculatePoints() {
@@ -346,15 +309,9 @@ export default function Page() {
       body: JSON.stringify({})
     });
     const d = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setActionType('error'); setActionMsg(d.error || 'Gagal hitung ulang poin.');
-      setBusy(false);
-      return;
-    }
-    await loadAdmin();
-    await loadParticipant();
-    setActionType('success'); setActionMsg(`Recalculate selesai. User dihitung ulang: ${d.recalculated_users ?? '-'}`);
-    setBusy(false);
+    if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal hitung ulang poin.'); setBusy(false); return; }
+    await loadAdmin(); await loadParticipant();
+    setActionType('success'); setActionMsg(`Recalculate selesai. User dihitung ulang: ${d.recalculated_users ?? '-'}`); setBusy(false);
   }
 
   async function saveExpReportSetting() {
@@ -364,14 +321,9 @@ export default function Page() {
       body: JSON.stringify({ time_of_day: expReportSetting.time_of_day, timezone: expReportSetting.timezone, is_active: !!expReportSetting.is_active })
     });
     const d = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setActionType('error'); setActionMsg(d.error || 'Gagal simpan setting laporan EXP.');
-      setBusy(false);
-      return;
-    }
+    if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal simpan setting laporan EXP.'); setBusy(false); return; }
     await loadAdmin();
-    setActionType('success'); setActionMsg('Setting laporan EXP berhasil disimpan.');
-    setBusy(false);
+    setActionType('success'); setActionMsg('Setting laporan EXP berhasil disimpan.'); setBusy(false);
   }
 
   async function updateExpRule(ruleKey, ruleValue) {
@@ -381,328 +333,775 @@ export default function Page() {
       body: JSON.stringify({ rule_key: ruleKey, rule_value: Number(ruleValue) })
     });
     const d = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setActionType('error'); setActionMsg(d.error || 'Gagal update rule EXP.');
-      setBusy(false);
-      return;
-    }
+    if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal update rule EXP.'); setBusy(false); return; }
     await loadAdmin();
-    setActionType('success'); setActionMsg(`Rule EXP ${ruleKey} berhasil diperbarui.`);
-    setBusy(false);
+    setActionType('success'); setActionMsg(`Rule EXP ${ruleKey} berhasil diperbarui.`); setBusy(false);
   }
 
   const matchedParticipant = participants.find((p) => ((p.phone || '').replace(/[^0-9]/g, '') === (pointPhone || '').replace(/[^0-9]/g, '')));
-  const filteredQuestions = questionFilterCategoryId
-    ? questions.filter((q) => String(q.category_id) === String(questionFilterCategoryId))
-    : questions;
+  const filteredQuestions = questionFilterCategoryId ? questions.filter((q) => String(q.category_id) === String(questionFilterCategoryId)) : questions;
   const isAdmin = me?.role === 'admin';
   const showParticipantView = !isAdmin || adminViewMode === 'participant';
   const showAdminView = isAdmin && adminViewMode === 'admin';
 
-  if (loading) return <main style={wrap}><div style={{...card, textAlign:'center'}}><h2 style={{marginTop:0}}>Menyiapkan Portal Naik Kelas...</h2><p className='nk-muted'>Memuat profil, leaderboard, dan riwayat belajar.</p></div></main>;
-
-  if (!me) {
-    return <main style={wrap}><form onSubmit={login} style={card}><h1>Naik Kelas Login</h1><p style={{ color: '#94a3b8' }}>Nomor HP + password</p><input style={input} placeholder='No HP' value={phone} onChange={(e)=>setPhone(e.target.value)} /><input style={{...input, marginTop:8}} type='password' placeholder='Password' value={password} onChange={(e)=>setPassword(e.target.value)} />{err?<p style={{color:'#fca5a5'}}>{err}</p>:null}<button style={btn}>Login</button></form></main>;
+  // ── Loading ──────────────────────────────────────────────
+  if (loading) {
+    return (
+      <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
+        <div style={{ textAlign: 'center', padding: 32 }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: '50%',
+            background: 'linear-gradient(135deg, #be94f5 0%, #ff5734 100%)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 20px', fontSize: 28, boxShadow: '0 8px 24px rgba(190,148,245,0.35)'
+          }}>🎓</div>
+          <h2 style={{ fontFamily: 'Poppins, sans-serif', margin: '0 0 8px', fontSize: 22, color: '#e5e7eb' }}>
+            Naik Kelas
+          </h2>
+          <p style={{ color: '#94a3b8', margin: '0 0 24px', fontSize: 14 }}>Memuat portal belajarmu...</p>
+          <div className="nk-spinner" />
+        </div>
+      </main>
+    );
   }
 
-  return (
-    <main style={{ ...wrap, alignItems: 'start' }}>
-      <div style={{ maxWidth: 1080, width: '100%', margin: '20px auto', padding: 16 }}>
-        <div style={{ ...hero, marginBottom: 16 }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: 34, color: 'var(--nk-ink)' }}>Naik Kelas Portal</h1>
-            <p style={{ margin: '6px 0 0', color: 'rgba(21,19,19,0.8)' }}>{profile?.name || me.phone} · role: {me.role}</p>
+  // ── Login ──────────────────────────────────────────────
+  if (!me) {
+    return (
+      <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 16 }}>
+        <div style={{ width: '100%', maxWidth: 400 }}>
+          {/* Brand */}
+          <div style={{ textAlign: 'center', marginBottom: 32 }}>
+            <div style={{
+              width: 72, height: 72, borderRadius: 20,
+              background: 'linear-gradient(135deg, #be94f5 0%, #9b6de0 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 16px', fontSize: 32,
+              boxShadow: '0 8px 24px rgba(190,148,245,0.4)'
+            }}>🎓</div>
+            <h1 style={{ fontFamily: 'Poppins, sans-serif', margin: '0 0 6px', fontSize: 28, color: '#fff' }}>
+              Naik Kelas
+            </h1>
+            <p style={{ color: '#94a3b8', margin: 0, fontSize: 14 }}>Portal Belajar Peserta</p>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            {isAdmin ? (
+
+          {/* Card */}
+          <form onSubmit={login} style={{
+            border: '1px solid #1e2d45',
+            borderRadius: 20,
+            padding: '28px 24px',
+            background: 'rgba(15,23,42,0.85)',
+            backdropFilter: 'blur(12px)',
+            boxShadow: '0 16px 40px rgba(0,0,0,0.4)'
+          }}>
+            <p style={{ color: '#cbd5e1', margin: '0 0 20px', fontSize: 14, fontWeight: 500 }}>
+              Masuk dengan nomor HP &amp; password
+            </p>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', fontSize: 12, color: '#94a3b8', marginBottom: 6, fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
+                Nomor HP
+              </label>
+              <input
+                className="nk-input"
+                placeholder="Contoh: 08123456789"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', fontSize: 12, color: '#94a3b8', marginBottom: 6, fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
+                Password
+              </label>
+              <input
+                className="nk-input"
+                type="password"
+                placeholder="Masukkan password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+
+            {err && (
+              <div style={{
+                background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)',
+                borderRadius: 10, padding: '10px 14px', marginBottom: 16,
+                color: '#fca5a5', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8
+              }}>
+                <span>⚠️</span> {err}
+              </div>
+            )}
+
+            <button type="submit" style={{
+              width: '100%', border: 0, borderRadius: 12, padding: '12px 0',
+              background: 'linear-gradient(135deg, #ff5734 0%, #e8431f 100%)',
+              color: 'white', fontWeight: 700, fontSize: 15, cursor: 'pointer',
+              boxShadow: '0 4px 16px rgba(255,87,52,0.4)',
+              transition: 'all 180ms ease'
+            }}>
+              Masuk →
+            </button>
+
+            <p style={{ color: '#475569', fontSize: 12, textAlign: 'center', margin: '16px 0 0' }}>
+              Belum punya akun? Daftar via bot Telegram <b style={{ color: '#94a3b8' }}>Nala</b>
+            </p>
+          </form>
+        </div>
+      </main>
+    );
+  }
+
+  // ── Portal ──────────────────────────────────────────────
+  return (
+    <main style={{ minHeight: '100vh', padding: '16px' }}>
+      <div style={{ maxWidth: 1100, width: '100%', margin: '16px auto' }}>
+
+        {/* ── Hero Header ── */}
+        <div style={{
+          background: 'linear-gradient(135deg, #be94f5 0%, #9b6de0 60%, #7c5cbf 100%)',
+          borderRadius: 20, padding: '20px 24px', marginBottom: 20,
+          boxShadow: '0 8px 28px rgba(190,148,245,0.3)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: 14,
+              background: 'rgba(255,255,255,0.2)', display: 'flex',
+              alignItems: 'center', justifyContent: 'center', fontSize: 22,
+              backdropFilter: 'blur(4px)'
+            }}>🎓</div>
+            <div>
+              <h1 style={{ margin: 0, fontSize: 22, fontFamily: 'Poppins, sans-serif', color: '#fff', fontWeight: 800 }}>
+                Naik Kelas Portal
+              </h1>
+              <p style={{ margin: '3px 0 0', color: 'rgba(255,255,255,0.75)', fontSize: 13 }}>
+                {profile?.name || me.phone}
+                <span style={{ margin: '0 8px', opacity: 0.5 }}>·</span>
+                <span style={{
+                  background: 'rgba(255,255,255,0.2)', borderRadius: 99,
+                  padding: '2px 10px', fontSize: 12, fontWeight: 600
+                }}>{me.role}</span>
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            {isAdmin && (
               <>
-                <button onClick={() => setAdminViewMode('participant')} style={{ ...btnMini, background: adminViewMode === 'participant' ? '#111827' : '#374151' }}>Tampilan Peserta</button>
-                <button onClick={() => setAdminViewMode('admin')} style={{ ...btnMini, background: adminViewMode === 'admin' ? '#111827' : '#374151' }}>Tampilan Admin</button>
+                <button
+                  onClick={() => setAdminViewMode('participant')}
+                  style={{
+                    ...btnOutline,
+                    background: adminViewMode === 'participant' ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)',
+                    borderColor: 'rgba(255,255,255,0.3)'
+                  }}
+                >
+                  👤 Peserta
+                </button>
+                <button
+                  onClick={() => setAdminViewMode('admin')}
+                  style={{
+                    ...btnOutline,
+                    background: adminViewMode === 'admin' ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)',
+                    borderColor: 'rgba(255,255,255,0.3)'
+                  }}
+                >
+                  ⚙️ Admin
+                </button>
               </>
-            ) : null}
-            <button onClick={logout} style={btn}>Logout</button>
+            )}
+            <button onClick={logout} style={{
+              border: '1px solid rgba(255,255,255,0.3)',
+              background: 'rgba(255,255,255,0.1)', color: 'white',
+              borderRadius: 10, padding: '7px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600
+            }}>
+              Keluar
+            </button>
           </div>
         </div>
 
-        {me.must_change_password ? <p style={{ color: '#facc15' }}>⚠️ Password default terdeteksi. Ganti via /auth/change-password.</p> : null}
-        {actionMsg ? <div className={`nk-banner ${actionType}`}>{actionMsg}</div> : null}
+        {/* Warning & Banner */}
+        {me.must_change_password && (
+          <div style={{
+            background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)',
+            borderRadius: 12, padding: '12px 16px', marginBottom: 12,
+            color: '#fcd34d', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8
+          }}>
+            ⚠️ Password default terdeteksi. Harap ganti password via <code>/auth/change-password</code>.
+          </div>
+        )}
 
-        {showParticipantView ? (
+        {actionMsg && (
+          <div className={`nk-banner ${actionType}`} style={{ marginBottom: 12 }}>
+            {actionType === 'success' ? '✅' : '❌'} {actionMsg}
+          </div>
+        )}
+
+        {/* ── Participant View ── */}
+        {showParticipantView && (
           <>
-            <div style={summaryGrid}>
-              <section style={card2}><h2>Profil</h2><p><b>Nama:</b> {profile?.name || '-'}</p><p><b>Email:</b> {profile?.email || '-'}</p><p><b>Sumber:</b> {profile?.source || '-'}</p><p><b>Level:</b> {profile?.level || 1}</p><p><b>EXP:</b> {profile?.exp || 0}</p></section>
-              <section style={card2}><h2>Jadwal Belajar</h2>{myReminder?.active ? <p>Aktif tiap hari jam <b>{myReminder.time_of_day}</b> ({myReminder.timezone})</p> : <p>Belum aktif. Atur lewat bot Nala: <b>/jadwal_belajar</b></p>}</section>
-              <section style={card2}><h2>Saldo Poin</h2><p style={{fontSize:30, margin:'8px 0'}}><b>{myPoints}</b> poin 🌟</p><p className='nk-muted'>Total poin yang bisa digunakan saat ini.</p></section>
+            {/* Summary Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14, marginBottom: 14 }}>
+
+              <div className="nk-stat-card purple">
+                <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 10 }}>👤 Profil</div>
+                <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{profile?.name || '-'}</div>
+                <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 2 }}>{profile?.email || '-'}</div>
+                <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+                  <span className="nk-badge nk-badge-purple">Lv. {profile?.level || 1}</span>
+                  <span className="nk-badge nk-badge-yellow">⭐ {profile?.exp || 0} EXP</span>
+                </div>
+              </div>
+
+              <div className="nk-stat-card orange">
+                <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 10 }}>🌟 Saldo Poin</div>
+                <div style={{ fontSize: 38, fontWeight: 800, fontFamily: 'Poppins, sans-serif', color: '#ff7a5c', lineHeight: 1 }}>{myPoints}</div>
+                <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 6 }}>poin tersedia</div>
+              </div>
+
+              <div className="nk-stat-card yellow">
+                <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 10 }}>📅 Jadwal Belajar</div>
+                {myReminder?.active ? (
+                  <>
+                    <div style={{ fontWeight: 700, fontSize: 16 }}>Jam {myReminder.time_of_day}</div>
+                    <div style={{ fontSize: 13, color: '#94a3b8' }}>{myReminder.timezone}</div>
+                    <span className="nk-badge nk-badge-green" style={{ marginTop: 10 }}>● Aktif</span>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 14, color: '#94a3b8', marginBottom: 8 }}>Belum diatur</div>
+                    <div style={{ fontSize: 13, color: '#94a3b8' }}>Atur via bot: <b style={{ color: '#fccc42' }}>/jadwal_belajar</b></div>
+                  </>
+                )}
+              </div>
             </div>
 
-            <section style={card2}>
-              <h2>Riwayat Poin</h2>
+            {/* Riwayat Poin */}
+            <Section title="💰 Riwayat Poin">
               {myPointHistory.length ? (
-                <div style={{overflowX:'auto',overflowY:'auto',maxHeight:320,border:'1px solid #22304d',borderRadius:'var(--nk-radius-md)'}}>
-                  <table style={{width:'max-content',minWidth:760,borderCollapse:'collapse'}}>
-                    <thead><tr><th style={thAdmin}>Delta</th><th style={thAdmin}>Reason</th><th style={thAdmin}>Type</th><th style={thAdmin}>Waktu</th></tr></thead>
-                    <tbody>{myPointHistory.slice(0,50).map((p,i)=><tr key={i}><td style={tdAdmin}>{p.delta > 0 ? `+${p.delta}` : p.delta}</td><td style={tdAdmin}>{p.reason}</td><td style={tdAdmin}>{p.type}</td><td style={tdAdmin}>{new Date(p.created_at).toLocaleString('id-ID')}</td></tr>)}</tbody>
+                <div className="nk-table-wrap" style={{ maxHeight: 280 }}>
+                  <table className="nk-table" style={{ minWidth: 700 }}>
+                    <thead><tr><th>Delta</th><th>Keterangan</th><th>Tipe</th><th>Waktu</th></tr></thead>
+                    <tbody>{myPointHistory.slice(0, 50).map((p, i) => (
+                      <tr key={i}>
+                        <td><span className={`nk-badge ${p.delta > 0 ? 'nk-badge-green' : 'nk-badge-red'}`}>{p.delta > 0 ? `+${p.delta}` : p.delta}</span></td>
+                        <td style={{ color: '#cbd5e1' }}>{p.reason}</td>
+                        <td><span className="nk-badge nk-badge-purple">{p.type}</span></td>
+                        <td style={{ color: '#94a3b8', fontSize: 13 }}>{new Date(p.created_at).toLocaleString('id-ID')}</td>
+                      </tr>
+                    ))}</tbody>
                   </table>
                 </div>
-              ) : <div className='nk-empty'>Belum ada transaksi poin.</div>}
-            </section>
-            <section style={card2}><h2>Leaderbot Tryout</h2><ol>{leaderboard.map((it)=><li key={it.rank}>{it.name} ({it.telegram}) — {it.best_seconds}s (perfect: {it.perfect_count}x)</li>)}{!leaderboard.length?<li>Belum ada data.</li>:null}</ol></section>
-            <div style={summaryGrid}>
-              <section style={card2}>
-                <h2>Riwayat Quiz</h2>
-                {(history.quiz||[]).length ? (
-                  <div style={{overflowX:'auto',overflowY:'auto',maxHeight:320,border:'1px solid #22304d',borderRadius:'var(--nk-radius-md)'}}>
-                    <table style={{width:'max-content',minWidth:840,borderCollapse:'collapse'}}>
-                      <thead><tr><th style={thAdmin}>Kategori</th><th style={thAdmin}>Attempt</th><th style={thAdmin}>Salah</th><th style={thAdmin}>Total Soal</th><th style={thAdmin}>Status</th></tr></thead>
-                      <tbody>{(history.quiz||[]).map((q,i)=><tr key={i}><td style={tdAdmin}>{q.category}</td><td style={tdAdmin}>#{q.attempt_no}</td><td style={tdAdmin}>{q.wrong_count}</td><td style={tdAdmin}>{q.total_questions}</td><td style={tdAdmin}>{q.all_correct?'LULUS':'BELUM'}</td></tr>)}</tbody>
+              ) : <div className="nk-empty">📭 Belum ada transaksi poin.</div>}
+            </Section>
+
+            {/* Leaderboard */}
+            <Section title="🏆 Leaderbot Tryout">
+              {leaderboard.length ? (
+                <div className="nk-table-wrap" style={{ maxHeight: 280 }}>
+                  <table className="nk-table" style={{ minWidth: 500 }}>
+                    <thead><tr><th>#</th><th>Nama</th><th>Telegram</th><th>Waktu Terbaik</th><th>Perfect</th></tr></thead>
+                    <tbody>{leaderboard.map((it) => (
+                      <tr key={it.rank}>
+                        <td>
+                          <span style={{ fontWeight: 700, color: it.rank === 1 ? '#fccc42' : it.rank === 2 ? '#94a3b8' : it.rank === 3 ? '#cd7c3c' : '#e5e7eb' }}>
+                            {it.rank === 1 ? '🥇' : it.rank === 2 ? '🥈' : it.rank === 3 ? '🥉' : `#${it.rank}`}
+                          </span>
+                        </td>
+                        <td style={{ fontWeight: 600 }}>{it.name}</td>
+                        <td style={{ color: '#94a3b8' }}>@{it.telegram}</td>
+                        <td><span className="nk-badge nk-badge-orange">⚡ {it.best_seconds}s</span></td>
+                        <td><span className="nk-badge nk-badge-purple">{it.perfect_count}x</span></td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              ) : <div className="nk-empty">🏆 Belum ada data leaderboard.</div>}
+            </Section>
+
+            {/* Riwayat */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 14 }}>
+              <Section title="🧠 Riwayat Quiz">
+                {(history.quiz || []).length ? (
+                  <div className="nk-table-wrap" style={{ maxHeight: 280 }}>
+                    <table className="nk-table" style={{ minWidth: 500 }}>
+                      <thead><tr><th>Kategori</th><th>Attempt</th><th>Salah</th><th>Total</th><th>Status</th></tr></thead>
+                      <tbody>{(history.quiz || []).map((q, i) => (
+                        <tr key={i}>
+                          <td style={{ fontWeight: 600 }}>{q.category}</td>
+                          <td style={{ color: '#94a3b8' }}>#{q.attempt_no}</td>
+                          <td style={{ color: q.wrong_count > 0 ? '#f87171' : '#4ade80' }}>{q.wrong_count}</td>
+                          <td>{q.total_questions}</td>
+                          <td><span className={`nk-badge ${q.all_correct ? 'nk-badge-green' : 'nk-badge-yellow'}`}>{q.all_correct ? '✓ LULUS' : '○ BELUM'}</span></td>
+                        </tr>
+                      ))}</tbody>
                     </table>
                   </div>
-                ) : <div className='nk-empty'>Belum ada riwayat quiz.</div>}
-              </section>
-              <section style={card2}>
-                <h2>Riwayat Tryout</h2>
-                {(history.tryout||[]).length ? (
-                  <div style={{overflowX:'auto',overflowY:'auto',maxHeight:320,border:'1px solid #22304d',borderRadius:'var(--nk-radius-md)'}}>
-                    <table style={{width:'max-content',minWidth:900,borderCollapse:'collapse'}}>
-                      <thead><tr><th style={thAdmin}>Benar</th><th style={thAdmin}>Total Soal</th><th style={thAdmin}>Durasi (detik)</th><th style={thAdmin}>Kecepatan (qpm)</th><th style={thAdmin}>Status</th></tr></thead>
-                      <tbody>{(history.tryout||[]).map((t,i)=><tr key={i}><td style={tdAdmin}>{t.correct_count}</td><td style={tdAdmin}>{t.total_questions}</td><td style={tdAdmin}>{t.duration_seconds}</td><td style={tdAdmin}>{Number(t.speed_qpm||0).toFixed(2)}</td><td style={tdAdmin}>{t.all_correct?'PERFECT':'BELUM'}</td></tr>)}</tbody>
+                ) : <div className="nk-empty">📚 Belum ada riwayat quiz.</div>}
+              </Section>
+
+              <Section title="🚀 Riwayat Tryout">
+                {(history.tryout || []).length ? (
+                  <div className="nk-table-wrap" style={{ maxHeight: 280 }}>
+                    <table className="nk-table" style={{ minWidth: 520 }}>
+                      <thead><tr><th>Benar</th><th>Total</th><th>Durasi</th><th>Kecepatan</th><th>Status</th></tr></thead>
+                      <tbody>{(history.tryout || []).map((t, i) => (
+                        <tr key={i}>
+                          <td style={{ fontWeight: 600 }}>{t.correct_count}</td>
+                          <td>{t.total_questions}</td>
+                          <td style={{ color: '#94a3b8' }}>{t.duration_seconds}s</td>
+                          <td><span className="nk-badge nk-badge-orange">{Number(t.speed_qpm || 0).toFixed(2)} qpm</span></td>
+                          <td><span className={`nk-badge ${t.all_correct ? 'nk-badge-green' : 'nk-badge-yellow'}`}>{t.all_correct ? '⭐ PERFECT' : '○ BELUM'}</span></td>
+                        </tr>
+                      ))}</tbody>
                     </table>
                   </div>
-                ) : <div className='nk-empty'>Belum ada riwayat tryout.</div>}
-              </section>
+                ) : <div className="nk-empty">🚀 Belum ada riwayat tryout.</div>}
+              </Section>
             </div>
           </>
-        ) : null}
+        )}
 
-        {showAdminView ? (
-          <section style={{ ...card2, padding: 0 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '220px minmax(0,1fr)', minHeight: 520 }}>
-              <aside style={{ background: '#0b0f1a', borderRight: '1px solid #273244', padding: 14 }}>
-                <h3 style={{ marginTop: 4, marginBottom: 14 }}>Admin Menu</h3>
-                <div style={{ display: 'grid', gap: 8 }}>
-                  {[
-                    ['peserta', 'Peserta'],
-                    ['bank', 'Bank Soal'],
-                    ['jadwal', 'Jadwal Belajar'],
-                    ['poin', 'Poin'],
-                    ['exp', 'EXP']
-                  ].map(([key, label]) => (
-                    <button
-                      key={key}
-                      onClick={() => setAdminSection(key)}
-                      style={{
-                        ...btnMini,
-                        textAlign: 'left',
-                        background: adminSection === key ? 'var(--nk-bg-main)' : '#1f2937',
-                        color: adminSection === key ? 'var(--nk-ink)' : 'white',
-                        fontWeight: 700
-                      }}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </aside>
+        {/* ── Admin View ── */}
+        {showAdminView && (
+          <div style={{
+            border: '1px solid #1e2d45', borderRadius: 16,
+            background: '#0b1220', overflow: 'hidden',
+            display: 'grid', gridTemplateColumns: '210px minmax(0,1fr)', minHeight: 560
+          }}>
+            {/* Sidebar */}
+            <aside style={{ background: '#080d18', borderRight: '1px solid #1e2d45', padding: '20px 12px' }}>
+              <p style={{ fontSize: 11, color: '#475569', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', margin: '0 0 12px 8px' }}>
+                Menu Admin
+              </p>
+              <nav style={{ display: 'grid', gap: 4 }}>
+                {[
+                  ['peserta', '👥', 'Peserta'],
+                  ['bank', '📚', 'Bank Soal'],
+                  ['jadwal', '📅', 'Jadwal Belajar'],
+                  ['poin', '💰', 'Poin'],
+                  ['exp', '⭐', 'EXP'],
+                ].map(([key, icon, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setAdminSection(key)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '9px 12px', borderRadius: 10, cursor: 'pointer',
+                      border: adminSection === key ? '1px solid rgba(190,148,245,0.3)' : '1px solid transparent',
+                      background: adminSection === key ? 'rgba(190,148,245,0.12)' : 'transparent',
+                      color: adminSection === key ? '#be94f5' : '#94a3b8',
+                      fontWeight: adminSection === key ? 700 : 500,
+                      fontSize: 14, textAlign: 'left', transition: 'all 160ms ease'
+                    }}
+                  >
+                    <span>{icon}</span> {label}
+                  </button>
+                ))}
+              </nav>
+            </aside>
 
-              <div style={{ padding: 16, overflowX: 'auto' }}>
-                {adminSection === 'peserta' ? (
-                  <section style={card2}>
-                    <h2>Admin · Peserta</h2>
-                    {participants.length ? (
-                      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 520, border: '1px solid #22304d', borderRadius: 'var(--nk-radius-md)', WebkitOverflowScrolling: 'touch', touchAction: 'pan-x pan-y' }}>
-                        <table style={{ width: 'max-content', borderCollapse: 'collapse', minWidth: 1250 }}>
-                          <thead>
-                            <tr>
-                              <th style={thAdmin}>Nama</th>
-                              <th style={thAdmin}>No. HP</th>
-                              <th style={thAdmin}>Role</th>
-                              <th style={thAdmin}>Status</th>
-                              <th style={thAdmin}>Aksi</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {participants.map((p) => (
-                              <tr key={p.id}>
-                                <td style={tdAdmin}>{p.name || '-'}</td>
-                                <td style={tdAdmin}>{p.phone}</td>
-                                <td style={tdAdmin}><b>{p.role}</b></td>
-                                <td style={tdAdmin}>{p.is_active ? 'active' : 'non-active'}</td>
-                                <td style={tdAdmin}>
-                                  <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap' }}>
-                                    <button style={btnMini} disabled={busy} onClick={() => resetPassword(p.id)}>Reset Pass</button>
-                                    <button style={btnMini} disabled={busy} onClick={() => openConfirm('role', p)}>{p.role === 'admin' ? 'Jadi Participant' : 'Jadi Admin'}</button>
-                                    <button style={btnMini} disabled={busy} onClick={() => openConfirm('active', p)}>{p.is_active ? 'Non Aktifkan' : 'Aktifkan'}</button>
-                                    <button style={{ ...btnMini, background: '#7f1d1d', borderColor: '#b91c1c' }} disabled={busy} onClick={() => openConfirm('delete', p)}>Hapus</button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : <div className='nk-empty'>Belum ada peserta.</div>}
-                  </section>
-                ) : null}
+            {/* Content */}
+            <div style={{ padding: 20, overflowX: 'auto' }}>
 
-                {adminSection === 'bank' ? (
-                  <>
-                    <section style={card2}><h2>Admin · Kategori Soal</h2><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><input style={inputSmall} placeholder='code' value={newCategoryCode} onChange={(e)=>setNewCategoryCode(e.target.value)} /><input style={inputSmall} placeholder='name' value={newCategoryName} onChange={(e)=>setNewCategoryName(e.target.value)} /><button style={btnMini} disabled={busy} onClick={addCategory}>{busy?'Proses...':(editingCategoryId ? 'Update' : 'Tambah')}</button>{editingCategoryId ? <button style={btnMini} disabled={busy} onClick={() => { setEditingCategoryId(''); setNewCategoryCode(''); setNewCategoryName(''); }}>Batal</button> : null}</div><div style={{display:'grid',gap:10,gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',marginTop:12}}>{categories.map((c)=><div key={c.id} style={{border:'1px solid #334155',borderRadius:'var(--nk-radius-md)',padding:12,background:'#111827'}}><div style={{fontWeight:700}}>{c.name}</div><div className='nk-muted' style={{marginBottom:8}}>{c.code}</div><div style={{display:'flex',gap:8}}><button style={btnMini} disabled={busy} onClick={()=>startEditCategory(c)}>Edit</button><button style={{...btnMini, background:'#7f1d1d', borderColor:'#b91c1c'}} disabled={busy} onClick={()=>deleteCategory(c.id)}>Delete</button></div></div>)}{!categories.length?<div className='nk-empty'>Belum ada kategori.</div>:null}</div></section>
-                    <section style={card2}><h2>Admin · Bank Soal</h2><div style={{display:'grid',gap:8}}><label style={fieldLabel}>Kategori Soal</label><select style={input} value={qCategoryId} onChange={(e)=>setQCategoryId(e.target.value)}><option value=''>Pilih kategori</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select><label style={fieldLabel}>Pertanyaan</label><input style={input} placeholder='Masukkan pertanyaan' value={qText} onChange={(e)=>setQText(e.target.value)} /><label style={fieldLabel}>Jawaban A</label><input style={input} placeholder='Isi opsi A' value={qA} onChange={(e)=>setQA(e.target.value)} /><label style={fieldLabel}>Jawaban B</label><input style={input} placeholder='Isi opsi B' value={qB} onChange={(e)=>setQB(e.target.value)} /><label style={fieldLabel}>Jawaban C</label><input style={input} placeholder='Isi opsi C' value={qC} onChange={(e)=>setQC(e.target.value)} /><label style={fieldLabel}>Jawaban D</label><input style={input} placeholder='Isi opsi D' value={qD} onChange={(e)=>setQD(e.target.value)} /><label style={fieldLabel}>Jawaban Benar</label><select style={input} value={qCorrect} onChange={(e)=>setQCorrect(e.target.value)}><option>A</option><option>B</option><option>C</option><option>D</option></select><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><button style={btnMini} disabled={busy} onClick={addQuestion}>{busy?'Proses...':(editingQuestionId ? 'Update Soal' : 'Tambah Soal')}</button>{editingQuestionId ? <button style={btnMini} disabled={busy} onClick={() => { setEditingQuestionId(''); setQCategoryId(''); setQText(''); setQA(''); setQB(''); setQC(''); setQD(''); setQCorrect('A'); }}>Batal</button> : null}</div></div><p className='nk-muted'>Total soal: {questions.length}</p><div style={{marginTop:12}}><label style={{display:'block',marginBottom:6}}>Filter daftar soal berdasarkan kategori</label><select style={input} value={questionFilterCategoryId} onChange={(e)=>setQuestionFilterCategoryId(e.target.value)}><option value=''>Semua kategori</option>{categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div><div style={{display:'grid',gap:10,gridTemplateColumns:'repeat(auto-fit,minmax(260px,1fr))',marginTop:10}}>{filteredQuestions.map((q)=><div key={q.id} style={{border:'1px solid #334155',borderRadius:'var(--nk-radius-md)',padding:12,background:'#111827'}}><div style={{fontWeight:700,marginBottom:4}}>{q.category_name}</div><div style={{marginBottom:8}}>{q.question_text}</div><div className='nk-muted' style={{fontSize:13,marginBottom:8}}>A. {q.option_a} | B. {q.option_b} | C. {q.option_c} | D. {q.option_d} | Jawaban: {q.correct_option}</div><div style={{display:'flex',gap:8}}><button style={btnMini} disabled={busy} onClick={()=>startEditQuestion(q)}>Edit</button><button style={{...btnMini, background:'#7f1d1d', borderColor:'#b91c1c'}} disabled={busy} onClick={()=>deleteQuestion(q.id)}>Delete</button></div></div>)}{!filteredQuestions.length?<div className='nk-empty'>Tidak ada soal untuk kategori ini.</div>:null}</div></section>
-                  </>
-                ) : null}
-
-                {adminSection === 'jadwal' ? (
-                  <section style={card2}>
-                    <h2>Admin · Jadwal Belajar Peserta</h2>
-                    {adminReminders.length ? (
-                      <div style={{overflowX:'auto',overflowY:'auto',maxHeight:420,border:'1px solid #22304d',borderRadius:'var(--nk-radius-md)'}}>
-                        <table style={{width:'max-content',minWidth:860,borderCollapse:'collapse'}}>
-                          <thead><tr><th style={thAdmin}>Nama</th><th style={thAdmin}>No. HP</th><th style={thAdmin}>Jam</th><th style={thAdmin}>Timezone</th><th style={thAdmin}>Status</th></tr></thead>
-                          <tbody>
-                            {adminReminders.map((r, i)=>(
-                              <tr key={i}>
-                                <td style={tdAdmin}>{r.name || '-'}</td>
-                                <td style={tdAdmin}>{r.phone || '-'}</td>
-                                <td style={tdAdmin}>{r.time_of_day}</td>
-                                <td style={tdAdmin}>{r.timezone}</td>
-                                <td style={tdAdmin}>{r.is_active ? 'aktif' : 'nonaktif'}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : <div className='nk-empty'>Belum ada jadwal belajar yang diset.</div>}
-                  </section>
-                ) : null}
-
-                {adminSection === 'poin' ? (
-                  <section style={card2}>
-                    <h2>Admin · Poin Peserta</h2>
-                    <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                      <input style={inputSmall} placeholder='nomor telepon peserta' value={pointPhone} onChange={(e)=>setPointPhone(e.target.value)} />
-                      <input style={inputSmall} placeholder='delta (+/-)' value={pointDelta} onChange={(e)=>setPointDelta(e.target.value)} />
-                      <input style={inputSmall} placeholder='reason' value={pointReason} onChange={(e)=>setPointReason(e.target.value)} />
-                      <button style={btnMini} disabled={busy} onClick={adjustPoints}>{busy?'Proses...':(editingPointEntryId ? 'Update Entry' : 'Submit Poin')}</button>
-                      {editingPointEntryId ? <button style={btnMini} disabled={busy} onClick={() => { setEditingPointEntryId(''); setPointPhone(''); setPointDelta(''); setPointReason(''); }}>Batal</button> : null}
-                      <button style={btnMini} disabled={busy} onClick={recalculatePoints}>{busy?'Proses...':'Hitung Ulang Poin'}</button>
+              {/* Admin — Peserta */}
+              {adminSection === 'peserta' && (
+                <AdminSection title="👥 Peserta">
+                  {participants.length ? (
+                    <div className="nk-table-wrap" style={{ maxHeight: 520 }}>
+                      <table className="nk-table" style={{ minWidth: 1100 }}>
+                        <thead><tr><th>Nama</th><th>No. HP</th><th>Role</th><th>Status</th><th>Aksi</th></tr></thead>
+                        <tbody>{participants.map((p) => (
+                          <tr key={p.id}>
+                            <td style={{ fontWeight: 600 }}>{p.name || '-'}</td>
+                            <td style={{ color: '#94a3b8' }}>{p.phone}</td>
+                            <td><span className={`nk-badge ${p.role === 'admin' ? 'nk-badge-orange' : 'nk-badge-purple'}`}>{p.role}</span></td>
+                            <td><span className={`nk-badge ${p.is_active ? 'nk-badge-green' : 'nk-badge-red'}`}>{p.is_active ? '● Aktif' : '○ Nonaktif'}</span></td>
+                            <td>
+                              <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap' }}>
+                                <BtnSm disabled={busy} onClick={() => resetPassword(p.id)}>Reset Pass</BtnSm>
+                                <BtnSm disabled={busy} onClick={() => openConfirm('role', p)}>{p.role === 'admin' ? '↓ Peserta' : '↑ Admin'}</BtnSm>
+                                <BtnSm disabled={busy} onClick={() => openConfirm('active', p)}>{p.is_active ? 'Nonaktifkan' : 'Aktifkan'}</BtnSm>
+                                <BtnSm disabled={busy} onClick={() => openConfirm('delete', p)} danger>Hapus</BtnSm>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}</tbody>
+                      </table>
                     </div>
-                    <p className='nk-muted' style={{ marginTop:8 }}>Nama terdeteksi: <b>{matchedParticipant?.name || '-'}</b>{matchedParticipant?.phone ? ` (${matchedParticipant.phone})` : ''}</p>
+                  ) : <div className="nk-empty">👥 Belum ada peserta.</div>}
+                </AdminSection>
+              )}
 
-                    <h3 style={{ marginTop: 14, marginBottom: 8 }}>Saldo Akhir Tiap Peserta</h3>
-                    {adminPointBalances.length ? (
-                      <div style={{overflowX:'auto',overflowY:'auto',maxHeight:260,border:'1px solid #22304d',borderRadius:'var(--nk-radius-md)'}}>
-                        <table style={{width:'max-content',minWidth:760,borderCollapse:'collapse'}}>
-                          <thead><tr><th style={thAdmin}>Nama</th><th style={thAdmin}>No. HP</th><th style={thAdmin}>Saldo Akhir</th></tr></thead>
-                          <tbody>
-                            {adminPointBalances.map((b)=> (
-                              <tr key={b.user_id}>
-                                <td style={tdAdmin}>{b.name || '-'}</td>
-                                <td style={tdAdmin}>{b.phone || '-'}</td>
-                                <td style={tdAdmin}><b>{b.balance}</b> poin</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : <div className='nk-empty'>Belum ada saldo poin peserta.</div>}
-
-                    <h3 style={{ marginTop: 16, marginBottom: 8 }}>Riwayat Transaksi Poin</h3>
-                    {adminPointHistory.length ? (
-                      <div style={{overflowX:'auto',overflowY:'auto',maxHeight:420,border:'1px solid #22304d',borderRadius:'var(--nk-radius-md)'}}>
-                        <table style={{width:'max-content',minWidth:980,borderCollapse:'collapse'}}>
-                          <thead><tr><th style={thAdmin}>Nama</th><th style={thAdmin}>No. HP</th><th style={thAdmin}>Delta</th><th style={thAdmin}>Reason</th><th style={thAdmin}>Type</th><th style={thAdmin}>Waktu</th><th style={thAdmin}>Aksi</th></tr></thead>
-                          <tbody>{adminPointHistory.slice(0,100).map((p)=><tr key={p.id}><td style={tdAdmin}>{p.name || '-'}</td><td style={tdAdmin}>{p.phone || '-'}</td><td style={tdAdmin}>{p.delta>0?`+${p.delta}`:p.delta}</td><td style={tdAdmin}>{p.reason}</td><td style={tdAdmin}>{p.type}</td><td style={tdAdmin}>{new Date(p.created_at).toLocaleString('id-ID')}</td><td style={tdAdmin}><div style={{display:'flex',gap:6}}><button style={btnMini} disabled={busy} onClick={()=>startEditPointEntry(p)}>Edit</button><button style={{...btnMini, background:'#7f1d1d', borderColor:'#b91c1c'}} disabled={busy} onClick={()=>deletePointEntry(p.id)}>Hapus</button></div></td></tr>)}</tbody>
-                        </table>
-                      </div>
-                    ) : <div className='nk-empty'>Belum ada transaksi poin.</div>}
-                  </section>
-                ) : null}
-
-                {adminSection === 'exp' ? (
-                  <section style={card2}>
-                    <h2>Admin · EXP Peserta</h2>
-
-                    <h3 style={{ marginTop: 10, marginBottom: 8 }}>Setting Laporan EXP Harian</h3>
-                    <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',marginBottom:10}}>
-                      <input style={inputSmall} type='time' value={expReportSetting.time_of_day || '10:00'} onChange={(e)=>setExpReportSetting((s)=>({...s,time_of_day:e.target.value}))} />
-                      <input style={inputSmall} placeholder='Timezone (contoh: Asia/Jakarta)' value={expReportSetting.timezone || 'Asia/Jakarta'} onChange={(e)=>setExpReportSetting((s)=>({...s,timezone:e.target.value}))} />
-                      <label style={{display:'flex',alignItems:'center',gap:6,fontSize:14}}><input type='checkbox' checked={!!expReportSetting.is_active} onChange={(e)=>setExpReportSetting((s)=>({...s,is_active:e.target.checked}))} /> Aktif</label>
-                      <button style={btnMini} disabled={busy} onClick={saveExpReportSetting}>{busy?'Proses...':'Simpan Setting Laporan'}</button>
+              {/* Admin — Bank Soal */}
+              {adminSection === 'bank' && (
+                <>
+                  <AdminSection title="📂 Kategori Soal">
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+                      <input className="nk-input-sm" placeholder="Kode" style={{ width: 120 }} value={newCategoryCode} onChange={(e) => setNewCategoryCode(e.target.value)} />
+                      <input className="nk-input-sm" placeholder="Nama kategori" style={{ width: 200 }} value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
+                      <BtnSm disabled={busy} onClick={addCategory}>{busy ? '...' : (editingCategoryId ? 'Update' : '+ Tambah')}</BtnSm>
+                      {editingCategoryId && <BtnSm disabled={busy} onClick={() => { setEditingCategoryId(''); setNewCategoryCode(''); setNewCategoryName(''); }}>Batal</BtnSm>}
                     </div>
-                    <p className='nk-muted'>Laporan level+EXP seluruh peserta otomatis dikirim ke seluruh peserta Telegram tiap hari sesuai jam di atas (default 10:00).</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
+                      {categories.map((c) => (
+                        <div key={c.id} style={{
+                          border: '1px solid #1e2d45', borderRadius: 12,
+                          padding: '14px 16px', background: '#0f172a'
+                        }}>
+                          <div style={{ fontWeight: 700, marginBottom: 2 }}>{c.name}</div>
+                          <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 12 }}>{c.code}</div>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <BtnSm disabled={busy} onClick={() => startEditCategory(c)}>Edit</BtnSm>
+                            <BtnSm disabled={busy} onClick={() => deleteCategory(c.id)} danger>Hapus</BtnSm>
+                          </div>
+                        </div>
+                      ))}
+                      {!categories.length && <div className="nk-empty">Belum ada kategori.</div>}
+                    </div>
+                  </AdminSection>
 
-                    <h3 style={{ marginTop: 10, marginBottom: 8 }}>Rules EXP (editable)</h3>
-                    {adminExpRules.length ? (
-                      <div style={{overflowX:'auto',border:'1px solid #22304d',borderRadius:'var(--nk-radius-md)'}}>
-                        <table style={{width:'100%',borderCollapse:'collapse',minWidth:720}}>
-                          <thead><tr><th style={thAdmin}>Rule</th><th style={thAdmin}>Value</th><th style={thAdmin}>Aksi</th></tr></thead>
-                          <tbody>
-                            {adminExpRules.map((r)=>(
-                              <tr key={r.rule_key}>
-                                <td style={tdAdmin}>{r.rule_key}</td>
-                                <td style={tdAdmin}><input style={{...inputSmall, width:120}} type='number' min='1' defaultValue={r.rule_value} id={`rule-${r.rule_key}`} /></td>
-                                <td style={tdAdmin}><button style={btnMini} disabled={busy} onClick={()=>{ const el=document.getElementById(`rule-${r.rule_key}`); updateExpRule(r.rule_key, el?.value || r.rule_value); }}>Simpan</button></td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                  <AdminSection title="📝 Bank Soal" style={{ marginTop: 14 }}>
+                    <div style={{ display: 'grid', gap: 10, marginBottom: 16 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        <div>
+                          <label style={fieldLbl}>Kategori</label>
+                          <select className="nk-input" value={qCategoryId} onChange={(e) => setQCategoryId(e.target.value)}>
+                            <option value="">Pilih kategori</option>
+                            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={fieldLbl}>Jawaban Benar</label>
+                          <select className="nk-input" value={qCorrect} onChange={(e) => setQCorrect(e.target.value)}>
+                            <option>A</option><option>B</option><option>C</option><option>D</option>
+                          </select>
+                        </div>
                       </div>
-                    ) : <div className='nk-empty'>Rule EXP belum tersedia.</div>}
-
-                    <h3 style={{ marginTop: 16, marginBottom: 8 }}>Status Level & EXP Peserta</h3>
-                    {adminExpStatus.length ? (
-                      <div style={{overflowX:'auto',overflowY:'auto',maxHeight:320,border:'1px solid #22304d',borderRadius:'var(--nk-radius-md)'}}>
-                        <table style={{width:'max-content',minWidth:860,borderCollapse:'collapse'}}>
-                          <thead><tr><th style={thAdmin}>Nama</th><th style={thAdmin}>No. HP</th><th style={thAdmin}>Level</th><th style={thAdmin}>EXP</th><th style={thAdmin}>Progress</th></tr></thead>
-                          <tbody>{adminExpStatus.map((s)=><tr key={s.user_id}><td style={tdAdmin}>{s.name || '-'}</td><td style={tdAdmin}>{s.phone || '-'}</td><td style={tdAdmin}>{s.level}</td><td style={tdAdmin}>{s.exp}</td><td style={tdAdmin}>{s.progress}/{s.level_step}</td></tr>)}</tbody>
-                        </table>
+                      <div>
+                        <label style={fieldLbl}>Pertanyaan</label>
+                        <input className="nk-input" placeholder="Teks pertanyaan" value={qText} onChange={(e) => setQText(e.target.value)} />
                       </div>
-                    ) : <div className='nk-empty'>Belum ada data EXP peserta.</div>}
-
-                    <h3 style={{ marginTop: 16, marginBottom: 8 }}>History EXP Peserta</h3>
-                    {adminExpHistory.length ? (
-                      <div style={{overflowX:'auto',overflowY:'auto',maxHeight:380,border:'1px solid #22304d',borderRadius:'var(--nk-radius-md)'}}>
-                        <table style={{width:'max-content',minWidth:980,borderCollapse:'collapse'}}>
-                          <thead><tr><th style={thAdmin}>Nama</th><th style={thAdmin}>No. HP</th><th style={thAdmin}>Delta EXP</th><th style={thAdmin}>Type</th><th style={thAdmin}>Reason</th><th style={thAdmin}>Waktu</th></tr></thead>
-                          <tbody>{adminExpHistory.map((h)=><tr key={h.id}><td style={tdAdmin}>{h.name || '-'}</td><td style={tdAdmin}>{h.phone || '-'}</td><td style={tdAdmin}>{h.delta}</td><td style={tdAdmin}>{h.type}</td><td style={tdAdmin}>{h.reason}</td><td style={tdAdmin}>{new Date(h.created_at).toLocaleString('id-ID')}</td></tr>)}</tbody>
-                        </table>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        {[['A', qA, setQA], ['B', qB, setQB], ['C', qC, setQC], ['D', qD, setQD]].map(([lbl, val, setter]) => (
+                          <div key={lbl}>
+                            <label style={fieldLbl}>Opsi {lbl}</label>
+                            <input className="nk-input" placeholder={`Jawaban ${lbl}`} value={val} onChange={(e) => setter(e.target.value)} />
+                          </div>
+                        ))}
                       </div>
-                    ) : <div className='nk-empty'>Belum ada history EXP.</div>}
-                  </section>
-                ) : null}
-              </div>
-            </div>
-          </section>
-        ) : null}
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <BtnSm disabled={busy} onClick={addQuestion}>{busy ? '...' : (editingQuestionId ? 'Update Soal' : '+ Tambah Soal')}</BtnSm>
+                        {editingQuestionId && <BtnSm disabled={busy} onClick={() => { setEditingQuestionId(''); setQCategoryId(''); setQText(''); setQA(''); setQB(''); setQC(''); setQD(''); setQCorrect('A'); }}>Batal</BtnSm>}
+                      </div>
+                    </div>
 
-        {confirmAction ? (
-          <div style={modalOverlay}>
-            <div style={modalCard}>
-              <h3 style={{ marginTop: 0 }}>Konfirmasi Aksi</h3>
-              <p style={{ marginBottom: 14 }}>{confirmAction.message}</p>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button style={btnMini} onClick={() => setConfirmAction(null)}>Batal</button>
-                <button style={{ ...btnMini, background: '#7f1d1d', borderColor: '#b91c1c' }} onClick={executeConfirmAction}>Ya, Lanjutkan</button>
-              </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <span style={{ fontSize: 13, color: '#94a3b8' }}>Filter:</span>
+                      <select className="nk-input-sm" value={questionFilterCategoryId} onChange={(e) => setQuestionFilterCategoryId(e.target.value)}>
+                        <option value="">Semua kategori</option>
+                        {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                      <span className="nk-badge nk-badge-purple">{filteredQuestions.length} soal</span>
+                    </div>
+
+                    <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+                      {filteredQuestions.map((q) => (
+                        <div key={q.id} style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 14, background: '#0f172a' }}>
+                          <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}><span className="nk-badge nk-badge-purple">{q.category_name}</span></div>
+                          <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>{q.question_text}</div>
+                          <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 10, lineHeight: 1.6 }}>
+                            A. {q.option_a} &nbsp;·&nbsp; B. {q.option_b}<br />
+                            C. {q.option_c} &nbsp;·&nbsp; D. {q.option_d}<br />
+                            <span style={{ color: '#4ade80', fontWeight: 600 }}>✓ Jawaban: {q.correct_option}</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <BtnSm disabled={busy} onClick={() => startEditQuestion(q)}>Edit</BtnSm>
+                            <BtnSm disabled={busy} onClick={() => deleteQuestion(q.id)} danger>Hapus</BtnSm>
+                          </div>
+                        </div>
+                      ))}
+                      {!filteredQuestions.length && <div className="nk-empty">Tidak ada soal untuk kategori ini.</div>}
+                    </div>
+                  </AdminSection>
+                </>
+              )}
+
+              {/* Admin — Jadwal */}
+              {adminSection === 'jadwal' && (
+                <AdminSection title="📅 Jadwal Belajar Peserta">
+                  {adminReminders.length ? (
+                    <div className="nk-table-wrap" style={{ maxHeight: 420 }}>
+                      <table className="nk-table" style={{ minWidth: 700 }}>
+                        <thead><tr><th>Nama</th><th>No. HP</th><th>Jam</th><th>Timezone</th><th>Status</th></tr></thead>
+                        <tbody>{adminReminders.map((r, i) => (
+                          <tr key={i}>
+                            <td style={{ fontWeight: 600 }}>{r.name || '-'}</td>
+                            <td style={{ color: '#94a3b8' }}>{r.phone || '-'}</td>
+                            <td><span className="nk-badge nk-badge-yellow">🕐 {r.time_of_day}</span></td>
+                            <td style={{ color: '#94a3b8' }}>{r.timezone}</td>
+                            <td><span className={`nk-badge ${r.is_active ? 'nk-badge-green' : 'nk-badge-red'}`}>{r.is_active ? '● Aktif' : '○ Nonaktif'}</span></td>
+                          </tr>
+                        ))}</tbody>
+                      </table>
+                    </div>
+                  ) : <div className="nk-empty">📅 Belum ada jadwal belajar yang diset.</div>}
+                </AdminSection>
+              )}
+
+              {/* Admin — Poin */}
+              {adminSection === 'poin' && (
+                <AdminSection title="💰 Poin Peserta">
+                  <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px', marginBottom: 16 }}>
+                    <p style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600, color: '#cbd5e1' }}>
+                      {editingPointEntryId ? '✏️ Edit Entry Poin' : '➕ Tambah / Kurangi Poin'}
+                    </p>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                      <div>
+                        <label style={fieldLbl}>No. HP Peserta</label>
+                        <input className="nk-input-sm" placeholder="08xxxxxxxxxx" value={pointPhone} onChange={(e) => setPointPhone(e.target.value)} />
+                      </div>
+                      <div>
+                        <label style={fieldLbl}>Delta (+/-)</label>
+                        <input className="nk-input-sm" placeholder="contoh: 100 atau -50" style={{ width: 140 }} value={pointDelta} onChange={(e) => setPointDelta(e.target.value)} />
+                      </div>
+                      <div>
+                        <label style={fieldLbl}>Keterangan</label>
+                        <input className="nk-input-sm" placeholder="Alasan perubahan poin" style={{ width: 200 }} value={pointReason} onChange={(e) => setPointReason(e.target.value)} />
+                      </div>
+                      <BtnSm disabled={busy} onClick={adjustPoints}>{busy ? '...' : (editingPointEntryId ? 'Update' : 'Submit')}</BtnSm>
+                      {editingPointEntryId && <BtnSm disabled={busy} onClick={() => { setEditingPointEntryId(''); setPointPhone(''); setPointDelta(''); setPointReason(''); }}>Batal</BtnSm>}
+                      <BtnSm disabled={busy} onClick={recalculatePoints}>{busy ? '...' : '🔄 Recalculate'}</BtnSm>
+                    </div>
+                    {matchedParticipant && <p style={{ margin: '10px 0 0', fontSize: 13, color: '#4ade80' }}>✓ Ditemukan: <b>{matchedParticipant.name}</b> ({matchedParticipant.phone})</p>}
+                  </div>
+
+                  <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 10px', color: '#e5e7eb' }}>Saldo Per Peserta</h3>
+                  {adminPointBalances.length ? (
+                    <div className="nk-table-wrap" style={{ maxHeight: 240, marginBottom: 16 }}>
+                      <table className="nk-table" style={{ minWidth: 500 }}>
+                        <thead><tr><th>Nama</th><th>No. HP</th><th>Saldo</th></tr></thead>
+                        <tbody>{adminPointBalances.map((b) => (
+                          <tr key={b.user_id}>
+                            <td style={{ fontWeight: 600 }}>{b.name || '-'}</td>
+                            <td style={{ color: '#94a3b8' }}>{b.phone || '-'}</td>
+                            <td><span className="nk-badge nk-badge-orange">🌟 {b.balance} poin</span></td>
+                          </tr>
+                        ))}</tbody>
+                      </table>
+                    </div>
+                  ) : <div className="nk-empty" style={{ marginBottom: 16 }}>Belum ada saldo poin peserta.</div>}
+
+                  <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 10px', color: '#e5e7eb' }}>Riwayat Transaksi</h3>
+                  {adminPointHistory.length ? (
+                    <div className="nk-table-wrap" style={{ maxHeight: 380 }}>
+                      <table className="nk-table" style={{ minWidth: 900 }}>
+                        <thead><tr><th>Nama</th><th>No. HP</th><th>Delta</th><th>Keterangan</th><th>Tipe</th><th>Waktu</th><th>Aksi</th></tr></thead>
+                        <tbody>{adminPointHistory.slice(0, 100).map((p) => (
+                          <tr key={p.id}>
+                            <td style={{ fontWeight: 600 }}>{p.name || '-'}</td>
+                            <td style={{ color: '#94a3b8' }}>{p.phone || '-'}</td>
+                            <td><span className={`nk-badge ${p.delta > 0 ? 'nk-badge-green' : 'nk-badge-red'}`}>{p.delta > 0 ? `+${p.delta}` : p.delta}</span></td>
+                            <td style={{ color: '#cbd5e1' }}>{p.reason}</td>
+                            <td><span className="nk-badge nk-badge-purple">{p.type}</span></td>
+                            <td style={{ color: '#94a3b8', fontSize: 13 }}>{new Date(p.created_at).toLocaleString('id-ID')}</td>
+                            <td>
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <BtnSm disabled={busy} onClick={() => startEditPointEntry(p)}>Edit</BtnSm>
+                                <BtnSm disabled={busy} onClick={() => deletePointEntry(p.id)} danger>Hapus</BtnSm>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}</tbody>
+                      </table>
+                    </div>
+                  ) : <div className="nk-empty">Belum ada transaksi poin.</div>}
+                </AdminSection>
+              )}
+
+              {/* Admin — EXP */}
+              {adminSection === 'exp' && (
+                <AdminSection title="⭐ EXP Peserta">
+                  <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                    <p style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>⏰ Setting Laporan EXP Harian</p>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <input className="nk-input-sm" type="time" value={expReportSetting.time_of_day || '10:00'} onChange={(e) => setExpReportSetting((s) => ({ ...s, time_of_day: e.target.value }))} />
+                      <input className="nk-input-sm" placeholder="Timezone" style={{ width: 180 }} value={expReportSetting.timezone || 'Asia/Jakarta'} onChange={(e) => setExpReportSetting((s) => ({ ...s, timezone: e.target.value }))} />
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: '#cbd5e1' }}>
+                        <input type="checkbox" checked={!!expReportSetting.is_active} onChange={(e) => setExpReportSetting((s) => ({ ...s, is_active: e.target.checked }))} />
+                        Aktif
+                      </label>
+                      <BtnSm disabled={busy} onClick={saveExpReportSetting}>{busy ? '...' : 'Simpan'}</BtnSm>
+                    </div>
+                    <p style={{ margin: '10px 0 0', fontSize: 13, color: '#94a3b8' }}>
+                      Laporan level + EXP dikirim ke semua peserta Telegram setiap hari sesuai jam di atas.
+                    </p>
+                  </div>
+
+                  <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 10px' }}>Rules EXP</h3>
+                  {adminExpRules.length ? (
+                    <div className="nk-table-wrap" style={{ marginBottom: 16 }}>
+                      <table className="nk-table" style={{ width: '100%', minWidth: 600 }}>
+                        <thead><tr><th>Rule</th><th>Nilai</th><th>Aksi</th></tr></thead>
+                        <tbody>{adminExpRules.map((r) => (
+                          <tr key={r.rule_key}>
+                            <td style={{ fontWeight: 600 }}>{r.rule_key}</td>
+                            <td><input className="nk-input-sm" type="number" min="1" style={{ width: 120 }} defaultValue={r.rule_value} id={`rule-${r.rule_key}`} /></td>
+                            <td><BtnSm disabled={busy} onClick={() => { const el = document.getElementById(`rule-${r.rule_key}`); updateExpRule(r.rule_key, el?.value || r.rule_value); }}>Simpan</BtnSm></td>
+                          </tr>
+                        ))}</tbody>
+                      </table>
+                    </div>
+                  ) : <div className="nk-empty" style={{ marginBottom: 16 }}>Rule EXP belum tersedia.</div>}
+
+                  <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 10px' }}>Status Level & EXP Peserta</h3>
+                  {adminExpStatus.length ? (
+                    <div className="nk-table-wrap" style={{ maxHeight: 280, marginBottom: 16 }}>
+                      <table className="nk-table" style={{ minWidth: 700 }}>
+                        <thead><tr><th>Nama</th><th>No. HP</th><th>Level</th><th>EXP</th><th>Progress</th></tr></thead>
+                        <tbody>{adminExpStatus.map((s) => (
+                          <tr key={s.user_id}>
+                            <td style={{ fontWeight: 600 }}>{s.name || '-'}</td>
+                            <td style={{ color: '#94a3b8' }}>{s.phone || '-'}</td>
+                            <td><span className="nk-badge nk-badge-purple">Lv. {s.level}</span></td>
+                            <td><span className="nk-badge nk-badge-yellow">⭐ {s.exp}</span></td>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <div style={{ flex: 1, height: 6, background: '#1e2d45', borderRadius: 99, overflow: 'hidden', minWidth: 80 }}>
+                                  <div style={{ height: '100%', borderRadius: 99, background: 'linear-gradient(90deg, #be94f5, #9b6de0)', width: `${Math.min(100, Math.round((s.progress / (s.level_step || 1)) * 100))}%` }} />
+                                </div>
+                                <span style={{ fontSize: 12, color: '#94a3b8' }}>{s.progress}/{s.level_step}</span>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}</tbody>
+                      </table>
+                    </div>
+                  ) : <div className="nk-empty" style={{ marginBottom: 16 }}>Belum ada data EXP peserta.</div>}
+
+                  <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 10px' }}>History EXP</h3>
+                  {adminExpHistory.length ? (
+                    <div className="nk-table-wrap" style={{ maxHeight: 320 }}>
+                      <table className="nk-table" style={{ minWidth: 860 }}>
+                        <thead><tr><th>Nama</th><th>No. HP</th><th>Delta EXP</th><th>Tipe</th><th>Keterangan</th><th>Waktu</th></tr></thead>
+                        <tbody>{adminExpHistory.map((h) => (
+                          <tr key={h.id}>
+                            <td style={{ fontWeight: 600 }}>{h.name || '-'}</td>
+                            <td style={{ color: '#94a3b8' }}>{h.phone || '-'}</td>
+                            <td><span className={`nk-badge ${h.delta > 0 ? 'nk-badge-green' : 'nk-badge-red'}`}>{h.delta > 0 ? `+${h.delta}` : h.delta}</span></td>
+                            <td><span className="nk-badge nk-badge-purple">{h.type}</span></td>
+                            <td style={{ color: '#cbd5e1' }}>{h.reason}</td>
+                            <td style={{ color: '#94a3b8', fontSize: 13 }}>{new Date(h.created_at).toLocaleString('id-ID')}</td>
+                          </tr>
+                        ))}</tbody>
+                      </table>
+                    </div>
+                  ) : <div className="nk-empty">Belum ada history EXP.</div>}
+                </AdminSection>
+              )}
             </div>
           </div>
-        ) : null}
+        )}
+
+        {/* Footer */}
+        <p style={{ textAlign: 'center', color: '#334155', fontSize: 12, marginTop: 32 }}>
+          Naik Kelas © 2025 · Ditenagai oleh semangat belajar 🎓
+        </p>
       </div>
+
+      {/* Confirm Modal */}
+      {confirmAction && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)',
+          display: 'grid', placeItems: 'center', zIndex: 9999,
+          backdropFilter: 'blur(4px)'
+        }}>
+          <div style={{
+            width: 'min(440px,92vw)', border: '1px solid #1e2d45', borderRadius: 18,
+            padding: '24px', background: '#0f172a',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.6)'
+          }}>
+            <h3 style={{ margin: '0 0 12px', fontFamily: 'Poppins, sans-serif', fontSize: 18 }}>⚠️ Konfirmasi Aksi</h3>
+            <p style={{ margin: '0 0 20px', color: '#94a3b8', fontSize: 14, lineHeight: 1.6 }}>{confirmAction.message}</p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setConfirmAction(null)} style={btnOutlineNeutral}>Batal</button>
+              <button onClick={executeConfirmAction} style={btnDanger}>Ya, Lanjutkan</button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
 
-const wrap = { minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 16 };
-const card = { width: '100%', maxWidth: 420, border: '1px solid #334155', borderRadius: 'var(--nk-radius-lg)', padding: 20, background: 'var(--nk-bg-surface)', boxShadow: 'var(--nk-shadow-sm)' };
-const card2 = { border: '1px solid #334155', borderRadius: 'var(--nk-radius-lg)', padding: 16, background: 'var(--nk-bg-surface)', marginTop: 16, boxShadow: 'var(--nk-shadow-sm)' };
-const hero = { background: 'var(--nk-bg-main)', borderRadius: 'var(--nk-radius-xl)', padding: 20, boxShadow: 'var(--nk-shadow-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 };
-const summaryGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 };
-const input = { width: '100%', padding: 10, borderRadius: 'var(--nk-radius-sm)', border: '1px solid #334155', background: 'var(--nk-bg-elevated)', color: 'white' };
-const inputSmall = { padding: 10, borderRadius: 'var(--nk-radius-sm)', border: '1px solid #334155', background: 'var(--nk-bg-elevated)', color: 'white' };
-const fieldLabel = { display: 'block', fontSize: 13, color: 'var(--nk-muted)', marginTop: 2 };
-const btn = { border: 0, background: 'var(--nk-cta)', color: 'white', borderRadius: 'var(--nk-radius-md)', padding: '8px 14px', cursor: 'pointer', fontWeight: 600 };
-const btnMini = { border: '1px solid #374151', background: '#1f2937', color: 'white', borderRadius: 'var(--nk-radius-sm)', padding: '6px 10px', cursor: 'pointer' };
-const thAdmin = { textAlign: 'left', padding: '10px 8px', borderBottom: '1px solid #334155', color: '#cbd5e1', fontSize: 13, position: 'sticky', top: 0, background: '#0b1220', zIndex: 2 };
-const tdAdmin = { padding: '10px 8px', borderBottom: '1px solid #1f2937', fontSize: 14, verticalAlign: 'top', whiteSpace: 'nowrap' };
-const modalOverlay = { position: 'fixed', inset: 0, background: 'rgba(2,6,23,.6)', display: 'grid', placeItems: 'center', zIndex: 9999 };
-const modalCard = { width: 'min(460px,92vw)', border: '1px solid #334155', borderRadius: 'var(--nk-radius-lg)', padding: 16, background: '#0f172a', boxShadow: 'var(--nk-shadow-md)' };
+// ── Reusable Components ──────────────────────────────────────
+
+function Section({ title, children }) {
+  return (
+    <section style={{
+      border: '1px solid #1e2d45', borderRadius: 16,
+      padding: 18, background: '#0b1220', marginBottom: 14
+    }}>
+      <h2 style={{ fontFamily: 'Poppins, sans-serif', fontSize: 16, fontWeight: 700, margin: '0 0 14px', color: '#e5e7eb' }}>{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function AdminSection({ title, children, style }) {
+  return (
+    <section style={style}>
+      <h2 style={{ fontFamily: 'Poppins, sans-serif', fontSize: 17, fontWeight: 700, margin: '0 0 16px', color: '#e5e7eb' }}>{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function BtnSm({ children, onClick, disabled, danger }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        border: danger ? '1px solid rgba(220,38,38,0.5)' : '1px solid #2d3f5a',
+        background: danger ? 'rgba(127,29,29,0.6)' : '#1a2640',
+        color: danger ? '#fca5a5' : '#cbd5e1',
+        borderRadius: 8, padding: '6px 12px', cursor: disabled ? 'not-allowed' : 'pointer',
+        fontSize: 12, fontWeight: 600, opacity: disabled ? 0.6 : 1,
+        transition: 'all 160ms ease'
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ── Styles ──────────────────────────────────────────────────
+
+const fieldLbl = {
+  display: 'block', fontSize: 11, color: '#64748b',
+  marginBottom: 5, fontWeight: 600,
+  letterSpacing: '0.4px', textTransform: 'uppercase'
+};
+
+const btnOutline = {
+  border: '1px solid rgba(255,255,255,0.2)',
+  background: 'rgba(255,255,255,0.1)', color: 'white',
+  borderRadius: 10, padding: '7px 14px', cursor: 'pointer',
+  fontSize: 13, fontWeight: 600
+};
+
+const btnOutlineNeutral = {
+  border: '1px solid #2d3f5a', background: '#1a2640',
+  color: '#94a3b8', borderRadius: 10, padding: '9px 18px',
+  cursor: 'pointer', fontSize: 14, fontWeight: 600
+};
+
+const btnDanger = {
+  border: '1px solid rgba(220,38,38,0.5)',
+  background: 'rgba(220,38,38,0.8)', color: 'white',
+  borderRadius: 10, padding: '9px 18px', cursor: 'pointer',
+  fontSize: 14, fontWeight: 700,
+  boxShadow: '0 4px 12px rgba(220,38,38,0.3)'
+};
