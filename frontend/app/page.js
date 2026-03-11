@@ -47,6 +47,7 @@ export default function Page() {
   const [myMaterials, setMyMaterials] = useState([]);
   const [myReflections, setMyReflections] = useState([]);
   const [adminReflectionStats, setAdminReflectionStats] = useState(null);
+  const [adminLearningSummary, setAdminLearningSummary] = useState(null);
   const [adminMaterials, setAdminMaterials] = useState([]);
   const [adminCategories, setAdminCategories] = useState([]);
   const [materiFilterCat, setMateriFilterCat] = useState('');
@@ -162,6 +163,8 @@ export default function Page() {
     if (grpRes.ok) setAdminGroups((await grpRes.json()).items || []);
     const refStatsRes = await fetch(`${apiBase}/admin/reflections/stats`, { credentials: 'include' });
     if (refStatsRes.ok) setAdminReflectionStats(await refStatsRes.json());
+    const learnRes = await fetch(`${apiBase}/admin/learning-summary`, { credentials: 'include' });
+    if (learnRes.ok) setAdminLearningSummary(await learnRes.json());
   }
 
   async function loadPortal(role) {
@@ -1340,23 +1343,70 @@ export default function Page() {
 
               {/* Admin — Jadwal */}
               {adminSection === 'jadwal' && (
-                <AdminSection title="📅 Jadwal Belajar Peserta">
-                  {adminReminders.length ? (
-                    <div className="nk-table-wrap" style={{ maxHeight: 420 }}>
-                      <table className="nk-table" style={{ minWidth: 700 }}>
-                        <thead><tr><th>Nama</th><th>No. HP</th><th>Jam</th><th>Timezone</th><th>Status</th></tr></thead>
-                        <tbody>{adminReminders.map((r, i) => (
-                          <tr key={i}>
-                            <td style={{ fontWeight: 600 }}>{r.name || '-'}</td>
-                            <td style={{ color: '#94a3b8' }}>{r.phone || '-'}</td>
-                            <td><span className="nk-badge nk-badge-yellow">🕐 {r.time_of_day}</span></td>
-                            <td style={{ color: '#94a3b8' }}>{r.timezone}</td>
-                            <td><span className={`nk-badge ${r.is_active ? 'nk-badge-green' : 'nk-badge-red'}`}>{r.is_active ? '● Aktif' : '○ Nonaktif'}</span></td>
-                          </tr>
-                        ))}</tbody>
-                      </table>
+                <AdminSection title="📅 Resume Aktivitas Belajar">
+                  {adminLearningSummary ? (<>
+                    {/* Stat cards */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
+                      <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                        <div style={{ fontSize: 28, fontWeight: 800, color: '#be94f5' }}>{adminLearningSummary.total_participants}</div>
+                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Total Peserta</div>
+                      </div>
+                      <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                        <div style={{ fontSize: 28, fontWeight: 800, color: '#34d399' }}>{adminLearningSummary.active_today}</div>
+                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Aktif Hari Ini</div>
+                      </div>
+                      <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                        <div style={{ fontSize: 28, fontWeight: 800, color: '#38bdf8' }}>{adminLearningSummary.active_week}</div>
+                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Aktif 7 Hari</div>
+                      </div>
                     </div>
-                  ) : <div className="nk-empty">📅 Belum ada jadwal belajar yang diset.</div>}
+
+                    {/* Tabel per peserta */}
+                    <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                      <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>📊 Detail Per Peserta</p>
+                      {adminLearningSummary.participants?.length > 0 ? (
+                        <div className="nk-table-wrap" style={{ maxHeight: 380 }}>
+                          <table className="nk-table">
+                            <thead><tr><th>Nama</th><th>Kelompok</th><th>📚 Materi</th><th>🧠 Quiz</th><th>🚀 Tryout</th><th>Terakhir Aktif</th></tr></thead>
+                            <tbody>{adminLearningSummary.participants.map((p, i) => (
+                              <tr key={i}>
+                                <td style={{ fontWeight: 600 }}>{p.name}</td>
+                                <td>{p.group_name !== '-' ? <span className="nk-badge nk-badge-purple">🏢 {p.group_name}</span> : <span style={{ color: '#475569', fontSize: 12 }}>—</span>}</td>
+                                <td><span className="nk-badge" style={{ background: 'rgba(99,102,241,0.15)', color: '#a78bfa' }}>{p.materi_count}x</span></td>
+                                <td><span className="nk-badge" style={{ background: 'rgba(56,189,248,0.12)', color: '#38bdf8' }}>{p.quiz_count}x</span></td>
+                                <td><span className="nk-badge" style={{ background: 'rgba(251,146,60,0.12)', color: '#fb923c' }}>{p.tryout_count}x</span></td>
+                                <td>
+                                  {p.last_active
+                                    ? <span className={`nk-badge ${p.days_ago === 0 ? 'nk-badge-green' : p.days_ago <= 3 ? 'nk-badge-yellow' : 'nk-badge-red'}`}>{p.last_active}</span>
+                                    : <span style={{ color: '#475569', fontSize: 12 }}>Belum aktif</span>}
+                                </td>
+                              </tr>
+                            ))}</tbody>
+                          </table>
+                        </div>
+                      ) : <p style={{ color: '#475569', fontSize: 13 }}>Belum ada data aktivitas.</p>}
+                    </div>
+
+                    {/* Jadwal belajar terpasang */}
+                    <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16 }}>
+                      <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>⏰ Jadwal Pengingat Belajar</p>
+                      {adminReminders.length ? (
+                        <div className="nk-table-wrap" style={{ maxHeight: 240 }}>
+                          <table className="nk-table">
+                            <thead><tr><th>Nama</th><th>Jam</th><th>Timezone</th><th>Status</th></tr></thead>
+                            <tbody>{adminReminders.map((r, i) => (
+                              <tr key={i}>
+                                <td style={{ fontWeight: 600 }}>{r.name || '-'}</td>
+                                <td><span className="nk-badge nk-badge-yellow">🕐 {r.time_of_day}</span></td>
+                                <td style={{ color: '#94a3b8', fontSize: 12 }}>{r.timezone}</td>
+                                <td><span className={`nk-badge ${r.is_active ? 'nk-badge-green' : 'nk-badge-red'}`}>{r.is_active ? '● Aktif' : '○ Nonaktif'}</span></td>
+                              </tr>
+                            ))}</tbody>
+                          </table>
+                        </div>
+                      ) : <p style={{ color: '#475569', fontSize: 13 }}>Belum ada jadwal yang diset.</p>}
+                    </div>
+                  </>) : <div style={{ textAlign: 'center', color: '#475569', padding: 40 }}>Memuat data...</div>}
                 </AdminSection>
               )}
 

@@ -196,6 +196,7 @@ func main() {
 	mux.HandleFunc("/admin/ping", a.handleAdminPing)
 	mux.HandleFunc("/admin/participants", a.handleAdminParticipants)
 	mux.HandleFunc("/admin/reminders", a.handleAdminReminders)
+	mux.HandleFunc("/admin/learning-summary", a.handleAdminLearningSummary)
 	mux.HandleFunc("/admin/points/adjust", a.handleAdminPointsAdjust)
 	mux.HandleFunc("/admin/points/history", a.handleAdminPointsHistory)
 	mux.HandleFunc("/admin/points/update", a.handleAdminPointsUpdate)
@@ -2302,7 +2303,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-refleksi-v5"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-learning-summary"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -5587,4 +5588,98 @@ func (a *app) sendReflectionReminderRows(ctx context.Context, rows *sql.Rows) {
 		}(chatID, msg)
 		time.Sleep(100 * time.Millisecond)
 	}
+}
+
+// ── Admin: Learning Summary per Peserta ────────────────────────────────────
+
+func (a *app) handleAdminLearningSummary(w http.ResponseWriter, r *http.Request) {
+	_, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	ctx := r.Context()
+
+	// Statistik agregat
+	var totalParticipants, activeToday, activeWeek int
+	_ = a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE role='participant' AND is_active=TRUE`).Scan(&totalParticipants)
+	_ = a.db.QueryRowContext(ctx, `
+		SELECT COUNT(DISTINCT user_id) FROM (
+			SELECT user_id FROM quiz_attempts WHERE created_at >= CURRENT_DATE
+			UNION SELECT user_id FROM tryout_results WHERE created_at >= CURRENT_DATE
+			UNION SELECT CAST(user_id AS TEXT) FROM material_progress WHERE completed_at >= CURRENT_DATE
+		) x
+	`).Scan(&activeToday)
+	_ = a.db.QueryRowContext(ctx, `
+		SELECT COUNT(DISTINCT user_id) FROM (
+			SELECT user_id FROM quiz_attempts WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+			UNION SELECT user_id FROM tryout_results WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+			UNION SELECT CAST(user_id AS TEXT) FROM material_progress WHERE completed_at >= CURRENT_DATE - INTERVAL '7 days'
+		) x
+	`).Scan(&activeWeek)
+
+	// Per peserta: nama, kelompok, materi selesai, quiz attempt, tryout attempt, last active
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT
+			pp.name,
+			COALESCE(g.name, '-') as group_name,
+			COALESCE(mat.cnt, 0) as materi_count,
+			COALESCE(qz.cnt, 0) as quiz_count,
+			COALESCE(to2.cnt, 0) as tryout_count,
+			GREATEST(
+				COALESCE(mat.last_at, '2000-01-01'),
+				COALESCE(qz.last_at, '2000-01-01'),
+				COALESCE(to2.last_at, '2000-01-01')
+			) as last_active
+		FROM participant_profiles pp
+		JOIN users u ON u.id = pp.user_id AND u.role='participant' AND u.is_active=TRUE
+		LEFT JOIN groups g ON g.id = pp.group_id
+		LEFT JOIN (
+			SELECT user_id, COUNT(*) as cnt, MAX(completed_at) as last_at
+			FROM material_progress GROUP BY user_id
+		) mat ON mat.user_id = pp.user_id
+		LEFT JOIN (
+			SELECT CAST(user_id AS BIGINT) as uid, COUNT(*) as cnt, MAX(created_at) as last_at
+			FROM quiz_attempts GROUP BY user_id
+		) qz ON qz.uid = pp.user_id
+		LEFT JOIN (
+			SELECT CAST(user_id AS BIGINT) as uid, COUNT(*) as cnt, MAX(created_at) as last_at
+			FROM tryout_results GROUP BY user_id
+		) to2 ON to2.uid = pp.user_id
+		ORDER BY last_active DESC, pp.name ASC
+	`)
+	participants := []map[string]any{}
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var name, groupName string
+			var materiCnt, quizCnt, tryoutCnt int
+			var lastActive time.Time
+			if rows.Scan(&name, &groupName, &materiCnt, &quizCnt, &tryoutCnt, &lastActive) == nil {
+				daysAgo := int(time.Since(lastActive).Hours() / 24)
+				lastStr := ""
+				if lastActive.Year() > 2001 {
+					if daysAgo == 0 {
+						lastStr = "Hari ini"
+					} else if daysAgo == 1 {
+						lastStr = "Kemarin"
+					} else {
+						lastStr = fmt.Sprintf("%d hari lalu", daysAgo)
+					}
+				}
+				participants = append(participants, map[string]any{
+					"name": name, "group_name": groupName,
+					"materi_count": materiCnt, "quiz_count": quizCnt, "tryout_count": tryoutCnt,
+					"last_active": lastStr, "days_ago": daysAgo,
+				})
+			}
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"total_participants": totalParticipants,
+		"active_today":       activeToday,
+		"active_week":        activeWeek,
+		"participants":       participants,
+	})
 }
