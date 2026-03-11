@@ -131,7 +131,7 @@ export default function Page() {
       fetch(`${apiBase}/admin/exp/report-setting`, { credentials: 'include' })
     ]);
     if (pRes.ok) setParticipants((await pRes.json()).items || []);
-    if (cRes.ok) setCategories((await cRes.json()).items || []);
+    if (cRes.ok) { const cd = await cRes.json(); setCategories(cd.categories || cd.items || []); }
     if (qRes.ok) setQuestions((await qRes.json()).items || []);
     if (rRes.ok) setAdminReminders((await rRes.json()).items || []);
     if (phRes.ok) setAdminPointHistory((await phRes.json()).items || []);
