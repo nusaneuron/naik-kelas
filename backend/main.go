@@ -2302,7 +2302,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-refleksi-v2"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-refleksi-v3"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -2452,6 +2452,16 @@ func (a *app) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	reply, state := a.processBotText(r.Context(), uid, displayName, text)
 	if strings.TrimSpace(reply) != "" {
+		// Keyboard menu refleksi
+		if state == "refleksi_menu" {
+			kb := [][]string{{"✍️ Tulis Refleksi", "⏰ Set Pengingat"}}
+			if err := a.sendTelegramMessageWithKeyboard(r.Context(), upd.Message.Chat.ID, reply, kb); err != nil {
+				log.Printf("telegram send keyboard error: %v", err)
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+			return
+		}
+
 		// Untuk state yang membutuhkan keyboard kategori
 		if state == "quiz_choose_category" || state == "materi_choose_category" {
 			webUIDKb, _ := a.resolveWebUserIDByExternal(r.Context(), uid)
@@ -2648,16 +2658,49 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		if !registered {
 			return "Kamu belum terdaftar. Ketik /daftar dulu ya ✨", "idle"
 		}
-		// Cek apakah sudah refleksi hari ini
-		webUID, err := a.resolveWebUserIDByExternal(ctx, uid)
-		if err == nil {
-			var existingID int64
-			checkErr := a.db.QueryRowContext(ctx, `SELECT id FROM reflections WHERE user_id=$1 AND reflected_date=CURRENT_DATE`, webUID).Scan(&existingID)
-			if checkErr == nil {
-				return "Kamu sudah menulis refleksi hari ini 📔✅\n\nSampai jumpa besok\\! Tetap semangat belajar\\! 💪", "idle"
+		return "📔 *Refleksi Diri*\n\nHai\\! Mau ngapain nih? 😊", "refleksi_menu"
+	}
+
+	if s.State == "refleksi_menu" {
+		switch text {
+		case "✍️ Tulis Refleksi":
+			// Cek apakah sudah refleksi hari ini
+			webUID2, err2 := a.resolveWebUserIDByExternal(ctx, uid)
+			if err2 == nil {
+				var existingID int64
+				if a.db.QueryRowContext(ctx, `SELECT id FROM reflections WHERE user_id=$1 AND reflected_date=CURRENT_DATE`, webUID2).Scan(&existingID) == nil {
+					a.resetSession(uid)
+					return "Kamu sudah menulis refleksi hari ini 📔✅\n\nSampai jumpa besok\\! Tetap semangat belajar\\! 💪", "idle"
+				}
 			}
+			return "📔 *Yuk, Ceritakan Harimu\\!*\n\n_Tulis bebas, tidak ada jawaban yang salah_ 🤍\n\n• Apa yang kamu pelajari hari ini?\n• Apa yang kamu rasakan?\n• Adakah hal yang ingin kamu syukuri atau perbaiki?\n\n_Ketik /batal untuk membatalkan_", "wait_reflection"
+		case "⏰ Set Pengingat":
+			return "⏰ *Set Jadwal Pengingat Refleksi*\n\nKirimkan jam berapa kamu mau Nala ingatkan setiap hari\\.\nFormat: *HH:MM* \\(contoh: 20:00 atau 19:30\\)\n\n_Zona waktu WIB_\n_Ketik /batal untuk membatalkan_", "refleksi_set_time"
+		default:
+			return "Pilih salah satu ya 😊", "refleksi_menu"
 		}
-		return "📔 *Refleksi Harian*\n\nHai\\! Sebelum hari ini berakhir, yuk luangkan sejenak untuk merenung 🌙\n\n_Ceritakan ke Nala:_\n• Apa yang kamu pelajari hari ini?\n• Apa yang kamu rasakan?\n• Adakah yang ingin kamu syukuri atau perbaiki?\n\nTulis bebas ya, tidak ada jawaban yang salah 🤍\n\n_Ketik /batal untuk membatalkan_", "wait_reflection"
+	}
+
+	if s.State == "refleksi_set_time" {
+		timeInput := strings.TrimSpace(text)
+		// Validasi format HH:MM
+		valid := len(timeInput) == 5 && timeInput[2] == ':'
+		if valid {
+			parts := strings.Split(timeInput, ":")
+			h, e1 := strconv.Atoi(parts[0])
+			m, e2 := strconv.Atoi(parts[1])
+			valid = e1 == nil && e2 == nil && h >= 0 && h <= 23 && m >= 0 && m <= 59
+		}
+		if !valid {
+			return "Format tidak valid\\. Kirim dalam format *HH:MM* ya\\, contoh: *20:00*", "refleksi_set_time"
+		}
+		webUID3, err3 := a.resolveWebUserIDByExternal(ctx, uid)
+		if err3 != nil {
+			return "Maaf, Nala kesulitan menyimpan data 🙏", "refleksi_set_time"
+		}
+		_, _ = a.db.ExecContext(ctx, `UPDATE participant_profiles SET reflection_reminder_time=$1 WHERE user_id=$2`, timeInput, webUID3)
+		a.resetSession(uid)
+		return fmt.Sprintf("✅ Jadwal pengingat refleksi berhasil diset ke *%s WIB*\\!\n\nNala akan mengingatkanmu setiap hari pada jam tersebut 🌙", timeInput), "idle"
 	}
 
 	if s.State == "wait_reflection" {
