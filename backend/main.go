@@ -2102,7 +2102,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-phase2-materi"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-phase4-gamifikasi"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -2836,13 +2836,23 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		}
 
 		attemptNo, _ := a.saveQuizAttempt(ctx, uid, displayName, cat, len(cat.Items), wrong, false)
+		// Cek apakah ada materi untuk kategori ini → sarankan belajar dulu
+		materiSuggest := ""
+		var catIDForSuggest int
+		if err2 := a.db.QueryRowContext(ctx, `SELECT id FROM question_categories WHERE name=$1`, cat.Name).Scan(&catIDForSuggest); err2 == nil {
+			var materiCount int
+			_ = a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM learning_materials WHERE category_id=$1 AND is_active=TRUE`, catIDForSuggest).Scan(&materiCount)
+			if materiCount > 0 {
+				materiSuggest = fmt.Sprintf("\n\n💡 *Tips:* Ada *%d materi* yang bisa kamu pelajari dulu untuk kategori ini!\nKetik /materi untuk buka materi belajar 📚", materiCount)
+			}
+		}
 		a.mu.Lock()
 		s.State = "quiz_answering"
 		s.QuizIndex = 0
 		s.QuizAnswers = []string{}
 		s.UpdatedAt = time.Now()
 		a.mu.Unlock()
-		return fmt.Sprintf("💪 Hampir! Masih ada *%d* jawaban yang belum tepat.\nKategori: *%s* | Percobaan ke-%d\n\n%s\nYuk coba lagi dari soal pertama 🔁\n\n%s", wrong, cat.Name, attemptNo, recap.String(), formatQuizQuestion(cat, 0)), "quiz_answering"
+		return fmt.Sprintf("💪 Hampir! Masih ada *%d* jawaban yang belum tepat.\nKategori: *%s* | Percobaan ke-%d\n\n%s%sYuk coba lagi dari soal pertama 🔁\n\n%s", wrong, cat.Name, attemptNo, recap.String(), materiSuggest, formatQuizQuestion(cat, 0)), "quiz_answering"
 
 	case "poin_menu":
 		if lower != "saldo saya" && lower != "transaksi saya" {
@@ -4585,6 +4595,30 @@ func (a *app) handleParticipantMaterialComplete(w http.ResponseWriter, r *http.R
 	if expReward > 0 {
 		_, _ = a.adjustExp(ctx, u.ID, int64(expReward), fmt.Sprintf("Selesai materi: %s", title))
 	}
+
+	// Cek apakah semua materi kategori sudah selesai → notif Telegram
+	go func() {
+		bgCtx := context.Background()
+		var catID int
+		var catName string
+		if err := a.db.QueryRowContext(bgCtx, `SELECT category_id FROM learning_materials WHERE id=$1`, req.MaterialID).Scan(&catID); err == nil {
+			_ = a.db.QueryRowContext(bgCtx, `SELECT name FROM question_categories WHERE id=$1`, catID).Scan(&catName)
+			// Hitung total vs selesai
+			var total, done int
+			_ = a.db.QueryRowContext(bgCtx, `SELECT COUNT(*) FROM learning_materials WHERE category_id=$1 AND is_active=TRUE`, catID).Scan(&total)
+			_ = a.db.QueryRowContext(bgCtx, `
+				SELECT COUNT(*) FROM material_progress mp
+				JOIN learning_materials lm ON lm.id = mp.material_id
+				WHERE lm.category_id=$1 AND lm.is_active=TRUE AND mp.user_id=$2
+			`, catID, u.ID).Scan(&done)
+			if total > 0 && done >= total {
+				a.notifyTelegramUser(bgCtx, u.ID, fmt.Sprintf(
+					"🎉 *Selamat!* Kamu sudah menyelesaikan semua materi *%s*!\n\nSekarang kamu siap untuk latihan soal 🧠\nCoba /quiz sekarang ya!",
+					catName,
+				))
+			}
+		}
+	}()
 
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "exp_gained": expReward, "already_completed": false})
 }
