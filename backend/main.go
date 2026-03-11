@@ -2045,6 +2045,13 @@ func (a *app) handleAdminCategories(w http.ResponseWriter, r *http.Request) {
 		if req.GroupID != nil && *req.GroupID > 0 {
 			groupIDVal = *req.GroupID
 		}
+		// Validasi: admin biasa tidak boleh konten global
+		if req.Action == "create" || req.Action == "update" {
+			if gErr := guardGlobalContent(admin, groupIDVal); gErr != nil {
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": gErr.Error()})
+				return
+			}
+		}
 		switch req.Action {
 		case "create":
 			_, err = a.db.ExecContext(r.Context(), `INSERT INTO question_categories(code,name,is_active,group_id) VALUES($1,$2,TRUE,$3)`, strings.ToLower(strings.TrimSpace(req.Code)), strings.TrimSpace(req.Name), groupIDVal)
@@ -2114,6 +2121,15 @@ func (a *app) handleAdminQuestions(w http.ResponseWriter, r *http.Request) {
 		if json.NewDecoder(r.Body).Decode(&req) != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 			return
+		}
+		// Validasi: admin biasa tidak boleh tambah soal ke kategori global
+		if (req.Action == "create" || req.Action == "update") && req.CategoryID > 0 && !isSuperAdmin(admin) {
+			var catGroupID *int64
+			_ = a.db.QueryRowContext(r.Context(), `SELECT group_id FROM question_categories WHERE id=$1`, req.CategoryID).Scan(&catGroupID)
+			if catGroupID == nil {
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": "admin hanya bisa mengelola soal di kategori yang terikat kelompok"})
+				return
+			}
 		}
 		switch req.Action {
 		case "create":
@@ -2198,6 +2214,22 @@ func isSuperAdmin(u authUser) bool {
 	return u.Role == "super_admin"
 }
 
+// guardGlobalContent — admin biasa WAJIB set group_id; hanya super_admin boleh global (group_id=nil)
+// Mengembalikan error jika admin biasa coba buat/update konten global
+func guardGlobalContent(u authUser, groupIDVal any) error {
+	if isSuperAdmin(u) {
+		return nil // super_admin bebas
+	}
+	// admin biasa: groupIDVal harus tidak nil/0
+	if groupIDVal == nil {
+		return errors.New("admin hanya bisa mengelola konten per kelompok — pilih kelompok terlebih dahulu")
+	}
+	if gid, ok := groupIDVal.(int64); ok && gid == 0 {
+		return errors.New("admin hanya bisa mengelola konten per kelompok — pilih kelompok terlebih dahulu")
+	}
+	return nil
+}
+
 func (a *app) logAdminAction(ctx context.Context, adminUserID int64, action, target string, detail any) error {
 	if strings.TrimSpace(action) == "" {
 		return nil
@@ -2235,7 +2267,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-materi-group"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-global-guard"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -4488,8 +4520,8 @@ func (a *app) handleParticipantRedeemClaims(w http.ResponseWriter, r *http.Reque
 // ─── Admin redeem handlers ────────────────────────────────────────────────────
 
 func (a *app) handleAdminRedeemItems(w http.ResponseWriter, r *http.Request) {
-	u, err := a.currentUser(r.Context(), r)
-	if err != nil || u.Role != "admin" {
+	adminUser, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
@@ -4547,6 +4579,13 @@ func (a *app) handleAdminRedeemItems(w http.ResponseWriter, r *http.Request) {
 		var gidVal any = nil
 		if req.GroupID != nil && *req.GroupID > 0 {
 			gidVal = *req.GroupID
+		}
+		// Validasi: admin biasa tidak boleh konten global
+		if req.Action == "create" || req.Action == "update" {
+			if gErr := guardGlobalContent(adminUser, gidVal); gErr != nil {
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": gErr.Error()})
+				return
+			}
 		}
 		switch req.Action {
 		case "create":
@@ -4723,7 +4762,8 @@ type materialWithProgress struct {
 // POST /admin/materials                → create | update | delete
 func (a *app) handleAdminMaterials(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	if _, err := a.requireRole(ctx, r, "admin"); err != nil {
+	adminUserM, err := a.requireRole(ctx, r, "admin")
+	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
@@ -4796,6 +4836,16 @@ func (a *app) handleAdminMaterials(w http.ResponseWriter, r *http.Request) {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 			return
+		}
+
+		// Validasi: admin biasa tidak boleh tambah materi ke kategori global
+		if (req.Action == "create" || req.Action == "update") && req.CategoryID > 0 && !isSuperAdmin(adminUserM) {
+			var catGroupID *int64
+			_ = a.db.QueryRowContext(ctx, `SELECT group_id FROM question_categories WHERE id=$1`, req.CategoryID).Scan(&catGroupID)
+			if catGroupID == nil {
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": "admin hanya bisa mengelola materi di kategori yang terikat kelompok — pilih kategori per kelompok"})
+				return
+			}
 		}
 
 		switch req.Action {

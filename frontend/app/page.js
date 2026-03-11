@@ -1126,7 +1126,7 @@ export default function Page() {
                       <input className="nk-input-sm" placeholder="Kode" style={{ width: 100 }} value={newCategoryCode} onChange={(e) => setNewCategoryCode(e.target.value)} />
                       <input className="nk-input-sm" placeholder="Nama kategori" style={{ width: 180 }} value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
                       <select className="nk-input-sm" style={{ width: 160 }} value={newCategoryGroupId} onChange={e => setNewCategoryGroupId(e.target.value)}>
-                        <option value="">🌐 Semua Kelompok</option>
+                        {isSuperAdmin && <option value="">🌐 Global (Super Admin)</option>}
                         {adminGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                       </select>
                       <BtnSm disabled={busy} onClick={addCategory}>{busy ? '...' : (editingCategoryId ? 'Update' : '+ Tambah')}</BtnSm>
@@ -1158,7 +1158,9 @@ export default function Page() {
                           <label style={fieldLbl}>Kategori</label>
                           <select className="nk-input" value={qCategoryId} onChange={(e) => setQCategoryId(e.target.value)}>
                             <option value="">Pilih kategori</option>
-                            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            {categories
+                              .filter(c => isSuperAdmin || c.group_id > 0)
+                              .map((c) => <option key={c.id} value={c.id}>{c.name}{c.group_name && !isSuperAdmin ? '' : c.group_name ? ` (${c.group_name})` : ' 🌐'}</option>)}
                           </select>
                         </div>
                         <div>
@@ -1455,7 +1457,7 @@ export default function Page() {
                     <div style={{ marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                       <label style={{ fontSize: 13, color: '#94a3b8' }}>Filter:</label>
                       <select className="nk-input-sm" value={materiFilterGroup} onChange={e => { setMateriFilterGroup(e.target.value); setMateriFilterCat(''); }}>
-                        <option value="">🌐 Semua Kelompok</option>
+                        {isSuperAdmin && <option value="">🌐 Global (Super Admin)</option>}
                         {adminGroups.map(g => <option key={g.id} value={String(g.id)}>🏢 {g.name}</option>)}
                       </select>
                       <select className="nk-input-sm" value={materiFilterCat} onChange={e => setMateriFilterCat(e.target.value)}>
@@ -1540,7 +1542,7 @@ export default function Page() {
                       <div style={{ marginBottom: 12 }}>
                         <label style={fieldLbl}>Kelompok (kosong = semua)</label>
                         <select className="nk-input" value={redeemGroupId} onChange={e => setRedeemGroupId(e.target.value)}>
-                          <option value="">🌐 Semua Kelompok</option>
+                          {isSuperAdmin && <option value="">🌐 Global (Super Admin)</option>}
                           {adminGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                         </select>
                       </div>
