@@ -1311,14 +1311,14 @@ export default function Page() {
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
                         <div>
                           <label style={fieldLbl}>Kategori</label>
-                          <select value={materiCatId} onChange={e => setMateriCatId(e.target.value)} style={inputSt}>
+                          <select value={materiCatId} onChange={e => setMateriCatId(e.target.value)} className="nk-input-sm" style={{ width: "100%" }}>
                             <option value="">-- Pilih Kategori --</option>
                             {adminCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                           </select>
                         </div>
                         <div>
                           <label style={fieldLbl}>Tipe</label>
-                          <select value={materiType} onChange={e => setMateriType(e.target.value)} style={inputSt}>
+                          <select value={materiType} onChange={e => setMateriType(e.target.value)} className="nk-input-sm" style={{ width: "100%" }}>
                             <option value="text">📖 Bacaan (Teks)</option>
                             <option value="video">🎬 Video (URL)</option>
                             <option value="audio">🎵 Audio (URL)</option>
@@ -1327,23 +1327,23 @@ export default function Page() {
                       </div>
                       <div style={{ marginBottom: 10 }}>
                         <label style={fieldLbl}>Judul Materi</label>
-                        <input value={materiTitle} onChange={e => setMateriTitle(e.target.value)} placeholder="Judul materi..." style={inputSt} />
+                        <input value={materiTitle} onChange={e => setMateriTitle(e.target.value)} placeholder="Judul materi..." className="nk-input-sm" style={{ width: "100%" }} />
                       </div>
                       <div style={{ marginBottom: 10 }}>
                         <label style={fieldLbl}>{materiType === 'text' ? 'Isi Materi' : 'URL ' + (materiType === 'video' ? 'Video (YouTube/GDrive)' : 'Audio (MP3)')}</label>
                         {materiType === 'text'
-                          ? <textarea value={materiContent} onChange={e => setMateriContent(e.target.value)} rows={5} placeholder="Tulis isi materi di sini..." style={{ ...inputSt, resize: 'vertical' }} />
-                          : <input value={materiContent} onChange={e => setMateriContent(e.target.value)} placeholder="https://..." style={inputSt} />
+                          ? <textarea value={materiContent} onChange={e => setMateriContent(e.target.value)} rows={5} placeholder="Tulis isi materi di sini..." style={{ width: "100%", resize: 'vertical' }} />
+                          : <input value={materiContent} onChange={e => setMateriContent(e.target.value)} placeholder="https://..." className="nk-input-sm" style={{ width: "100%" }} />
                         }
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
                         <div>
                           <label style={fieldLbl}>EXP Reward</label>
-                          <input type="number" value={materiExp} onChange={e => setMateriExp(e.target.value)} style={inputSt} />
+                          <input type="number" value={materiExp} onChange={e => setMateriExp(e.target.value)} className="nk-input-sm" style={{ width: "100%" }} />
                         </div>
                         <div>
                           <label style={fieldLbl}>Urutan</label>
-                          <input type="number" value={materiOrder} onChange={e => setMateriOrder(e.target.value)} style={inputSt} />
+                          <input type="number" value={materiOrder} onChange={e => setMateriOrder(e.target.value)} className="nk-input-sm" style={{ width: "100%" }} />
                         </div>
                         <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 2 }}>
                           <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer', fontSize: 14 }}>
@@ -1363,7 +1363,7 @@ export default function Page() {
                     {/* Filter kategori */}
                     <div style={{ marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
                       <label style={{ fontSize: 13, color: '#94a3b8' }}>Filter:</label>
-                      <select value={materiFilterCat} onChange={e => setMateriFilterCat(e.target.value)} style={{ ...inputSt, width: 'auto' }}>
+                      <select value={materiFilterCat} onChange={e => setMateriFilterCat(e.target.value)} style={{ width: "100%", width: 'auto' }}>
                         <option value="">Semua Kategori</option>
                         {adminCategories.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
                       </select>
