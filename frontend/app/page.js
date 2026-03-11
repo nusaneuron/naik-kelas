@@ -13,6 +13,7 @@ export default function Page() {
   const [busy, setBusy] = useState(false);
   const [adminViewMode, setAdminViewMode] = useState('participant');
   const [adminSection, setAdminSection] = useState('peserta');
+  const [participantSection, setParticipantSection] = useState('profil');
   const [confirmAction, setConfirmAction] = useState(null);
 
   const [phone, setPhone] = useState('');
@@ -693,7 +694,39 @@ export default function Page() {
 
         {/* ── Participant View ── */}
         {showParticipantView && (
-          <>
+          <div style={{ display: 'flex', gap: 0, minHeight: 600 }}>
+
+            {/* Sidebar Peserta */}
+            <aside style={{ width: 200, flexShrink: 0, background: '#0a1628', borderRight: '1px solid #1e2d45', padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <p style={{ fontSize: 11, color: '#475569', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', margin: '0 0 12px 8px' }}>Menu</p>
+              {[
+                ['profil',    '👤', 'Profil'],
+                ['materi',    '📚', 'Materi'],
+                ['quiz',      '🧠', 'Quiz & Tryout'],
+                ['redeem',    '🎁', 'Redeem'],
+                ['poin',      '💰', 'Poin'],
+                ['refleksi',  '📔', 'Refleksi'],
+                ['leaderboard','🏆','Leaderboard'],
+              ].map(([key, icon, label]) => (
+                <button key={key} onClick={() => setParticipantSection(key)} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '9px 12px', borderRadius: 10, cursor: 'pointer',
+                  border: participantSection === key ? '1px solid rgba(190,148,245,0.3)' : '1px solid transparent',
+                  background: participantSection === key ? 'rgba(190,148,245,0.12)' : 'transparent',
+                  color: participantSection === key ? '#be94f5' : '#94a3b8',
+                  fontWeight: participantSection === key ? 700 : 500,
+                  fontSize: 13, textAlign: 'left', transition: 'all 160ms ease', width: '100%'
+                }}>
+                  <span style={{ fontSize: 16 }}>{icon}</span> {label}
+                </button>
+              ))}
+            </aside>
+
+            {/* Content Peserta */}
+            <div style={{ flex: 1, padding: 20, overflowX: 'auto' }}>
+
+            {/* ── Profil ── */}
+            {participantSection === 'profil' && (<>
             {/* Summary Cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14, marginBottom: 14 }}>
 
@@ -767,7 +800,10 @@ export default function Page() {
               </div>
             </div>
 
-            {/* Riwayat Poin */}
+            </>)}
+
+            {/* ── Poin ── */}
+            {participantSection === 'poin' && (<>
             <Section title="💰 Riwayat Poin">
               {myPointHistory.length ? (
                 <div className="nk-table-wrap" style={{ maxHeight: 280 }}>
@@ -787,6 +823,10 @@ export default function Page() {
             </Section>
 
             {/* Leaderboard */}
+            </>)}
+
+            {/* ── Leaderboard ── */}
+            {participantSection === 'leaderboard' && (<>
             <Section title="🏆 Leaderbot Tryout">
               {leaderboard.length ? (
                 <div className="nk-table-wrap" style={{ maxHeight: 280 }}>
@@ -810,7 +850,10 @@ export default function Page() {
               ) : <div className="nk-empty">🏆 Belum ada data leaderboard.</div>}
             </Section>
 
-            {/* Riwayat */}
+            </>)}
+
+            {/* ── Quiz & Tryout ── */}
+            {participantSection === 'quiz' && (<>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 14 }}>
               <Section title="🧠 Riwayat Quiz">
                 {(history.quiz || []).length ? (
@@ -850,9 +893,10 @@ export default function Page() {
                 ) : <div className="nk-empty">🚀 Belum ada riwayat tryout.</div>}
               </Section>
             </div>
+            </>)}
 
-            {/* Redeem Catalog */}
-            {/* ── Materi Belajar ── */}
+            {/* ── Materi ── */}
+            {participantSection === 'materi' && (<>
             <Section title="📚 Materi Belajar">
               {(() => {
                 // Kelompokkan per kategori
@@ -913,6 +957,10 @@ export default function Page() {
               })()}
             </Section>
 
+            </>)}
+
+            {/* ── Redeem ── */}
+            {participantSection === 'redeem' && (<>
             <Section title="🎁 Redeem Poin">
               {redeemItems.length ? (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px,1fr))', gap: 12 }}>
@@ -979,6 +1027,10 @@ export default function Page() {
             </Section>
 
             {/* Refleksi Harian */}
+            </>)}
+
+            {/* ── Refleksi ── */}
+            {participantSection === 'refleksi' && (<>
             <Section title="📔 Refleksi Harianku">
               <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 16 }}>
                 Refleksi harianmu bersifat <strong>privat</strong> — hanya kamu yang bisa membacanya 🔒<br/>
@@ -1005,7 +1057,10 @@ export default function Page() {
                 </div>
               )}
             </Section>
-          </>
+            </>)}
+
+            </div>
+          </div>
         )}
 
         {/* ── Admin View ── */}
