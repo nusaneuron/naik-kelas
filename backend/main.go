@@ -2277,7 +2277,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-profile-group"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-bot-ux"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -2465,19 +2465,19 @@ func (a *app) syncTelegramBotCommands(ctx context.Context) error {
 		return nil
 	}
 	commands := []map[string]string{
-		{"command": "start", "description": "Mulai dengan Nala"},
-		{"command": "poin", "description": "Menu saldo & transaksi poin"},
-		{"command": "exp", "description": "Lihat EXP dan level"},
-		{"command": "status", "description": "Ringkasan level, EXP, poin"},
-		{"command": "daftar", "description": "Daftar peserta baru"},
-		{"command": "cek", "description": "Cek status pendaftaran"},
-		{"command": "quiz", "description": "Latihan quiz per kategori"},
-		{"command": "tryout", "description": "Tryout soal acak"},
-		{"command": "leaderbot", "description": "Ranking tryout tercepat"},
-		{"command": "jadwal_belajar", "description": "Atur pengingat belajar"},
-		{"command": "materi", "description": "Akses materi belajar 📚"},
-		{"command": "redeem", "description": "Tukar poin dengan hadiah 🎁"},
-		{"command": "batal", "description": "Batalkan proses saat ini"},
+		{"command": "start", "description": "🏠 Tampilkan menu utama Nala"},
+		{"command": "daftar", "description": "📝 Daftar sebagai peserta baru"},
+		{"command": "cek", "description": "🔍 Cek status pendaftaranmu"},
+		{"command": "materi", "description": "📚 Belajar materi per kategori"},
+		{"command": "quiz", "description": "🧠 Latihan soal per kategori"},
+		{"command": "tryout", "description": "🚀 Simulasi tryout soal acak"},
+		{"command": "leaderbot", "description": "🏆 Papan ranking tryout tercepat"},
+		{"command": "status", "description": "📊 Lihat level, EXP & poin kamu"},
+		{"command": "exp", "description": "⭐ Detail EXP dan progress level"},
+		{"command": "poin", "description": "💰 Saldo & riwayat transaksi poin"},
+		{"command": "redeem", "description": "🎁 Tukar poin dengan hadiah"},
+		{"command": "jadwal_belajar", "description": "⏰ Atur pengingat belajar harian"},
+		{"command": "batal", "description": "❌ Batalkan proses yang sedang berjalan"},
 	}
 	payload := map[string]any{"commands": commands}
 	b, _ := json.Marshal(payload)
@@ -2619,7 +2619,7 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 	}
 	if lower == "/start" {
 		a.resetSession(uid)
-		return "Halo! Perkenalkan saya *Nala* ✨\nAsisten belajarmu di *Naik Kelas* 🎓\n\n📚 *Belajar*\n/materi — Belajar materi per kategori\n/quiz — Latihan soal per kategori\n/tryout — Simulasi soal acak\n/leaderbot — Ranking tryout tercepat 🏆\n\n👤 *Akun*\n/daftar — Daftar peserta baru\n/cek — Cek status pendaftaran\n/status — Level, EXP & poin kamu\n/poin — Menu saldo & transaksi poin\n/exp — Detail EXP & level\n\n🎁 *Reward*\n/redeem — Tukar poin dengan hadiah\n\n⏰ *Pengingat*\n/jadwal\\_belajar — Atur jadwal belajar harian\n\n❌ /batal — Batalkan proses yang sedang berjalan\n\nAda yang bisa Nala bantu hari ini? 😊", "idle"
+		return "Halo\\! Perkenalkan, saya *Nala* ✨\nAsisten belajar pintarmu di *Naik Kelas* 🎓\n\n━━━━━━━━━━━━━━━\n📚 *Belajar*\n/materi \\— Belajar materi per kategori\n/quiz \\— Latihan soal pilihan ganda\n/tryout \\— Simulasi tryout soal acak\n/leaderbot \\— Papan ranking tryout 🏆\n\n━━━━━━━━━━━━━━━\n👤 *Akun & Progress*\n/daftar \\— Daftar sebagai peserta baru\n/cek \\— Cek status pendaftaran\n/status \\— Level, EXP & saldo poin\n/exp \\— Detail progress levelmu ⭐\n/poin \\— Riwayat transaksi poin 💰\n\n━━━━━━━━━━━━━━━\n🎁 *Reward*\n/redeem \\— Tukar poin dengan hadiah\n\n━━━━━━━━━━━━━━━\n⏰ *Pengingat*\n/jadwal\\_belajar \\— Atur jadwal belajar harian\n\n❌ /batal \\— Batalkan proses yang sedang berjalan\n━━━━━━━━━━━━━━━\n\nAda yang bisa Nala bantu? Yuk mulai belajar\\! 💪", "idle"
 	}
 	if lower == "/daftar" {
 		a.mu.Lock()
