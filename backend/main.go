@@ -209,6 +209,7 @@ func main() {
 	mux.HandleFunc("/admin/participants/reset-password", a.handleAdminResetPassword)
 	mux.HandleFunc("/admin/participants/toggle-active", a.handleAdminToggleActive)
 	mux.HandleFunc("/admin/participants/set-role", a.handleAdminSetRole)
+	mux.HandleFunc("/admin/set-super-admin", a.handleAdminSetSuperAdmin)
 	mux.HandleFunc("/admin/participants/delete", a.handleAdminDeleteParticipant)
 	mux.HandleFunc("/admin/categories", a.handleAdminCategories)
 	mux.HandleFunc("/admin/questions", a.handleAdminQuestions)
@@ -913,7 +914,18 @@ func (a *app) handleAuthMe(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
-	writeJSON(w, http.StatusOK, u)
+	// Ambil nama dari participant_profiles jika ada
+	var name string
+	_ = a.db.QueryRowContext(r.Context(), `SELECT COALESCE(name,'') FROM participant_profiles WHERE user_id=$1`, u.ID).Scan(&name)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":                   u.ID,
+		"phone":                u.Phone,
+		"role":                 u.Role,
+		"must_change_password": u.MustChangePassword,
+		"name":                 name,
+		"is_admin":             isAdmin(u),
+		"is_super_admin":       isSuperAdmin(u),
+	})
 }
 
 func (a *app) handleAuthChangePassword(w http.ResponseWriter, r *http.Request) {
@@ -1919,6 +1931,42 @@ func (a *app) handleAdminSetRole(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+func (a *app) handleAdminSetSuperAdmin(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "super_admin")
+	if err != nil {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "hanya super_admin yang bisa menggunakan endpoint ini"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req struct {
+		UserID int64  `json:"user_id"`
+		Action string `json:"action"` // "promote" | "demote"
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || req.UserID == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
+		return
+	}
+	// Tidak boleh demote diri sendiri
+	if req.Action == "demote" && req.UserID == u.ID {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "tidak bisa demote diri sendiri"})
+		return
+	}
+	newRole := "admin"
+	if req.Action == "promote" {
+		newRole = "super_admin"
+	}
+	_, err = a.db.ExecContext(r.Context(), `UPDATE users SET role=$1, updated_at=NOW() WHERE id=$2`, newRole, req.UserID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal update role"})
+		return
+	}
+	_ = a.logAdminAction(r.Context(), u.ID, "super_admin.set_role", fmt.Sprint(req.UserID), map[string]any{"user_id": req.UserID, "new_role": newRole})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "user_id": req.UserID, "new_role": newRole})
+}
+
 func (a *app) handleAdminDeleteParticipant(w http.ResponseWriter, r *http.Request) {
 	admin, err := a.requireRole(r.Context(), r, "admin")
 	if err != nil {
@@ -2125,12 +2173,26 @@ func (a *app) requireRole(ctx context.Context, r *http.Request, roles ...string)
 	if err != nil {
 		return authUser{}, err
 	}
+	// super_admin punya akses ke semua role
+	if u.Role == "super_admin" {
+		return u, nil
+	}
 	for _, role := range roles {
 		if u.Role == role {
 			return u, nil
 		}
 	}
 	return authUser{}, errors.New("forbidden")
+}
+
+// isAdmin — true untuk admin & super_admin
+func isAdmin(u authUser) bool {
+	return u.Role == "admin" || u.Role == "super_admin"
+}
+
+// isSuperAdmin — true hanya untuk super_admin
+func isSuperAdmin(u authUser) bool {
+	return u.Role == "super_admin"
 }
 
 func (a *app) logAdminAction(ctx context.Context, adminUserID int64, action, target string, detail any) error {
@@ -2170,7 +2232,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-groups-phase4"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-superadmin"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {

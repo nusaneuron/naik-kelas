@@ -40,6 +40,7 @@ export default function Page() {
   const [redeemDesc, setRedeemDesc] = useState('');
   const [redeemCost, setRedeemCost] = useState('');
   const [redeemStock, setRedeemStock] = useState('-1');
+  const [redeemGroupId, setRedeemGroupId] = useState('');
   const [redeemClaimNote, setRedeemClaimNote] = useState('');
   // Materi
   const [myMaterials, setMyMaterials] = useState([]);
@@ -63,8 +64,17 @@ export default function Page() {
   const [pointReason, setPointReason] = useState('');
   const [editingPointEntryId, setEditingPointEntryId] = useState('');
 
+  // Kelompok
+  const [adminGroups, setAdminGroups] = useState([]);
+  const [groupName, setGroupName] = useState('');
+  const [groupCode, setGroupCode] = useState('');
+  const [groupDesc, setGroupDesc] = useState('');
+  const [groupActive, setGroupActive] = useState(true);
+  const [editingGroupId, setEditingGroupId] = useState('');
+
   const [newCategoryCode, setNewCategoryCode] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryGroupId, setNewCategoryGroupId] = useState('');
   const [editingCategoryId, setEditingCategoryId] = useState('');
 
   const [qCategoryId, setQCategoryId] = useState('');
@@ -139,11 +149,13 @@ export default function Page() {
     if (arcRes.ok) setAdminRedeemClaims((await arcRes.json()).items || []);
     if (amRes.ok) setAdminMaterials((await amRes.json()).items || []);
     if (catRes.ok) setAdminCategories((await catRes.json()).categories || []);
+    const grpRes = await fetch(`${apiBase}/admin/groups`, { credentials: 'include' });
+    if (grpRes.ok) setAdminGroups((await grpRes.json()).items || []);
   }
 
   async function loadPortal(role) {
     await loadParticipant();
-    if (role === 'admin') await loadAdmin();
+    if (role === 'admin' || role === 'super_admin') await loadAdmin();
   }
 
   useEffect(() => {
@@ -241,8 +253,8 @@ export default function Page() {
     await fetch(`${apiBase}/admin/categories`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify(isEdit
-        ? { action: 'update', id: Number(editingCategoryId), code: newCategoryCode, name: newCategoryName, is_active: true }
-        : { action: 'create', code: newCategoryCode, name: newCategoryName })
+        ? { action: 'update', id: Number(editingCategoryId), code: newCategoryCode, name: newCategoryName, is_active: true, group_id: newCategoryGroupId ? parseInt(newCategoryGroupId) : null }
+        : { action: 'create', code: newCategoryCode, name: newCategoryName, group_id: newCategoryGroupId ? parseInt(newCategoryGroupId) : null })
     });
     setNewCategoryCode(''); setNewCategoryName(''); setEditingCategoryId('');
     await loadAdmin();
@@ -253,6 +265,7 @@ export default function Page() {
     setEditingCategoryId(String(cat.id));
     setNewCategoryCode(cat.code || '');
     setNewCategoryName(cat.name || '');
+    setNewCategoryGroupId(cat.group_id ? String(cat.group_id) : '');
   }
 
   async function deleteCategory(catId) {
@@ -393,8 +406,8 @@ export default function Page() {
     setBusy(true); setActionMsg('');
     const isEdit = !!editingRedeemId;
     const payload = isEdit
-      ? { action: 'update', id: Number(editingRedeemId), name: redeemName, description: redeemDesc, point_cost: Number(redeemCost), stock: Number(redeemStock), is_active: true, image_url: '' }
-      : { action: 'create', name: redeemName, description: redeemDesc, point_cost: Number(redeemCost), stock: Number(redeemStock), image_url: '' };
+      ? { action: 'update', id: Number(editingRedeemId), name: redeemName, description: redeemDesc, point_cost: Number(redeemCost), stock: Number(redeemStock), is_active: true, image_url: '', group_id: redeemGroupId ? parseInt(redeemGroupId) : null }
+      : { action: 'create', name: redeemName, description: redeemDesc, point_cost: Number(redeemCost), stock: Number(redeemStock), image_url: '', group_id: redeemGroupId ? parseInt(redeemGroupId) : null };
     await fetch(`${apiBase}/admin/redeem/items`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify(payload)
@@ -408,6 +421,7 @@ export default function Page() {
     setEditingRedeemId(String(it.id));
     setRedeemName(it.name); setRedeemDesc(it.description);
     setRedeemCost(String(it.point_cost)); setRedeemStock(String(it.stock));
+    setRedeemGroupId(it.group_id ? String(it.group_id) : '');
   }
 
   async function deleteRedeemItem(id) {
@@ -497,7 +511,8 @@ export default function Page() {
 
   const matchedParticipant = participants.find((p) => ((p.phone || '').replace(/[^0-9]/g, '') === (pointPhone || '').replace(/[^0-9]/g, '')));
   const filteredQuestions = questionFilterCategoryId ? questions.filter((q) => String(q.category_id) === String(questionFilterCategoryId)) : questions;
-  const isAdmin = me?.role === 'admin';
+  const isAdmin = me?.role === 'admin' || me?.role === 'super_admin';
+  const isSuperAdmin = me?.role === 'super_admin';
   const showParticipantView = !isAdmin || adminViewMode === 'participant';
   const showAdminView = isAdmin && adminViewMode === 'admin';
 
@@ -682,6 +697,8 @@ export default function Page() {
                 <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <span className="nk-badge nk-badge-purple">Lv. {profile?.level || 1}</span>
                   <span className="nk-badge nk-badge-yellow">⭐ {profile?.exp || 0} EXP</span>
+                  {isSuperAdmin && <span className="nk-badge" style={{ background: 'linear-gradient(135deg,#f59e0b,#ef4444)', color: '#fff', fontWeight: 800 }}>👑 Super Admin</span>}
+                  {isAdmin && !isSuperAdmin && <span className="nk-badge nk-badge-orange">⚙️ Admin</span>}
                 </div>
                 {isAdmin && (
                   <div style={{ marginTop: 14, display: 'flex', gap: 6 }}>
@@ -973,13 +990,14 @@ export default function Page() {
               </p>
               <nav style={{ display: 'grid', gap: 4 }}>
                 {[
+                  ['kelompok', '🏢', 'Kelompok'],
                   ['peserta', '👥', 'Peserta'],
                   ['bank', '📚', 'Bank Soal'],
+                  ['materi', '📖', 'Materi'],
+                  ['redeem', '🎁', 'Redeem'],
                   ['jadwal', '📅', 'Jadwal Belajar'],
                   ['poin', '💰', 'Poin'],
                   ['exp', '⭐', 'EXP'],
-                  ['materi', '📚', 'Materi'],
-                  ['redeem', '🎁', 'Redeem'],
                 ].map(([key, icon, label]) => (
                   <button
                     key={key}
@@ -1003,18 +1021,85 @@ export default function Page() {
             {/* Content */}
             <div style={{ padding: 20, overflowX: 'auto' }}>
 
+              {/* Admin — Kelompok */}
+              {adminSection === 'kelompok' && (
+                <AdminSection title="🏢 Manajemen Kelompok">
+                  {/* Form tambah/edit */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 16 }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>Nama Kelompok</div>
+                      <input className="nk-input-sm" placeholder="PT ABC" value={groupName} onChange={e => setGroupName(e.target.value)} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>Kode (unik, kapital)</div>
+                      <input className="nk-input-sm" placeholder="PTABC" value={groupCode} onChange={e => setGroupCode(e.target.value.toUpperCase())} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>Deskripsi</div>
+                      <input className="nk-input-sm" placeholder="Keterangan kelompok..." value={groupDesc} onChange={e => setGroupDesc(e.target.value)} />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#94a3b8', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={groupActive} onChange={e => setGroupActive(e.target.checked)} /> Aktif
+                      </label>
+                      <BtnSm color="purple" onClick={async () => {
+                        if (!groupName.trim() || !groupCode.trim()) return showMsg('Nama & kode wajib diisi', 'error');
+                        setBusy(true);
+                        const action = editingGroupId ? 'update' : 'create';
+                        const body = { action, name: groupName, code: groupCode, description: groupDesc, is_active: groupActive };
+                        if (editingGroupId) body.id = parseInt(editingGroupId);
+                        const res = await fetch(`${apiBase}/admin/groups`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                        setBusy(false);
+                        if (res.ok) {
+                          showMsg(editingGroupId ? 'Kelompok diperbarui' : 'Kelompok ditambahkan', 'success');
+                          setGroupName(''); setGroupCode(''); setGroupDesc(''); setGroupActive(true); setEditingGroupId('');
+                          await loadAdmin();
+                        } else showMsg('Gagal simpan kelompok', 'error');
+                      }}>{editingGroupId ? '💾 Update' : '➕ Tambah'}</BtnSm>
+                      {editingGroupId && <BtnSm color="gray" onClick={() => { setEditingGroupId(''); setGroupName(''); setGroupCode(''); setGroupDesc(''); setGroupActive(true); }}>Batal</BtnSm>}
+                    </div>
+                  </div>
+                  {/* Tabel kelompok */}
+                  <div className="nk-table-wrap">
+                    <table className="nk-table">
+                      <thead><tr><th>Nama</th><th>Kode</th><th>Deskripsi</th><th>Anggota</th><th>Status</th><th>Aksi</th></tr></thead>
+                      <tbody>{adminGroups.map(g => (
+                        <tr key={g.id}>
+                          <td style={{ fontWeight: 600 }}>{g.name}</td>
+                          <td><code style={{ background: 'rgba(190,148,245,0.12)', color: '#be94f5', padding: '2px 7px', borderRadius: 5, fontSize: 12 }}>{g.code}</code></td>
+                          <td style={{ color: '#94a3b8', fontSize: 13 }}>{g.description || '-'}</td>
+                          <td><span className="nk-badge nk-badge-purple">{g.member_count} peserta</span></td>
+                          <td><span className={`nk-badge ${g.is_active ? 'nk-badge-green' : 'nk-badge-orange'}`}>{g.is_active ? 'Aktif' : 'Nonaktif'}</span></td>
+                          <td style={{ display: 'flex', gap: 6 }}>
+                            <BtnSm color="purple" onClick={() => { setEditingGroupId(String(g.id)); setGroupName(g.name); setGroupCode(g.code); setGroupDesc(g.description || ''); setGroupActive(g.is_active); }}>✏️ Edit</BtnSm>
+                            <BtnSm color="red" onClick={async () => {
+                              if (!confirm(`Hapus kelompok "${g.name}"?`)) return;
+                              const res = await fetch(`${apiBase}/admin/groups`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', id: g.id }) });
+                              if (res.ok) { showMsg('Kelompok dihapus', 'success'); await loadAdmin(); }
+                              else showMsg('Gagal hapus', 'error');
+                            }}>🗑️</BtnSm>
+                          </td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                  {adminGroups.length === 0 && <div style={{ textAlign: 'center', color: '#475569', padding: 24 }}>Belum ada kelompok. Tambahkan di atas.</div>}
+                </AdminSection>
+              )}
+
               {/* Admin — Peserta */}
               {adminSection === 'peserta' && (
                 <AdminSection title="👥 Peserta">
                   {participants.length ? (
                     <div className="nk-table-wrap" style={{ maxHeight: 520 }}>
                       <table className="nk-table" style={{ minWidth: 1100 }}>
-                        <thead><tr><th>Nama</th><th>No. HP</th><th>Role</th><th>Status</th><th>Aksi</th></tr></thead>
+                        <thead><tr><th>Nama</th><th>No. HP</th><th>Kelompok</th><th>Role</th><th>Status</th><th>Aksi</th></tr></thead>
                         <tbody>{participants.map((p) => (
                           <tr key={p.id}>
                             <td style={{ fontWeight: 600 }}>{p.name || '-'}</td>
                             <td style={{ color: '#94a3b8' }}>{p.phone}</td>
-                            <td><span className={`nk-badge ${p.role === 'admin' ? 'nk-badge-orange' : 'nk-badge-purple'}`}>{p.role}</span></td>
+                            <td>{p.group_name ? <span className="nk-badge nk-badge-purple">🏢 {p.group_name}</span> : <span style={{ color: '#475569', fontSize: 12 }}>—</span>}</td>
+                            <td><span className={`nk-badge ${p.role === 'super_admin' ? '' : p.role === 'admin' ? 'nk-badge-orange' : 'nk-badge-purple'}`} style={p.role === 'super_admin' ? {background:'linear-gradient(135deg,#f59e0b,#ef4444)',color:'#fff',fontWeight:800} : {}}>{p.role === 'super_admin' ? '👑 Super Admin' : p.role}</span></td>
                             <td><span className={`nk-badge ${p.is_active ? 'nk-badge-green' : 'nk-badge-red'}`}>{p.is_active ? '● Aktif' : '○ Nonaktif'}</span></td>
                             <td>
                               <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap' }}>
@@ -1037,10 +1122,14 @@ export default function Page() {
                 <>
                   <AdminSection title="📂 Kategori Soal">
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-                      <input className="nk-input-sm" placeholder="Kode" style={{ width: 120 }} value={newCategoryCode} onChange={(e) => setNewCategoryCode(e.target.value)} />
-                      <input className="nk-input-sm" placeholder="Nama kategori" style={{ width: 200 }} value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
+                      <input className="nk-input-sm" placeholder="Kode" style={{ width: 100 }} value={newCategoryCode} onChange={(e) => setNewCategoryCode(e.target.value)} />
+                      <input className="nk-input-sm" placeholder="Nama kategori" style={{ width: 180 }} value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
+                      <select className="nk-input-sm" style={{ width: 160 }} value={newCategoryGroupId} onChange={e => setNewCategoryGroupId(e.target.value)}>
+                        <option value="">🌐 Semua Kelompok</option>
+                        {adminGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                      </select>
                       <BtnSm disabled={busy} onClick={addCategory}>{busy ? '...' : (editingCategoryId ? 'Update' : '+ Tambah')}</BtnSm>
-                      {editingCategoryId && <BtnSm disabled={busy} onClick={() => { setEditingCategoryId(''); setNewCategoryCode(''); setNewCategoryName(''); }}>Batal</BtnSm>}
+                      {editingCategoryId && <BtnSm disabled={busy} onClick={() => { setEditingCategoryId(''); setNewCategoryCode(''); setNewCategoryName(''); setNewCategoryGroupId(''); }}>Batal</BtnSm>}
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
                       {categories.map((c) => (
@@ -1049,7 +1138,8 @@ export default function Page() {
                           padding: '14px 16px', background: '#0f172a'
                         }}>
                           <div style={{ fontWeight: 700, marginBottom: 2 }}>{c.name}</div>
-                          <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 12 }}>{c.code}</div>
+                          <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>{c.code}</div>
+                          <div style={{ fontSize: 11, marginBottom: 10 }}>{c.group_name ? <span className="nk-badge nk-badge-purple">🏢 {c.group_name}</span> : <span className="nk-badge" style={{ background: '#1e293b', color: '#64748b' }}>🌐 Global</span>}</div>
                           <div style={{ display: 'flex', gap: 6 }}>
                             <BtnSm disabled={busy} onClick={() => startEditCategory(c)}>Edit</BtnSm>
                             <BtnSm disabled={busy} onClick={() => deleteCategory(c.id)} danger>Hapus</BtnSm>
@@ -1427,13 +1517,20 @@ export default function Page() {
                         <label style={fieldLbl}>Deskripsi</label>
                         <input className="nk-input" placeholder="Keterangan singkat hadiah" value={redeemDesc} onChange={(e) => setRedeemDesc(e.target.value)} />
                       </div>
-                      <div style={{ marginBottom: 12 }}>
+                      <div style={{ marginBottom: 10 }}>
                         <label style={fieldLbl}>Stok (-1 = unlimited)</label>
                         <input className="nk-input" type="number" min="-1" placeholder="-1" value={redeemStock} onChange={(e) => setRedeemStock(e.target.value)} />
                       </div>
+                      <div style={{ marginBottom: 12 }}>
+                        <label style={fieldLbl}>Kelompok (kosong = semua)</label>
+                        <select className="nk-input" value={redeemGroupId} onChange={e => setRedeemGroupId(e.target.value)}>
+                          <option value="">🌐 Semua Kelompok</option>
+                          {adminGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                        </select>
+                      </div>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <BtnSm disabled={busy} onClick={saveRedeemItem}>{busy ? '...' : (editingRedeemId ? 'Update Hadiah' : '+ Tambah')}</BtnSm>
-                        {editingRedeemId && <BtnSm disabled={busy} onClick={() => { setEditingRedeemId(''); setRedeemName(''); setRedeemDesc(''); setRedeemCost(''); setRedeemStock('-1'); }}>Batal</BtnSm>}
+                        {editingRedeemId && <BtnSm disabled={busy} onClick={() => { setEditingRedeemId(''); setRedeemName(''); setRedeemDesc(''); setRedeemCost(''); setRedeemStock('-1'); setRedeemGroupId(''); }}>Batal</BtnSm>}
                       </div>
                     </div>
 
