@@ -44,6 +44,8 @@ export default function Page() {
   const [redeemClaimNote, setRedeemClaimNote] = useState('');
   // Materi
   const [myMaterials, setMyMaterials] = useState([]);
+  const [myReflections, setMyReflections] = useState([]);
+  const [adminReflectionStats, setAdminReflectionStats] = useState(null);
   const [adminMaterials, setAdminMaterials] = useState([]);
   const [adminCategories, setAdminCategories] = useState([]);
   const [materiFilterCat, setMateriFilterCat] = useState('');
@@ -115,6 +117,8 @@ export default function Page() {
     if (riRes.ok) setRedeemItems((await riRes.json()).items || []);
     if (rcRes.ok) setRedeemClaims((await rcRes.json()).items || []);
     if (matRes.ok) setMyMaterials((await matRes.json()).items || []);
+    const refRes = await fetch(`${apiBase}/participant/reflections`, { credentials: 'include' });
+    if (refRes.ok) setMyReflections((await refRes.json()).items || []);
   }
 
   async function loadAdmin() {
@@ -152,6 +156,8 @@ export default function Page() {
     if (catRes.ok) setAdminCategories((await catRes.json()).categories || []);
     const grpRes = await fetch(`${apiBase}/admin/groups`, { credentials: 'include' });
     if (grpRes.ok) setAdminGroups((await grpRes.json()).items || []);
+    const refStatsRes = await fetch(`${apiBase}/admin/reflections/stats`, { credentials: 'include' });
+    if (refStatsRes.ok) setAdminReflectionStats(await refStatsRes.json());
   }
 
   async function loadPortal(role) {
@@ -971,6 +977,34 @@ export default function Page() {
                 </div>
               ) : <div className="nk-empty">📋 Belum ada riwayat klaim.</div>}
             </Section>
+
+            {/* Refleksi Harian */}
+            <Section title="📔 Refleksi Harianku">
+              <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 16 }}>
+                Refleksi harianmu bersifat <strong>privat</strong> — hanya kamu yang bisa membacanya 🔒<br/>
+                Tulis lewat bot Nala dengan perintah <code style={{ color: '#be94f5' }}>/refleksi</code> dan dapatkan <strong>+15 EXP</strong> setiap hari!
+              </p>
+              {myReflections.length > 0 ? (
+                <div style={{ display: 'grid', gap: 10, maxHeight: 400, overflowY: 'auto' }}>
+                  {myReflections.map(r => (
+                    <div key={r.id} style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '14px 16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#be94f5' }}>
+                          📅 {new Date(r.reflected_date + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                        </span>
+                      </div>
+                      <p style={{ margin: 0, fontSize: 14, color: '#cbd5e1', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{r.content}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '32px 0' }}>
+                  <div style={{ fontSize: 32, marginBottom: 10 }}>📔</div>
+                  <p style={{ color: '#475569', fontSize: 14, margin: 0 }}>Belum ada refleksi.</p>
+                  <p style={{ color: '#334155', fontSize: 13, margin: '8px 0 0' }}>Mulai hari ini dengan ketik <strong>/refleksi</strong> di bot Nala!</p>
+                </div>
+              )}
+            </Section>
           </>
         )}
 
@@ -1005,6 +1039,7 @@ export default function Page() {
                   ['bank', '📚', 'Bank Soal'],
                   ['materi', '📖', 'Materi'],
                   ['redeem', '🎁', 'Redeem'],
+                  ['refleksi', '📔', 'Refleksi'],
                   ['jadwal', '📅', 'Jadwal Belajar'],
                   ['poin', '💰', 'Poin'],
                   ['exp', '⭐', 'EXP'],
@@ -1317,6 +1352,62 @@ export default function Page() {
                       </table>
                     </div>
                   ) : <div className="nk-empty">Belum ada transaksi poin.</div>}
+                </AdminSection>
+              )}
+
+              {/* Admin — Refleksi Stats */}
+              {adminSection === 'refleksi' && (
+                <AdminSection title="📔 Statistik Refleksi Harian">
+                  {adminReflectionStats ? (
+                    <>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
+                        <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                          <div style={{ fontSize: 28, fontWeight: 800, color: '#be94f5' }}>{adminReflectionStats.today}</div>
+                          <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Refleksi Hari Ini</div>
+                        </div>
+                        <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                          <div style={{ fontSize: 28, fontWeight: 800, color: '#38bdf8' }}>{adminReflectionStats.week}</div>
+                          <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>7 Hari Terakhir</div>
+                        </div>
+                        <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                          <div style={{ fontSize: 28, fontWeight: 800, color: '#34d399' }}>{adminReflectionStats.unique_users}</div>
+                          <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Peserta Aktif</div>
+                        </div>
+                      </div>
+                      {adminReflectionStats.top_users?.length > 0 && (
+                        <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                          <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>🏆 Peserta Paling Konsisten (30 hari)</p>
+                          {adminReflectionStats.top_users.map((u, i) => (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: i < adminReflectionStats.top_users.length - 1 ? '1px solid #1e2d45' : 'none' }}>
+                              <span style={{ fontSize: 13 }}>{['🥇','🥈','🥉','4.','5.'][i]} {u.name}</span>
+                              <span className="nk-badge nk-badge-purple">{u.count}x refleksi</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {adminReflectionStats.trend?.length > 0 && (
+                        <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16 }}>
+                          <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>📈 Tren 7 Hari Terakhir</p>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', height: 80 }}>
+                            {adminReflectionStats.trend.map((d, i) => {
+                              const max = Math.max(...adminReflectionStats.trend.map(x => x.count), 1);
+                              const h = Math.round((d.count / max) * 60) + 8;
+                              return (
+                                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                                  <div style={{ fontSize: 10, color: '#64748b' }}>{d.count}</div>
+                                  <div style={{ width: '100%', height: h, background: 'rgba(190,148,245,0.5)', borderRadius: 4 }}></div>
+                                  <div style={{ fontSize: 9, color: '#475569' }}>{d.date.slice(5)}</div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      <p style={{ fontSize: 12, color: '#475569', marginTop: 12, fontStyle: 'italic' }}>
+                        💡 Isi refleksi bersifat privat — hanya peserta yang bisa membaca tulisannya sendiri.
+                      </p>
+                    </>
+                  ) : <div style={{ textAlign: 'center', color: '#475569', padding: 40 }}>Memuat statistik...</div>}
                 </AdminSection>
               )}
 

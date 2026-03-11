@@ -174,6 +174,7 @@ func main() {
 	}
 
 	go a.startReminderScheduler(context.Background())
+	go a.startReflectionReminder(context.Background())
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", a.handleHealth)
@@ -227,6 +228,8 @@ func main() {
 	mux.HandleFunc("/admin/materials", a.handleAdminMaterials)
 	mux.HandleFunc("/participant/materials", a.handleParticipantMaterials)
 	mux.HandleFunc("/participant/materials/complete", a.handleParticipantMaterialComplete)
+	mux.HandleFunc("/participant/reflections", a.handleParticipantReflections)
+	mux.HandleFunc("/admin/reflections/stats", a.handleAdminReflectionStats)
 
 	port := getenv("PORT", "8080")
 	addr := ":" + port
@@ -514,7 +517,8 @@ func (a *app) initDB(ctx context.Context) error {
 		('quiz_perfect', 15),
 		('tryout_complete', 8),
 		('tryout_perfect', 20),
-		('level_step', 100)
+		('level_step', 100),
+		('reflection_daily', 15)
 	ON CONFLICT (rule_key) DO NOTHING`)
 
 	_, err = a.db.ExecContext(ctx, `
@@ -636,6 +640,21 @@ func (a *app) initDB(ctx context.Context) error {
 
 	// Promote designated super admin (Aldythya Nugraha)
 	_, _ = a.db.ExecContext(ctx, `UPDATE users SET role='super_admin' WHERE phone='081284047501' AND role='admin'`)
+
+	// Tabel refleksi harian peserta
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS reflections (
+			id           BIGSERIAL PRIMARY KEY,
+			user_id      BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			content      TEXT NOT NULL,
+			reflected_date DATE NOT NULL DEFAULT CURRENT_DATE,
+			created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE(user_id, reflected_date)
+		)
+	`)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -2277,7 +2296,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-bot-ux"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-refleksi"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -2476,6 +2495,7 @@ func (a *app) syncTelegramBotCommands(ctx context.Context) error {
 		{"command": "exp", "description": "⭐ Detail EXP dan progress level"},
 		{"command": "poin", "description": "💰 Saldo & riwayat transaksi poin"},
 		{"command": "redeem", "description": "🎁 Tukar poin dengan hadiah"},
+		{"command": "refleksi", "description": "📔 Tulis refleksi & jurnal harianmu"},
 		{"command": "jadwal_belajar", "description": "⏰ Atur pengingat belajar harian"},
 		{"command": "batal", "description": "❌ Batalkan proses yang sedang berjalan"},
 	}
@@ -2613,13 +2633,77 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 	}
 
 	lower := strings.ToLower(strings.TrimSpace(text))
+	// ── Refleksi Harian ──────────────────────────────────────────────
+	if lower == "/refleksi" {
+		registered, err := a.isRegisteredBotUser(ctx, uid)
+		if err != nil {
+			return "Maaf, Nala lagi kesulitan cek akunmu 🙏", "idle"
+		}
+		if !registered {
+			return "Kamu belum terdaftar. Ketik /daftar dulu ya ✨", "idle"
+		}
+		// Cek apakah sudah refleksi hari ini
+		webUID, err := a.resolveWebUserIDByExternal(ctx, uid)
+		if err == nil {
+			var existingID int64
+			checkErr := a.db.QueryRowContext(ctx, `SELECT id FROM reflections WHERE user_id=$1 AND reflected_date=CURRENT_DATE`, webUID).Scan(&existingID)
+			if checkErr == nil {
+				return "Kamu sudah menulis refleksi hari ini 📔✅\n\nSampai jumpa besok\\! Tetap semangat belajar\\! 💪", "idle"
+			}
+		}
+		return "📔 *Refleksi Harian*\n\nHai\\! Sebelum hari ini berakhir, yuk luangkan sejenak untuk merenung 🌙\n\n_Ceritakan ke Nala:_\n• Apa yang kamu pelajari hari ini?\n• Apa yang kamu rasakan?\n• Adakah yang ingin kamu syukuri atau perbaiki?\n\nTulis bebas ya, tidak ada jawaban yang salah 🤍\n\n_Ketik /batal untuk membatalkan_", "wait_reflection"
+	}
+
+	if s.State == "wait_reflection" {
+		if len(strings.TrimSpace(text)) < 10 {
+			return "Hmm, ceritakan sedikit lebih banyak ya 🙏\nNala ingin tahu lebih banyak tentang harimu hari ini 😊", "wait_reflection"
+		}
+		webUID, err := a.resolveWebUserIDByExternal(ctx, uid)
+		if err != nil {
+			return "Maaf, Nala kesulitan menyimpan refleksimu saat ini 🙏\nCoba lagi ya.", "wait_reflection"
+		}
+		// Simpan ke DB
+		_, dbErr := a.db.ExecContext(ctx, `
+			INSERT INTO reflections (user_id, content, reflected_date)
+			VALUES ($1, $2, CURRENT_DATE)
+			ON CONFLICT (user_id, reflected_date) DO UPDATE SET content=EXCLUDED.content, created_at=NOW()
+		`, webUID, strings.TrimSpace(text))
+		if dbErr != nil {
+			return "Maaf, terjadi kesalahan saat menyimpan 🙏", "wait_reflection"
+		}
+		// Beri EXP
+		expVal := a.getExpRuleValue(ctx, "reflection_daily", 15)
+		_, _ = a.adjustExp(ctx, webUID, expVal, "Refleksi harian")
+		// Pilih response motivasi
+		responses := []string{
+			"Terima kasih sudah berbagi, *%s*\\! 🤍\n\nMenuliskan apa yang kamu rasakan adalah langkah kecil yang luar biasa\\. Nala bangga kamu meluangkan waktu untuk ini\\.\n\n✨ *\\+%d EXP* sudah kamu dapatkan\\!\nSampai besok\\! 🌙",
+			"Wah, harimu penuh cerita ya, *%s*\\! 📔\n\nIngat, setiap hari adalah kesempatan baru untuk bertumbuh\\. Kamu sudah melakukan hal yang tepat hari ini\\!\n\n✨ *\\+%d EXP* untukmu\\!\nIstirahat yang cukup ya 💙",
+			"Nala senang kamu mau berbagi, *%s*\\! 🌸\n\nRefleksi seperti ini membantu kita jadi lebih sadar diri dan berkembang\\. Teruskan kebiasaan baik ini ya\\!\n\n✨ *\\+%d EXP* sudah ditambahkan\\!\nSemangat untuk esok hari\\! 🌅",
+			"Bagus sekali, *%s*\\! Konsistensi adalah kunci 🗝️\n\nJangan lupa bahwa setiap tulisanmu hari ini adalah bukti kamu peduli pada dirimu sendiri\\.\n\n✨ *\\+%d EXP* berhasil kamu raih\\!\nNala selalu ada besok ya 🤍",
+		}
+		// Pilih response berdasarkan hash uid
+		idx := 0
+		for _, c := range uid {
+			idx += int(c)
+		}
+		// Get nama peserta
+		name := "kamu"
+		var pName string
+		if err2 := a.db.QueryRowContext(ctx, `SELECT COALESCE(name,'') FROM participant_profiles WHERE user_id=$1`, webUID).Scan(&pName); err2 == nil && pName != "" {
+			name = strings.Split(pName, " ")[0] // Nama depan
+		}
+		msg := fmt.Sprintf(responses[idx%len(responses)], name, expVal)
+		a.resetSession(uid)
+		return msg, "idle"
+	}
+
 	if lower == "/batal" {
 		a.resetSession(uid)
 		return "Oke, proses dibatalkan dulu ya 🙂\nKapan pun siap, ketik /daftar, /quiz, atau /tryout untuk mulai lagi.", "idle"
 	}
 	if lower == "/start" {
 		a.resetSession(uid)
-		return "Halo\\! Perkenalkan, saya *Nala* ✨\nAsisten belajar pintarmu di *Naik Kelas* 🎓\n\n━━━━━━━━━━━━━━━\n📚 *Belajar*\n/materi \\— Belajar materi per kategori\n/quiz \\— Latihan soal pilihan ganda\n/tryout \\— Simulasi tryout soal acak\n/leaderbot \\— Papan ranking tryout 🏆\n\n━━━━━━━━━━━━━━━\n👤 *Akun & Progress*\n/daftar \\— Daftar sebagai peserta baru\n/cek \\— Cek status pendaftaran\n/status \\— Level, EXP & saldo poin\n/exp \\— Detail progress levelmu ⭐\n/poin \\— Riwayat transaksi poin 💰\n\n━━━━━━━━━━━━━━━\n🎁 *Reward*\n/redeem \\— Tukar poin dengan hadiah\n\n━━━━━━━━━━━━━━━\n⏰ *Pengingat*\n/jadwal\\_belajar \\— Atur jadwal belajar harian\n\n❌ /batal \\— Batalkan proses yang sedang berjalan\n━━━━━━━━━━━━━━━\n\nAda yang bisa Nala bantu? Yuk mulai belajar\\! 💪", "idle"
+		return "Halo\\! Perkenalkan, saya *Nala* ✨\nAsisten belajar pintarmu di *Naik Kelas* 🎓\n\n━━━━━━━━━━━━━━━\n📚 *Belajar*\n/materi \\— Belajar materi per kategori\n/quiz \\— Latihan soal pilihan ganda\n/tryout \\— Simulasi tryout soal acak\n/leaderbot \\— Papan ranking tryout 🏆\n\n━━━━━━━━━━━━━━━\n👤 *Akun & Progress*\n/daftar \\— Daftar sebagai peserta baru\n/cek \\— Cek status pendaftaran\n/status \\— Level, EXP & saldo poin\n/exp \\— Detail progress levelmu ⭐\n/poin \\— Riwayat transaksi poin 💰\n\n━━━━━━━━━━━━━━━\n🎁 *Reward*\n/redeem \\— Tukar poin dengan hadiah\n\n━━━━━━━━━━━━━━━\n📔 *Refleksi Diri*\n/refleksi \\— Tulis jurnal & refleksi harianmu\n\n━━━━━━━━━━━━━━━\n⏰ *Pengingat*\n/jadwal\\_belajar \\— Atur jadwal belajar harian\n\n❌ /batal \\— Batalkan proses yang sedang berjalan\n━━━━━━━━━━━━━━━\n\nAda yang bisa Nala bantu? Yuk mulai belajar\\! 💪", "idle"
 	}
 	if lower == "/daftar" {
 		a.mu.Lock()
@@ -5185,4 +5269,188 @@ func (a *app) handleAdminGroups(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+}
+
+// ── Refleksi: Endpoint Peserta ──────────────────────────────────────────────
+
+func (a *app) handleParticipantReflections(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant", "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method == http.MethodGet {
+		rows, err := a.db.QueryContext(r.Context(), `
+			SELECT id, content, reflected_date, created_at
+			FROM reflections
+			WHERE user_id=$1
+			ORDER BY reflected_date DESC
+			LIMIT 90
+		`, u.ID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
+			return
+		}
+		defer rows.Close()
+		type refItem struct {
+			ID            int64  `json:"id"`
+			Content       string `json:"content"`
+			ReflectedDate string `json:"reflected_date"`
+			CreatedAt     string `json:"created_at"`
+		}
+		items := []refItem{}
+		for rows.Next() {
+			var it refItem
+			var rDate time.Time
+			var cAt time.Time
+			if err := rows.Scan(&it.ID, &it.Content, &rDate, &cAt); err == nil {
+				it.ReflectedDate = rDate.Format("2006-01-02")
+				it.CreatedAt = cAt.Format(time.RFC3339)
+				items = append(items, it)
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+		return
+	}
+	writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+}
+
+// ── Refleksi: Agregat Admin ─────────────────────────────────────────────────
+
+func (a *app) handleAdminReflectionStats(w http.ResponseWriter, r *http.Request) {
+	_, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	ctx := r.Context()
+
+	// Total refleksi hari ini
+	var todayCount int
+	_ = a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM reflections WHERE reflected_date=CURRENT_DATE`).Scan(&todayCount)
+
+	// Total refleksi 7 hari terakhir
+	var weekCount int
+	_ = a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM reflections WHERE reflected_date >= CURRENT_DATE - INTERVAL '7 days'`).Scan(&weekCount)
+
+	// Jumlah peserta unik yang pernah refleksi
+	var uniqueUsers int
+	_ = a.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT user_id) FROM reflections`).Scan(&uniqueUsers)
+
+	// Tren 7 hari (per tanggal)
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT reflected_date::text, COUNT(*) as cnt
+		FROM reflections
+		WHERE reflected_date >= CURRENT_DATE - INTERVAL '6 days'
+		GROUP BY reflected_date
+		ORDER BY reflected_date ASC
+	`)
+	trend := []map[string]any{}
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var d string
+			var cnt int
+			if rows.Scan(&d, &cnt) == nil {
+				trend = append(trend, map[string]any{"date": d, "count": cnt})
+			}
+		}
+	}
+
+	// Top 5 peserta paling aktif (hanya jumlah, bukan isi)
+	topRows, _ := a.db.QueryContext(ctx, `
+		SELECT pp.name, COUNT(*) as streak
+		FROM reflections r
+		JOIN participant_profiles pp ON pp.user_id = r.user_id
+		WHERE r.reflected_date >= CURRENT_DATE - INTERVAL '30 days'
+		GROUP BY pp.name
+		ORDER BY streak DESC
+		LIMIT 5
+	`)
+	topUsers := []map[string]any{}
+	if topRows != nil {
+		defer topRows.Close()
+		for topRows.Next() {
+			var name string
+			var cnt int
+			if topRows.Scan(&name, &cnt) == nil {
+				topUsers = append(topUsers, map[string]any{"name": name, "count": cnt})
+			}
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"today":        todayCount,
+		"week":         weekCount,
+		"unique_users": uniqueUsers,
+		"trend":        trend,
+		"top_users":    topUsers,
+	})
+}
+
+// ── Refleksi: Daily Reminder Goroutine ─────────────────────────────────────
+
+func (a *app) startReflectionReminder(ctx context.Context) {
+	go func() {
+		for {
+			now := time.Now().In(time.FixedZone("WIB", 7*3600))
+			// Target jam 20:00 WIB
+			next := time.Date(now.Year(), now.Month(), now.Day(), 20, 0, 0, 0, now.Location())
+			if now.After(next) {
+				next = next.Add(24 * time.Hour)
+			}
+			sleepDur := time.Until(next)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(sleepDur):
+			}
+			a.sendReflectionReminders(ctx)
+		}
+	}()
+}
+
+func (a *app) sendReflectionReminders(ctx context.Context) {
+	if a.telegramBotToken == "" {
+		return
+	}
+	// Ambil semua telegram_user_id peserta aktif yang belum refleksi hari ini
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT tl.telegram_user_id, COALESCE(pp.name, '')
+		FROM telegram_links tl
+		JOIN users u ON u.id = tl.user_id AND u.is_active = TRUE AND u.role = 'participant'
+		JOIN participant_profiles pp ON pp.user_id = tl.user_id
+		WHERE NOT EXISTS (
+			SELECT 1 FROM reflections r WHERE r.user_id = tl.user_id AND r.reflected_date = CURRENT_DATE
+		)
+	`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	reminderMsgs := []string{
+		"Hai *%s*\\! 🌙\n\nHari sudah mau berakhir nih\\. Sudahkah kamu meluangkan waktu untuk diri sendiri hari ini?\n\nYuk tulis refleksimu sekarang dengan /refleksi 📔\n_Hanya butuh 2 menit\\!_",
+		"Hei *%s*\\! 📔\n\nNala ingin mengingatkan kamu untuk refleksi sebentar sebelum tidur\\.\n\nApa yang berkesan dari harimu hari ini? Ceritakan ke Nala lewat /refleksi 🌸",
+		"*%s*, jangan lupa refleksi ya\\! 🌙\n\nMenulis perasaan dan pikiranmu bisa membantumu tumbuh lebih baik\\.\n\nKetik /refleksi dan ceritakan harimu ke Nala 💙",
+	}
+
+	idx := 0
+	for rows.Next() {
+		var tgUID, name string
+		if rows.Scan(&tgUID, &name) != nil {
+			continue
+		}
+		firstName := strings.Split(strings.TrimSpace(name), " ")[0]
+		if firstName == "" {
+			firstName = "kamu"
+		}
+		msg := fmt.Sprintf(reminderMsgs[idx%len(reminderMsgs)], firstName)
+		idx++
+		chatID, _ := strconv.ParseInt(tgUID, 10, 64)
+		go func(cid int64, m string) {
+			_ = a.sendTelegramMessage(context.Background(), cid, m, "idle")
+		}(chatID, msg)
+		time.Sleep(100 * time.Millisecond) // rate limit
+	}
 }
