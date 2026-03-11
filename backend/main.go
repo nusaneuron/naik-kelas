@@ -1024,24 +1024,40 @@ func (a *app) handleParticipantHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleParticipantLeaderboard(w http.ResponseWriter, r *http.Request) {
-	_, err := a.requireRole(r.Context(), r, "participant", "admin")
+	u, err := a.requireRole(r.Context(), r, "participant", "admin")
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
-	rows, err := a.db.QueryContext(r.Context(), `
+
+	// Ambil group_id user yang sedang login
+	var myGroupID int64
+	_ = a.db.QueryRowContext(r.Context(), `SELECT COALESCE(group_id, 0) FROM participant_profiles WHERE user_id=$1`, u.ID).Scan(&myGroupID)
+
+	// Bangun query — filter per kelompok jika user punya kelompok
+	leaderQuery := `
 		SELECT tr.user_id,
 		       COALESCE(NULLIF(bp.registered_name, ''), NULLIF(tr.display_name, ''), tr.user_id) as name,
 		       COALESCE(NULLIF(bp.telegram_display, ''), tr.user_id) as tg,
 		       MIN(tr.duration_seconds) as best_seconds,
 		       COUNT(*) FILTER (WHERE tr.all_correct) as perfect_count
 		FROM tryout_results tr
-		LEFT JOIN bot_profiles bp ON bp.user_id = tr.user_id
+		LEFT JOIN bot_profiles bp ON bp.user_id = tr.user_id`
+
+	var leaderArgs []any
+	if myGroupID > 0 {
+		leaderQuery += `
+		JOIN telegram_links tl ON tl.telegram_user_id = tr.user_id
+		JOIN participant_profiles pp ON pp.user_id = tl.user_id AND pp.group_id = $1`
+		leaderArgs = append(leaderArgs, myGroupID)
+	}
+	leaderQuery += `
 		WHERE tr.all_correct = TRUE
 		GROUP BY tr.user_id, name, tg
 		ORDER BY best_seconds ASC, perfect_count DESC, name ASC
-		LIMIT 20
-	`)
+		LIMIT 20`
+
+	rows, err := a.db.QueryContext(r.Context(), leaderQuery, leaderArgs...)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed leaderboard"})
 		return
@@ -1760,14 +1776,23 @@ func (a *app) handleAdminParticipants(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
-	rows, err := a.db.QueryContext(r.Context(), `
+	// Filter opsional per group_id
+	groupFilter := r.URL.Query().Get("group_id")
+	query := `
 		SELECT u.id, u.phone, u.role, u.is_active, u.must_change_password,
-		       COALESCE(p.name,''), COALESCE(p.email,'')
+		       COALESCE(p.name,''), COALESCE(p.email,''),
+		       COALESCE(p.group_id, 0), COALESCE(g.name,'')
 		FROM users u
 		LEFT JOIN participant_profiles p ON p.user_id = u.id
-		ORDER BY u.created_at DESC
-		LIMIT 200
-	`)
+		LEFT JOIN groups g ON g.id = p.group_id`
+	args := []any{}
+	if groupFilter != "" {
+		query += ` WHERE p.group_id = $1`
+		args = append(args, groupFilter)
+	}
+	query += ` ORDER BY u.created_at DESC LIMIT 500`
+
+	rows, err := a.db.QueryContext(r.Context(), query, args...)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load participants"})
 		return
@@ -1775,11 +1800,16 @@ func (a *app) handleAdminParticipants(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	items := []map[string]any{}
 	for rows.Next() {
-		var id int64
-		var phone, role, name, email string
+		var id, groupID int64
+		var phone, role, name, email, groupName string
 		var isActive, mustChange bool
-		if rows.Scan(&id, &phone, &role, &isActive, &mustChange, &name, &email) == nil {
-			items = append(items, map[string]any{"id": id, "phone": phone, "role": role, "is_active": isActive, "must_change_password": mustChange, "name": name, "email": email})
+		if rows.Scan(&id, &phone, &role, &isActive, &mustChange, &name, &email, &groupID, &groupName) == nil {
+			items = append(items, map[string]any{
+				"id": id, "phone": phone, "role": role,
+				"is_active": isActive, "must_change_password": mustChange,
+				"name": name, "email": email,
+				"group_id": groupID, "group_name": groupName,
+			})
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
@@ -2125,7 +2155,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-groups-phase2b"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-groups-phase3"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -2547,7 +2577,12 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		return fmt.Sprintf("🚀 *Tryout dimulai!*\n%d soal acak menunggumu.\nTimer berjalan sekarang ⏱\n\n%s", len(qs), formatTryoutQuestion(qs, 0)), "tryout_answering"
 	}
 	if lower == "/leaderbot" || lower == "/leaderboard" {
-		board, err := a.getTryoutLeaderboard(ctx, 10)
+		// Ambil group_id user via telegram link
+		var myGroupID int64
+		if webUID, err2 := a.resolveWebUserIDByExternal(ctx, uid); err2 == nil {
+			_ = a.db.QueryRowContext(ctx, `SELECT COALESCE(group_id,0) FROM participant_profiles WHERE user_id=$1`, webUID).Scan(&myGroupID)
+		}
+		board, err := a.getTryoutLeaderboardByGroup(ctx, 10, myGroupID)
 		if err != nil {
 			return "Maaf, Nala belum bisa ambil leaderboard saat ini 🙏", "idle"
 		}
@@ -3728,6 +3763,76 @@ func (a *app) runReminderTick(ctx context.Context) {
 		_ = a.sendTelegramMessage(ctx, chatID, "📚 Waktunya belajar, semangat ya! Nala percaya kamu bisa konsisten hari ini ✨", "idle")
 		_, _ = a.db.ExecContext(ctx, `UPDATE study_reminders SET last_sent_at=NOW(), updated_at=NOW() WHERE telegram_user_id=$1`, r.TelegramUserID)
 	}
+}
+
+func (a *app) getTryoutLeaderboardByGroup(ctx context.Context, limit int, groupID int64) (string, error) {
+	var q string
+	var args []any
+	if groupID > 0 {
+		q = `
+			SELECT tr.user_id,
+			       COALESCE(NULLIF(bp.registered_name,''), NULLIF(tr.display_name,''), tr.user_id) as name,
+			       COALESCE(NULLIF(bp.telegram_display,''), tr.user_id) as tg,
+			       MIN(tr.duration_seconds) as best_seconds,
+			       COUNT(*) FILTER (WHERE tr.all_correct) as perfect_count
+			FROM tryout_results tr
+			LEFT JOIN bot_profiles bp ON bp.user_id = tr.user_id
+			JOIN telegram_links tl ON tl.telegram_user_id = tr.user_id
+			JOIN participant_profiles pp ON pp.user_id = tl.user_id AND pp.group_id = $2
+			WHERE tr.all_correct = TRUE
+			GROUP BY tr.user_id, name, tg
+			ORDER BY best_seconds ASC, perfect_count DESC, name ASC
+			LIMIT $1`
+		args = []any{limit, groupID}
+	} else {
+		q = `
+			SELECT tr.user_id,
+			       COALESCE(NULLIF(bp.registered_name,''), NULLIF(tr.display_name,''), tr.user_id) as name,
+			       COALESCE(NULLIF(bp.telegram_display,''), tr.user_id) as tg,
+			       MIN(tr.duration_seconds) as best_seconds,
+			       COUNT(*) FILTER (WHERE tr.all_correct) as perfect_count
+			FROM tryout_results tr
+			LEFT JOIN bot_profiles bp ON bp.user_id = tr.user_id
+			WHERE tr.all_correct = TRUE
+			GROUP BY tr.user_id, name, tg
+			ORDER BY best_seconds ASC, perfect_count DESC, name ASC
+			LIMIT $1`
+		args = []any{limit}
+	}
+	rows, err := a.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	medals := []string{"🥇", "🥈", "🥉"}
+	groupLabel := ""
+	if groupID > 0 {
+		var gName string
+		_ = a.db.QueryRowContext(ctx, `SELECT name FROM groups WHERE id=$1`, groupID).Scan(&gName)
+		if gName != "" {
+			groupLabel = " — " + gName
+		}
+	}
+	lines := []string{fmt.Sprintf("🏆 *Leaderbot Tryout%s*", groupLabel), ""}
+	rank := 1
+	for rows.Next() {
+		var userID, name, tg string
+		var bestSec, perfectCount int
+		if err := rows.Scan(&userID, &name, &tg, &bestSec, &perfectCount); err != nil {
+			return "", err
+		}
+		tg = cleanTelegramHandle(tg)
+		medal := fmt.Sprintf("%d\\.", rank)
+		if rank-1 < len(medals) {
+			medal = medals[rank-1]
+		}
+		lines = append(lines, fmt.Sprintf("%s *%s* (%s)\n    ⏱ %ds • 🎯 %dx perfect", medal, name, tg, bestSec, perfectCount))
+		rank++
+	}
+	if rank == 1 {
+		return "", nil
+	}
+	return strings.Join(lines, "\n"), nil
 }
 
 func (a *app) getTryoutLeaderboard(ctx context.Context, limit int) (string, error) {
