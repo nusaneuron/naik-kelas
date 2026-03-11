@@ -634,6 +634,9 @@ func (a *app) initDB(ctx context.Context) error {
 	// Tambah group_id ke redeem_items (nullable = global/semua kelompok)
 	_, _ = a.db.ExecContext(ctx, `ALTER TABLE redeem_items ADD COLUMN IF NOT EXISTS group_id INT REFERENCES groups(id) ON DELETE SET NULL`)
 
+	// Promote designated super admin (Aldythya Nugraha)
+	_, _ = a.db.ExecContext(ctx, `UPDATE users SET role='super_admin' WHERE phone='081284047501' AND role='admin'`)
+
 	return nil
 }
 
@@ -2232,7 +2235,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-superadmin"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-superadmin-final"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
