@@ -2302,7 +2302,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-refleksi-v3"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-refleksi-v4"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -2452,16 +2452,6 @@ func (a *app) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	reply, state := a.processBotText(r.Context(), uid, displayName, text)
 	if strings.TrimSpace(reply) != "" {
-		// Keyboard menu refleksi
-		if state == "refleksi_menu" {
-			kb := [][]string{{"✍️ Tulis Refleksi", "⏰ Set Pengingat"}}
-			if err := a.sendTelegramMessageWithKeyboard(r.Context(), upd.Message.Chat.ID, reply, kb); err != nil {
-				log.Printf("telegram send keyboard error: %v", err)
-			}
-			writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-			return
-		}
-
 		// Untuk state yang membutuhkan keyboard kategori
 		if state == "quiz_choose_category" || state == "materi_choose_category" {
 			webUIDKb, _ := a.resolveWebUserIDByExternal(r.Context(), uid)
@@ -2512,6 +2502,7 @@ func (a *app) syncTelegramBotCommands(ctx context.Context) error {
 		{"command": "poin", "description": "💰 Saldo & riwayat transaksi poin"},
 		{"command": "redeem", "description": "🎁 Tukar poin dengan hadiah"},
 		{"command": "refleksi", "description": "📔 Tulis refleksi & jurnal harianmu"},
+		{"command": "jadwal_refleksi", "description": "⏰ Atur jadwal pengingat refleksi harian"},
 		{"command": "jadwal_belajar", "description": "⏰ Atur pengingat belajar harian"},
 		{"command": "batal", "description": "❌ Batalkan proses yang sedang berjalan"},
 	}
@@ -2658,32 +2649,35 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		if !registered {
 			return "Kamu belum terdaftar. Ketik /daftar dulu ya ✨", "idle"
 		}
-		return "📔 *Refleksi Diri*\n\nHai\\! Mau ngapain nih? 😊", "refleksi_menu"
+		// Cek apakah sudah refleksi hari ini
+		webUID, err := a.resolveWebUserIDByExternal(ctx, uid)
+		if err == nil {
+			var existingID int64
+			if a.db.QueryRowContext(ctx, `SELECT id FROM reflections WHERE user_id=$1 AND reflected_date=CURRENT_DATE`, webUID).Scan(&existingID) == nil {
+				return "Kamu sudah menulis refleksi hari ini 📔✅\n\nSampai jumpa besok\\! Tetap semangat belajar\\! 💪", "idle"
+			}
+		}
+		return "📔 *Yuk, Ceritakan Harimu\\!*\n\n_Tulis bebas, tidak ada jawaban yang salah_ 🤍\n\n• Apa yang kamu pelajari hari ini?\n• Apa yang kamu rasakan?\n• Adakah hal yang ingin kamu syukuri atau perbaiki?\n\n_Ketik /batal untuk membatalkan_", "wait_reflection"
 	}
 
-	if s.State == "refleksi_menu" {
-		switch text {
-		case "✍️ Tulis Refleksi":
-			// Cek apakah sudah refleksi hari ini
-			webUID2, err2 := a.resolveWebUserIDByExternal(ctx, uid)
-			if err2 == nil {
-				var existingID int64
-				if a.db.QueryRowContext(ctx, `SELECT id FROM reflections WHERE user_id=$1 AND reflected_date=CURRENT_DATE`, webUID2).Scan(&existingID) == nil {
-					a.resetSession(uid)
-					return "Kamu sudah menulis refleksi hari ini 📔✅\n\nSampai jumpa besok\\! Tetap semangat belajar\\! 💪", "idle"
-				}
-			}
-			return "📔 *Yuk, Ceritakan Harimu\\!*\n\n_Tulis bebas, tidak ada jawaban yang salah_ 🤍\n\n• Apa yang kamu pelajari hari ini?\n• Apa yang kamu rasakan?\n• Adakah hal yang ingin kamu syukuri atau perbaiki?\n\n_Ketik /batal untuk membatalkan_", "wait_reflection"
-		case "⏰ Set Pengingat":
-			return "⏰ *Set Jadwal Pengingat Refleksi*\n\nKirimkan jam berapa kamu mau Nala ingatkan setiap hari\\.\nFormat: *HH:MM* \\(contoh: 20:00 atau 19:30\\)\n\n_Zona waktu WIB_\n_Ketik /batal untuk membatalkan_", "refleksi_set_time"
-		default:
-			return "Pilih salah satu ya 😊", "refleksi_menu"
+	// ── Jadwal Refleksi ──────────────────────────────────────────────
+	if lower == "/jadwal_refleksi" {
+		registered, err := a.isRegisteredBotUser(ctx, uid)
+		if err != nil {
+			return "Maaf, Nala lagi kesulitan cek akunmu 🙏", "idle"
 		}
+		if !registered {
+			return "Kamu belum terdaftar. Ketik /daftar dulu ya ✨", "idle"
+		}
+		// Tampil jadwal saat ini
+		webUID, _ := a.resolveWebUserIDByExternal(ctx, uid)
+		var currentTime string
+		_ = a.db.QueryRowContext(ctx, `SELECT COALESCE(reflection_reminder_time, '20:00') FROM participant_profiles WHERE user_id=$1`, webUID).Scan(&currentTime)
+		return fmt.Sprintf("⏰ *Jadwal Pengingat Refleksi*\n\nJadwal aktifmu saat ini: *%s WIB*\n\nKirimkan jam baru untuk mengubahnya\\.\nFormat: *HH:MM* \\(contoh: 20:00 atau 19:30\\)\n\n_Ketik /batal untuk membatalkan_", currentTime), "refleksi_set_time"
 	}
 
 	if s.State == "refleksi_set_time" {
 		timeInput := strings.TrimSpace(text)
-		// Validasi format HH:MM
 		valid := len(timeInput) == 5 && timeInput[2] == ':'
 		if valid {
 			parts := strings.Split(timeInput, ":")
@@ -2700,7 +2694,7 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		}
 		_, _ = a.db.ExecContext(ctx, `UPDATE participant_profiles SET reflection_reminder_time=$1 WHERE user_id=$2`, timeInput, webUID3)
 		a.resetSession(uid)
-		return fmt.Sprintf("✅ Jadwal pengingat refleksi berhasil diset ke *%s WIB*\\!\n\nNala akan mengingatkanmu setiap hari pada jam tersebut 🌙", timeInput), "idle"
+		return fmt.Sprintf("✅ Jadwal pengingat refleksi diset ke *%s WIB*\\!\n\nNala akan mengingatkanmu setiap hari pada jam tersebut 🌙", timeInput), "idle"
 	}
 
 	if s.State == "wait_reflection" {
@@ -2752,7 +2746,7 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 	}
 	if lower == "/start" {
 		a.resetSession(uid)
-		return "Halo\\! Perkenalkan, saya *Nala* ✨\nAsisten belajar pintarmu di *Naik Kelas* 🎓\n\n━━━━━━━━━━━━━━━\n📚 *Belajar*\n/materi \\— Belajar materi per kategori\n/quiz \\— Latihan soal pilihan ganda\n/tryout \\— Simulasi tryout soal acak\n/leaderbot \\— Papan ranking tryout 🏆\n\n━━━━━━━━━━━━━━━\n👤 *Akun & Progress*\n/daftar \\— Daftar sebagai peserta baru\n/cek \\— Cek status pendaftaran\n/status \\— Level, EXP & saldo poin\n/exp \\— Detail progress levelmu ⭐\n/poin \\— Riwayat transaksi poin 💰\n\n━━━━━━━━━━━━━━━\n🎁 *Reward*\n/redeem \\— Tukar poin dengan hadiah\n\n━━━━━━━━━━━━━━━\n📔 *Refleksi Diri*\n/refleksi \\— Tulis jurnal & refleksi harianmu\n\n━━━━━━━━━━━━━━━\n⏰ *Pengingat*\n/jadwal\\_belajar \\— Atur jadwal belajar harian\n\n❌ /batal \\— Batalkan proses yang sedang berjalan\n━━━━━━━━━━━━━━━\n\nAda yang bisa Nala bantu? Yuk mulai belajar\\! 💪", "idle"
+		return "Halo\\! Perkenalkan, saya *Nala* ✨\nAsisten belajar pintarmu di *Naik Kelas* 🎓\n\n━━━━━━━━━━━━━━━\n📚 *Belajar*\n/materi \\— Belajar materi per kategori\n/quiz \\— Latihan soal pilihan ganda\n/tryout \\— Simulasi tryout soal acak\n/leaderbot \\— Papan ranking tryout 🏆\n\n━━━━━━━━━━━━━━━\n👤 *Akun & Progress*\n/daftar \\— Daftar sebagai peserta baru\n/cek \\— Cek status pendaftaran\n/status \\— Level, EXP & saldo poin\n/exp \\— Detail progress levelmu ⭐\n/poin \\— Riwayat transaksi poin 💰\n\n━━━━━━━━━━━━━━━\n🎁 *Reward*\n/redeem \\— Tukar poin dengan hadiah\n\n━━━━━━━━━━━━━━━\n📔 *Refleksi Diri*\n/refleksi \\— Tulis jurnal & refleksi harianmu\n/jadwal\\_refleksi \\— Atur jadwal pengingat refleksi\n\n━━━━━━━━━━━━━━━\n⏰ *Pengingat Belajar*\n/jadwal\\_belajar \\— Atur jadwal pengingat belajar\n\n❌ /batal \\— Batalkan proses yang sedang berjalan\n━━━━━━━━━━━━━━━\n\nAda yang bisa Nala bantu? Yuk mulai belajar\\! 💪", "idle"
 	}
 	if lower == "/daftar" {
 		a.mu.Lock()

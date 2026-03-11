@@ -816,7 +816,7 @@ export default function Page() {
                     <div style={{ fontSize: 14, color: '#94a3b8', marginBottom: 8 }}>Belum diatur</div>
                   </>
                 )}
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 10 }}>Set via bot: <b style={{ color: '#a78bfa' }}>/refleksi</b> → Set Pengingat</div>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 10 }}>Atur via bot: <b style={{ color: '#a78bfa' }}>/jadwal_refleksi</b></div>
               </div>
             </div>
 
