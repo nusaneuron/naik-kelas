@@ -62,6 +62,7 @@ type botSession struct {
 	RedeemItemID      int64
 	RedeemItemName    string
 	RedeemItemCost    int
+	Email string
 	// Materi
 	MateriCategoryID   int
 	MateriCategoryName string
@@ -2124,7 +2125,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-groups-phase1"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-groups-phase2"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -2750,21 +2751,70 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 			return "Emailnya belum valid nih 🙏\nCoba kirim lagi dengan format benar ya. Contoh: nama@email.com", "wait_email"
 		}
 		a.mu.Lock()
+		s.Email = email
+		s.State = "wait_group"
+		s.UpdatedAt = time.Now()
+		a.mu.Unlock()
+		// Ambil daftar kelompok aktif
+		groups, _ := a.getActiveGroups(ctx)
+		if len(groups) == 0 {
+			// Tidak ada kelompok → langsung selesai tanpa kelompok
+			a.mu.Lock()
+			name := s.Name
+			phone := s.Phone
+			a.mu.Unlock()
+			_, err := a.createParticipantRecord(ctx, createParticipantRequest{Name: name, Phone: phone, Email: email, Source: "bot-naik-kelas"})
+			if err != nil {
+				if errors.Is(err, errConflict) {
+					a.resetSession(uid)
+					return "Nomor HP ini sudah pernah terdaftar ✅", "idle"
+				}
+				return "Maaf, Nala lagi kesulitan menyimpan data 🙏\nCoba lagi sebentar ya.", "wait_email"
+			}
+			_ = a.saveBotProfile(ctx, uid, name, displayName)
+			_ = a.linkTelegramToParticipant(ctx, uid, displayName, name, phone, email, "bot-naik-kelas")
+			a.resetSession(uid)
+			return fmt.Sprintf("🎉 *Yeay! Pendaftaran berhasil!*\n\nHai *%s*, selamat bergabung di Naik Kelas! 🎓\nMulai belajar sekarang:\n/materi — Belajar materi 📚\n/quiz — Latihan soal 🧠\n/tryout — Simulasi soal 🚀", name), "idle"
+		}
+		groupList := ""
+		for _, g := range groups {
+			groupList += fmt.Sprintf("• *%s* — kode: `%s`\n", g.Name, g.Code)
+		}
+		return fmt.Sprintf("Hampir selesai! 🎯\nSekarang ketik *kode kelompok* kamu:\n\n%s\nContoh: ketik `PTIAS` untuk bergabung di PT IAS.", groupList), "wait_group"
+
+	case "wait_group":
+		code := strings.ToUpper(strings.TrimSpace(text))
+		var groupID int
+		var groupName string
+		err := a.db.QueryRowContext(ctx, `SELECT id, name FROM groups WHERE code=$1 AND is_active=TRUE`, code).Scan(&groupID, &groupName)
+		if err != nil {
+			// Tampilkan daftar kelompok lagi
+			groups, _ := a.getActiveGroups(ctx)
+			groupList := ""
+			for _, g := range groups {
+				groupList += fmt.Sprintf("• *%s* — kode: `%s`\n", g.Name, g.Code)
+			}
+			return fmt.Sprintf("Kode kelompok tidak ditemukan 😕\nCoba ketik ulang kode yang benar ya:\n\n%s", groupList), "wait_group"
+		}
+		a.mu.Lock()
 		name := s.Name
 		phone := s.Phone
+		email := s.Email
 		a.mu.Unlock()
-		_, err := a.createParticipantRecord(ctx, createParticipantRequest{Name: name, Phone: phone, Email: email, Source: "bot-naik-kelas"})
+		newP, err := a.createParticipantRecord(ctx, createParticipantRequest{Name: name, Phone: phone, Email: email, Source: "bot-naik-kelas"})
 		if err != nil {
 			if errors.Is(err, errConflict) {
 				a.resetSession(uid)
 				return "Nomor HP ini sudah pernah terdaftar ✅", "idle"
 			}
-			return "Maaf, Nala lagi kesulitan menyimpan data 🙏\nCoba lagi sebentar ya.", "wait_email"
+			return "Maaf, Nala lagi kesulitan menyimpan data 🙏\nCoba lagi sebentar ya.", "wait_group"
 		}
+		// Assign ke kelompok
+		_, _ = a.db.ExecContext(ctx, `UPDATE participant_profiles SET group_id=$1 WHERE user_id=$2`, groupID, newP.ID)
 		_ = a.saveBotProfile(ctx, uid, name, displayName)
 		_ = a.linkTelegramToParticipant(ctx, uid, displayName, name, phone, email, "bot-naik-kelas")
 		a.resetSession(uid)
-		return fmt.Sprintf("🎉 *Yeay! Pendaftaran berhasil!*\n\nHai *%s*, selamat bergabung di Naik Kelas! 🎓\nAkun Telegram kamu sudah Nala daftarkan.\n\nMulai belajar sekarang:\n/quiz — Latihan per kategori 🧠\n/tryout — Simulasi soal acak 🚀\n/jadwal\\_belajar — Atur pengingat belajar ⏰", name), "idle"
+		return fmt.Sprintf("🎉 *Yeay! Pendaftaran berhasil!*\n\nHai *%s*, selamat bergabung di *%s*! 🎓\nAkun Telegram kamu sudah Nala daftarkan.\n\nMulai belajar sekarang:\n/materi — Belajar materi 📚\n/quiz — Latihan soal 🧠\n/tryout — Simulasi soal 🚀\n/jadwal\\_belajar — Atur pengingat ⏰", name, groupName), "idle"
 
 	case "check_phone":
 		phone := normalizePhone(text)
@@ -3760,6 +3810,28 @@ func (a *app) getActiveCategoryNames(ctx context.Context) ([]string, error) {
 		}
 	}
 	return names, nil
+}
+
+type activeGroup struct {
+	ID   int
+	Name string
+	Code string
+}
+
+func (a *app) getActiveGroups(ctx context.Context) ([]activeGroup, error) {
+	rows, err := a.db.QueryContext(ctx, `SELECT id, name, code FROM groups WHERE is_active=TRUE ORDER BY name ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var groups []activeGroup
+	for rows.Next() {
+		var g activeGroup
+		if rows.Scan(&g.ID, &g.Name, &g.Code) == nil {
+			groups = append(groups, g)
+		}
+	}
+	return groups, nil
 }
 
 func (a *app) findQuizCategoryDB(ctx context.Context, input string) (quizCategory, bool, error) {
