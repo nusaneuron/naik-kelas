@@ -2125,7 +2125,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-groups-phase2"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-groups-phase2b"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -2801,18 +2801,22 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		phone := s.Phone
 		email := s.Email
 		a.mu.Unlock()
-		newP, err := a.createParticipantRecord(ctx, createParticipantRequest{Name: name, Phone: phone, Email: email, Source: "bot-naik-kelas"})
-		if err != nil {
-			if errors.Is(err, errConflict) {
+		var createErr error
+		_, createErr = a.createParticipantRecord(ctx, createParticipantRequest{Name: name, Phone: phone, Email: email, Source: "bot-naik-kelas"})
+		if createErr != nil {
+			if errors.Is(createErr, errConflict) {
 				a.resetSession(uid)
 				return "Nomor HP ini sudah pernah terdaftar ✅", "idle"
 			}
 			return "Maaf, Nala lagi kesulitan menyimpan data 🙏\nCoba lagi sebentar ya.", "wait_group"
 		}
-		// Assign ke kelompok
-		_, _ = a.db.ExecContext(ctx, `UPDATE participant_profiles SET group_id=$1 WHERE user_id=$2`, groupID, newP.ID)
 		_ = a.saveBotProfile(ctx, uid, name, displayName)
 		_ = a.linkTelegramToParticipant(ctx, uid, displayName, name, phone, email, "bot-naik-kelas")
+		// Assign ke kelompok — ambil user_id dari users.phone (ID yang benar)
+		_, _ = a.db.ExecContext(ctx, `
+			UPDATE participant_profiles SET group_id=$1
+			WHERE user_id = (SELECT id FROM users WHERE phone=$2)
+		`, groupID, phone)
 		a.resetSession(uid)
 		return fmt.Sprintf("🎉 *Yeay! Pendaftaran berhasil!*\n\nHai *%s*, selamat bergabung di *%s*! 🎓\nAkun Telegram kamu sudah Nala daftarkan.\n\nMulai belajar sekarang:\n/materi — Belajar materi 📚\n/quiz — Latihan soal 🧠\n/tryout — Simulasi soal 🚀\n/jadwal\\_belajar — Atur pengingat ⏰", name, groupName), "idle"
 
