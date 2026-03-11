@@ -416,7 +416,7 @@ export default function Page() {
     setBusy(true); setActionMsg('');
     const res = await fetch(`${apiBase}/admin/exp/rules`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-      body: JSON.stringify({ rule_key: ruleKey, rule_value: Number(ruleValue) })
+      body: JSON.stringify({ rule_key: ruleKey, rule_value: Number(ruleValue), point_bonus: Number(document.getElementById(`rule-pb-${ruleKey}`)?.value || 0) })
     });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal update rule EXP.'); setBusy(false); return; }
@@ -1697,11 +1697,12 @@ export default function Page() {
                   {adminExpRules.length ? (
                     <div className="nk-table-wrap" style={{ marginBottom: 16 }}>
                       <table className="nk-table" style={{ width: '100%', minWidth: 600 }}>
-                        <thead><tr><th>Rule</th><th>Nilai</th><th>Aksi</th></tr></thead>
+                        <thead><tr><th>Rule</th><th>EXP</th><th>Bonus Poin</th><th>Aksi</th></tr></thead>
                         <tbody>{adminExpRules.map((r) => (
                           <tr key={r.rule_key}>
                             <td style={{ fontWeight: 600 }}>{r.rule_key}</td>
-                            <td><input className="nk-input-sm" type="number" min="1" style={{ width: 120 }} defaultValue={r.rule_value} id={`rule-${r.rule_key}`} /></td>
+                            <td><input className="nk-input-sm" type="number" min="1" style={{ width: 80 }} defaultValue={r.rule_value} id={`rule-${r.rule_key}`} /></td>
+                            <td><input className="nk-input-sm" type="number" min="0" style={{ width: 80 }} defaultValue={r.point_bonus ?? 0} id={`rule-pb-${r.rule_key}`} placeholder="0" /></td>
                             <td><BtnSm disabled={busy} onClick={() => { const el = document.getElementById(`rule-${r.rule_key}`); updateExpRule(r.rule_key, el?.value || r.rule_value); }}>Simpan</BtnSm></td>
                           </tr>
                         ))}</tbody>

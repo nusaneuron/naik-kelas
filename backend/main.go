@@ -527,8 +527,11 @@ func (a *app) initDB(ctx context.Context) error {
 		('tryout_complete', 8),
 		('tryout_perfect', 20),
 		('level_step', 100),
-		('reflection_daily', 15)
+		('reflection_daily', 15),
+		('material_complete', 10),
+		('feedback_submit', 5)
 	ON CONFLICT (rule_key) DO NOTHING`)
+	_, _ = a.db.ExecContext(ctx, `ALTER TABLE exp_rules ADD COLUMN IF NOT EXISTS point_bonus INT NOT NULL DEFAULT 0`)
 
 	_, err = a.db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS exp_report_settings (
@@ -1450,7 +1453,7 @@ func (a *app) handleAdminExpRules(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodGet {
-		rows, err := a.db.QueryContext(r.Context(), `SELECT rule_key, rule_value, updated_at FROM exp_rules ORDER BY rule_key ASC`)
+		rows, err := a.db.QueryContext(r.Context(), `SELECT rule_key, rule_value, COALESCE(point_bonus,0), updated_at FROM exp_rules ORDER BY rule_key ASC`)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed load exp rules"})
 			return
@@ -1459,10 +1462,10 @@ func (a *app) handleAdminExpRules(w http.ResponseWriter, r *http.Request) {
 		items := []map[string]any{}
 		for rows.Next() {
 			var k string
-			var v int64
+			var v, pb int64
 			var at time.Time
-			if rows.Scan(&k, &v, &at) == nil {
-				items = append(items, map[string]any{"rule_key": k, "rule_value": v, "updated_at": at})
+			if rows.Scan(&k, &v, &pb, &at) == nil {
+				items = append(items, map[string]any{"rule_key": k, "rule_value": v, "point_bonus": pb, "updated_at": at})
 			}
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"items": items})
@@ -1473,18 +1476,22 @@ func (a *app) handleAdminExpRules(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		RuleKey   string `json:"rule_key"`
-		RuleValue int64  `json:"rule_value"`
+		RuleKey    string `json:"rule_key"`
+		RuleValue  int64  `json:"rule_value"`
+		PointBonus int64  `json:"point_bonus"`
 	}
 	if json.NewDecoder(r.Body).Decode(&req) != nil || strings.TrimSpace(req.RuleKey) == "" || req.RuleValue <= 0 {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "rule_key dan rule_value wajib"})
 		return
 	}
+	if req.PointBonus < 0 {
+		req.PointBonus = 0
+	}
 	_, err = a.db.ExecContext(r.Context(), `
-		INSERT INTO exp_rules (rule_key, rule_value, updated_at)
-		VALUES ($1,$2,NOW())
-		ON CONFLICT (rule_key) DO UPDATE SET rule_value=EXCLUDED.rule_value, updated_at=NOW()
-	`, strings.TrimSpace(req.RuleKey), req.RuleValue)
+		INSERT INTO exp_rules (rule_key, rule_value, point_bonus, updated_at)
+		VALUES ($1,$2,$3,NOW())
+		ON CONFLICT (rule_key) DO UPDATE SET rule_value=EXCLUDED.rule_value, point_bonus=EXCLUDED.point_bonus, updated_at=NOW()
+	`, strings.TrimSpace(req.RuleKey), req.RuleValue, req.PointBonus)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed update exp rule"})
 		return
@@ -1765,6 +1772,12 @@ func (a *app) resolveWebUserIDByExternal(ctx context.Context, externalUserID str
 	return userID, err
 }
 
+func (a *app) getPointBonusRule(ctx context.Context, key string) int64 {
+	var v int64
+	_ = a.db.QueryRowContext(ctx, `SELECT COALESCE(point_bonus,0) FROM exp_rules WHERE rule_key=$1`, key).Scan(&v)
+	return v
+}
+
 func (a *app) getExpRuleValue(ctx context.Context, key string, fallback int64) int64 {
 	var v int64
 	if err := a.db.QueryRowContext(ctx, `SELECT rule_value FROM exp_rules WHERE rule_key=$1`, key).Scan(&v); err == nil && v > 0 {
@@ -1823,6 +1836,36 @@ func (a *app) addExpByExternalUser(ctx context.Context, externalUserID string, d
 		return 0, err
 	}
 	return next, nil
+}
+
+// applyRuleByExternalUser: apply EXP rule untuk external user (bot), termasuk point_bonus jika ada.
+func (a *app) applyRuleByExternalUser(ctx context.Context, externalUserID, ruleKey, expTyp, reason, sourceRef string) {
+	var expVal, pointBonus int64
+	if err := a.db.QueryRowContext(ctx, `SELECT rule_value, COALESCE(point_bonus,0) FROM exp_rules WHERE rule_key=$1`, ruleKey).Scan(&expVal, &pointBonus); err != nil {
+		return
+	}
+	if expVal > 0 {
+		_, _ = a.addExpByExternalUser(ctx, externalUserID, expVal, expTyp, reason, sourceRef)
+	}
+	if pointBonus > 0 {
+		if webUID, err := a.resolveWebUserIDByExternal(ctx, externalUserID); err == nil {
+			_, _ = a.adjustPoints(ctx, webUID, pointBonus, "exp_rule_bonus", fmt.Sprintf("Bonus poin: %s", ruleKey), nil)
+		}
+	}
+}
+
+// applyExpRule memberi EXP sesuai rule_key, dan jika ada point_bonus > 0 juga memberi poin.
+func (a *app) applyExpRule(ctx context.Context, userID int64, ruleKey, reason string) {
+	var expVal, pointBonus int64
+	if err := a.db.QueryRowContext(ctx, `SELECT rule_value, COALESCE(point_bonus,0) FROM exp_rules WHERE rule_key=$1`, ruleKey).Scan(&expVal, &pointBonus); err != nil {
+		return
+	}
+	if expVal > 0 {
+		_, _ = a.adjustExp(ctx, userID, expVal, reason)
+	}
+	if pointBonus > 0 {
+		_, _ = a.adjustPoints(ctx, userID, pointBonus, "exp_rule_bonus", fmt.Sprintf("Bonus poin: %s", ruleKey), nil)
+	}
 }
 
 func (a *app) adjustExp(ctx context.Context, userID int64, delta int64, reason string) (int64, error) {
@@ -2339,7 +2382,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260312-feedback-v2"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260312-exp-rules-v2"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -2762,9 +2805,9 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		if dbErr != nil {
 			return "Maaf, terjadi kesalahan saat menyimpan 🙏", "wait_reflection"
 		}
-		// Beri EXP
+		// Beri EXP + poin bonus
 		expVal := a.getExpRuleValue(ctx, "reflection_daily", 15)
-		_, _ = a.adjustExp(ctx, webUID, expVal, "Refleksi harian")
+		a.applyExpRule(ctx, webUID, "reflection_daily", "Refleksi harian")
 		// Pilih response motivasi
 		responses := []string{
 			"Terima kasih sudah berbagi, *%s*\\! 🤍\n\nMenuliskan apa yang kamu rasakan adalah langkah kecil yang luar biasa\\. Nala bangga kamu meluangkan waktu untuk ini\\.\n\n✨ *\\+%d EXP* sudah kamu dapatkan\\!\nSampai besok\\! 🌙",
@@ -2818,6 +2861,8 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		}
 		if fbUserID > 0 {
 			_, _ = a.db.ExecContext(ctx, `INSERT INTO feedbacks (user_id, rating, message) VALUES ($1,$2,$3)`, fbUserID, s.FeedbackRating, msg)
+			// EXP + bonus poin dari rule feedback_submit
+			a.applyExpRule(ctx, fbUserID, "feedback_submit", "Mengirim feedback aplikasi")
 		}
 		stars := strings.Repeat("⭐", s.FeedbackRating)
 		a.resetSession(uid)
@@ -3501,7 +3546,7 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 			s.State = "materi_list"
 			return "Materi ini sudah kamu selesaikan sebelumnya ✅\nTidak ada EXP tambahan ya.\n\nKetik nomor materi lain untuk lanjut belajar!", "materi_list"
 		}
-		// Beri EXP
+		// Beri EXP + poin bonus
 		expGained := s.MateriViewingExp
 		if expGained > 0 && webUserID > 0 {
 			var matTitle string
@@ -3512,6 +3557,10 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 				}
 			}
 			_, _ = a.adjustExp(ctx, webUserID, int64(expGained), fmt.Sprintf("Selesai materi: %s", matTitle))
+			// Bonus poin dari rule material_complete
+			if pb := a.getPointBonusRule(ctx, "material_complete"); pb > 0 {
+				_, _ = a.adjustPoints(ctx, webUserID, pb, "exp_rule_bonus", "Bonus poin: material_complete", nil)
+			}
 		}
 		// Update status lokal di sesi
 		for i := range s.MateriList {
@@ -3793,13 +3842,13 @@ func (a *app) saveTryoutResult(ctx context.Context, userID, displayName string, 
 	if err != nil {
 		return err
 	}
-	delta := a.getExpRuleValue(ctx, "tryout_complete", 8)
+	ruleKey := "tryout_complete"
 	reason := "Selesai tryout"
 	if allCorrect {
-		delta = a.getExpRuleValue(ctx, "tryout_perfect", 20)
+		ruleKey = "tryout_perfect"
 		reason = "Selesai tryout dengan hasil perfect"
 	}
-	_, _ = a.addExpByExternalUser(ctx, userID, delta, "tryout", reason, "tryout_results")
+	a.applyRuleByExternalUser(ctx, userID, ruleKey, "tryout", reason, "tryout_results")
 	return nil
 }
 
@@ -3823,13 +3872,13 @@ func (a *app) saveQuizAttempt(ctx context.Context, userID, displayName string, c
 	if err != nil {
 		return 0, err
 	}
-	delta := a.getExpRuleValue(ctx, "quiz_complete", 5)
-	reason := "Selesai latihan quiz"
+	ruleKeyQ := "quiz_complete"
+	reasonQ := "Selesai latihan quiz"
 	if allCorrect {
-		delta = a.getExpRuleValue(ctx, "quiz_perfect", 15)
-		reason = "Selesai latihan quiz dengan nilai sempurna"
+		ruleKeyQ = "quiz_perfect"
+		reasonQ = "Selesai latihan quiz dengan nilai sempurna"
 	}
-	_, _ = a.addExpByExternalUser(ctx, userID, delta, "quiz", reason, cat.Code)
+	a.applyRuleByExternalUser(ctx, userID, ruleKeyQ, "quiz", reasonQ, cat.Code)
 	return attemptNo, nil
 }
 
@@ -5258,6 +5307,10 @@ func (a *app) handleParticipantMaterialComplete(w http.ResponseWriter, r *http.R
 	// Berikan EXP
 	if expReward > 0 {
 		_, _ = a.adjustExp(ctx, u.ID, int64(expReward), fmt.Sprintf("Selesai materi: %s", title))
+	}
+	// Bonus poin rule material_complete
+	if pb := a.getPointBonusRule(ctx, "material_complete"); pb > 0 {
+		_, _ = a.adjustPoints(ctx, u.ID, pb, "exp_rule_bonus", "Bonus poin: material_complete", nil)
 	}
 
 	// Cek apakah semua materi kategori sudah selesai → notif Telegram
