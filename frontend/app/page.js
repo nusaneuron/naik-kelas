@@ -68,6 +68,9 @@ export default function Page() {
   const [pointReason, setPointReason] = useState('');
   const [editingPointEntryId, setEditingPointEntryId] = useState('');
 
+  // Refleksi reminder
+  const [reflectionReminderTime, setReflectionReminderTime] = useState('20:00');
+
   // Kelompok
   const [adminGroups, setAdminGroups] = useState([]);
   const [groupName, setGroupName] = useState('');
@@ -109,7 +112,7 @@ export default function Page() {
       fetch(`${apiBase}/participant/redeem/claims`, { credentials: 'include' }),
       fetch(`${apiBase}/participant/materials`, { credentials: 'include' }),
     ]);
-    if (mRes.ok) setProfile(await mRes.json());
+    if (mRes.ok) { const pd = await mRes.json(); setProfile(pd); if (pd.reflection_reminder_time) setReflectionReminderTime(pd.reflection_reminder_time); }
     if (hRes.ok) setHistory(await hRes.json());
     if (lRes.ok) { const d = await lRes.json(); setLeaderboard(d.items || []); }
     if (rRes.ok) setMyReminder(await rRes.json());
@@ -749,6 +752,26 @@ export default function Page() {
                 {!profile?.group_name && !isAdmin && (
                   <div style={{ marginTop: 10, fontSize: 12, color: '#475569' }}>Belum tergabung dalam kelompok</div>
                 )}
+                {/* Jadwal Refleksi */}
+                <div style={{ marginTop: 14, borderTop: '1px solid #1e2d45', paddingTop: 12 }}>
+                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>⏰ Jadwal Refleksi Harian</div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input type="time" value={reflectionReminderTime} onChange={e => setReflectionReminderTime(e.target.value)}
+                      style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 8, color: '#f1f5f9', padding: '6px 10px', fontSize: 14 }} />
+                    <BtnSm color="purple" onClick={async () => {
+                      setBusy(true);
+                      const res = await fetch(`${apiBase}/participant/reflection-reminder`, {
+                        method: 'POST', credentials: 'include',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ time: reflectionReminderTime })
+                      });
+                      setBusy(false);
+                      if (res.ok) showMsg(`Jadwal refleksi diset ke ${reflectionReminderTime} WIB ✅`, 'success');
+                      else showMsg('Gagal simpan jadwal', 'error');
+                    }}>💾 Simpan</BtnSm>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#475569', marginTop: 6 }}>Nala akan mengingatkan kamu untuk refleksi pada jam ini setiap hari.</div>
+                </div>
                 {isAdmin && (
                   <div style={{ marginTop: 14, display: 'flex', gap: 6 }}>
                     <button
@@ -1458,6 +1481,29 @@ export default function Page() {
                           </div>
                         </div>
                       )}
+                      {/* Tabel peserta */}
+                      <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginTop: 16 }}>
+                        <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>👥 Status Refleksi Peserta</p>
+                        {adminReflectionStats.participants?.length > 0 ? (
+                          <div className="nk-table-wrap" style={{ maxHeight: 340 }}>
+                            <table className="nk-table">
+                              <thead><tr><th>Nama</th><th>Kelompok</th><th>Jadwal Refleksi</th><th>Hari Ini</th><th>30 Hari</th></tr></thead>
+                              <tbody>{adminReflectionStats.participants.map((p, i) => (
+                                <tr key={i}>
+                                  <td style={{ fontWeight: 600 }}>{p.name}</td>
+                                  <td>{p.group_name !== '-' ? <span className="nk-badge nk-badge-purple">🏢 {p.group_name}</span> : <span style={{ color: '#475569', fontSize: 12 }}>—</span>}</td>
+                                  <td><span className="nk-badge" style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24' }}>⏰ {p.reminder_time}</span></td>
+                                  <td>{p.reflected_today
+                                    ? <span className="nk-badge nk-badge-green">✅ Sudah</span>
+                                    : <span className="nk-badge" style={{ background: 'rgba(248,113,113,0.12)', color: '#f87171' }}>❌ Belum</span>}
+                                  </td>
+                                  <td><span className="nk-badge nk-badge-purple">{p.month_count}x</span></td>
+                                </tr>
+                              ))}</tbody>
+                            </table>
+                          </div>
+                        ) : <p style={{ color: '#475569', fontSize: 13 }}>Belum ada peserta terdaftar.</p>}
+                      </div>
                       <p style={{ fontSize: 12, color: '#475569', marginTop: 12, fontStyle: 'italic' }}>
                         💡 Isi refleksi bersifat privat — hanya peserta yang bisa membaca tulisannya sendiri.
                       </p>

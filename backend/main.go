@@ -229,6 +229,7 @@ func main() {
 	mux.HandleFunc("/participant/materials", a.handleParticipantMaterials)
 	mux.HandleFunc("/participant/materials/complete", a.handleParticipantMaterialComplete)
 	mux.HandleFunc("/participant/reflections", a.handleParticipantReflections)
+	mux.HandleFunc("/participant/reflection-reminder", a.handleParticipantReflectionReminder)
 	mux.HandleFunc("/admin/reflections/stats", a.handleAdminReflectionStats)
 
 	port := getenv("PORT", "8080")
@@ -631,6 +632,8 @@ func (a *app) initDB(ctx context.Context) error {
 
 	// Tambah group_id ke participant_profiles (nullable = belum punya kelompok)
 	_, _ = a.db.ExecContext(ctx, `ALTER TABLE participant_profiles ADD COLUMN IF NOT EXISTS group_id INT REFERENCES groups(id) ON DELETE SET NULL`)
+	// Tambah jadwal pengingat refleksi personal per peserta (format HH:MM, nullable = pakai default 20:00)
+	_, _ = a.db.ExecContext(ctx, `ALTER TABLE participant_profiles ADD COLUMN IF NOT EXISTS reflection_reminder_time TEXT`)
 
 	// Tambah group_id ke question_categories (nullable = global/semua kelompok)
 	_, _ = a.db.ExecContext(ctx, `ALTER TABLE question_categories ADD COLUMN IF NOT EXISTS group_id INT REFERENCES groups(id) ON DELETE SET NULL`)
@@ -996,9 +999,11 @@ func (a *app) handleParticipantMe(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
-	var name, email, source string
+	var name, email, source, reflectionReminderTime string
 	var groupID int64
-	_ = a.db.QueryRowContext(r.Context(), `SELECT COALESCE(name,''), COALESCE(email,''), COALESCE(source,''), COALESCE(group_id,0) FROM participant_profiles WHERE user_id=$1`, u.ID).Scan(&name, &email, &source, &groupID)
+	_ = a.db.QueryRowContext(r.Context(), `
+		SELECT COALESCE(name,''), COALESCE(email,''), COALESCE(source,''), COALESCE(group_id,0), COALESCE(reflection_reminder_time,'20:00')
+		FROM participant_profiles WHERE user_id=$1`, u.ID).Scan(&name, &email, &source, &groupID, &reflectionReminderTime)
 	var groupName string
 	if groupID > 0 {
 		_ = a.db.QueryRowContext(r.Context(), `SELECT name FROM groups WHERE id=$1`, groupID).Scan(&groupName)
@@ -1011,6 +1016,7 @@ func (a *app) handleParticipantMe(w http.ResponseWriter, r *http.Request) {
 		"name": name, "email": email, "source": source,
 		"exp": totalExp, "level": level, "level_progress": progress, "level_step": levelStep,
 		"group_id": groupID, "group_name": groupName,
+		"reflection_reminder_time": reflectionReminderTime,
 	})
 }
 
@@ -2296,7 +2302,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-refleksi"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-refleksi-v2"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -5271,6 +5277,41 @@ func (a *app) handleAdminGroups(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 }
 
+// ── Refleksi: Set Jadwal Reminder Peserta ───────────────────────────────────
+
+func (a *app) handleParticipantReflectionReminder(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant", "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req struct {
+		Time string `json:"time"` // format HH:MM
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+	// Validasi format HH:MM
+	t := strings.TrimSpace(req.Time)
+	if len(t) != 5 || t[2] != ':' {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "format waktu harus HH:MM"})
+		return
+	}
+	_, err = a.db.ExecContext(r.Context(), `
+		UPDATE participant_profiles SET reflection_reminder_time=$1 WHERE user_id=$2
+	`, t, u.ID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal simpan jadwal"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "time": t})
+}
+
 // ── Refleksi: Endpoint Peserta ──────────────────────────────────────────────
 
 func (a *app) handleParticipantReflections(w http.ResponseWriter, r *http.Request) {
@@ -5359,12 +5400,12 @@ func (a *app) handleAdminReflectionStats(w http.ResponseWriter, r *http.Request)
 
 	// Top 5 peserta paling aktif (hanya jumlah, bukan isi)
 	topRows, _ := a.db.QueryContext(ctx, `
-		SELECT pp.name, COUNT(*) as streak
+		SELECT pp.name, COUNT(*) as cnt
 		FROM reflections r
 		JOIN participant_profiles pp ON pp.user_id = r.user_id
 		WHERE r.reflected_date >= CURRENT_DATE - INTERVAL '30 days'
 		GROUP BY pp.name
-		ORDER BY streak DESC
+		ORDER BY cnt DESC
 		LIMIT 5
 	`)
 	topUsers := []map[string]any{}
@@ -5379,12 +5420,46 @@ func (a *app) handleAdminReflectionStats(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
+	// Tabel semua peserta: status refleksi hari ini + jadwal reminder
+	participantRows, _ := a.db.QueryContext(ctx, `
+		SELECT
+			pp.name,
+			COALESCE(g.name, '-') as group_name,
+			COALESCE(pp.reflection_reminder_time, '20:00') as reminder_time,
+			CASE WHEN r.id IS NOT NULL THEN TRUE ELSE FALSE END as reflected_today,
+			COALESCE(COUNT(r2.id) FILTER (WHERE r2.reflected_date >= CURRENT_DATE - INTERVAL '30 days'), 0) as month_count
+		FROM participant_profiles pp
+		JOIN users u ON u.id = pp.user_id AND u.role = 'participant' AND u.is_active = TRUE
+		LEFT JOIN groups g ON g.id = pp.group_id
+		LEFT JOIN reflections r ON r.user_id = pp.user_id AND r.reflected_date = CURRENT_DATE
+		LEFT JOIN reflections r2 ON r2.user_id = pp.user_id
+		GROUP BY pp.name, g.name, pp.reflection_reminder_time, r.id
+		ORDER BY reflected_today DESC, month_count DESC, pp.name ASC
+	`)
+	participants := []map[string]any{}
+	if participantRows != nil {
+		defer participantRows.Close()
+		for participantRows.Next() {
+			var name, groupName, reminderTime string
+			var reflectedToday bool
+			var monthCount int
+			if participantRows.Scan(&name, &groupName, &reminderTime, &reflectedToday, &monthCount) == nil {
+				participants = append(participants, map[string]any{
+					"name": name, "group_name": groupName,
+					"reminder_time": reminderTime, "reflected_today": reflectedToday,
+					"month_count": monthCount,
+				})
+			}
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"today":        todayCount,
 		"week":         weekCount,
 		"unique_users": uniqueUsers,
 		"trend":        trend,
 		"top_users":    topUsers,
+		"participants": participants,
 	})
 }
 
@@ -5392,22 +5467,41 @@ func (a *app) handleAdminReflectionStats(w http.ResponseWriter, r *http.Request)
 
 func (a *app) startReflectionReminder(ctx context.Context) {
 	go func() {
+		wib := time.FixedZone("WIB", 7*3600)
 		for {
-			now := time.Now().In(time.FixedZone("WIB", 7*3600))
-			// Target jam 20:00 WIB
-			next := time.Date(now.Year(), now.Month(), now.Day(), 20, 0, 0, 0, now.Location())
-			if now.After(next) {
-				next = next.Add(24 * time.Hour)
-			}
-			sleepDur := time.Until(next)
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(sleepDur):
+			case <-time.After(1 * time.Minute):
 			}
-			a.sendReflectionReminders(ctx)
+			now := time.Now().In(wib)
+			currentHHMM := fmt.Sprintf("%02d:%02d", now.Hour(), now.Minute())
+			// Kirim reminder ke peserta yang jadwal remindernya = menit ini & belum refleksi hari ini
+			a.sendReflectionRemindersByTime(ctx, currentHHMM)
 		}
 	}()
+}
+
+func (a *app) sendReflectionRemindersByTime(ctx context.Context, hhMM string) {
+	if a.telegramBotToken == "" {
+		return
+	}
+	// Kirim ke peserta yang jadwal remindernya = hhMM dan belum refleksi hari ini
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT tl.telegram_user_id, COALESCE(pp.name, '')
+		FROM telegram_links tl
+		JOIN users u ON u.id = tl.user_id AND u.is_active = TRUE AND u.role = 'participant'
+		JOIN participant_profiles pp ON pp.user_id = tl.user_id
+		WHERE COALESCE(pp.reflection_reminder_time, '20:00') = $1
+		AND NOT EXISTS (
+			SELECT 1 FROM reflections r WHERE r.user_id = tl.user_id AND r.reflected_date = CURRENT_DATE
+		)
+	`, hhMM)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	a.sendReflectionReminderRows(ctx, rows)
 }
 
 func (a *app) sendReflectionReminders(ctx context.Context) {
@@ -5429,12 +5523,15 @@ func (a *app) sendReflectionReminders(ctx context.Context) {
 	}
 	defer rows.Close()
 
-	reminderMsgs := []string{
-		"Hai *%s*\\! 🌙\n\nHari sudah mau berakhir nih\\. Sudahkah kamu meluangkan waktu untuk diri sendiri hari ini?\n\nYuk tulis refleksimu sekarang dengan /refleksi 📔\n_Hanya butuh 2 menit\\!_",
-		"Hei *%s*\\! 📔\n\nNala ingin mengingatkan kamu untuk refleksi sebentar sebelum tidur\\.\n\nApa yang berkesan dari harimu hari ini? Ceritakan ke Nala lewat /refleksi 🌸",
-		"*%s*, jangan lupa refleksi ya\\! 🌙\n\nMenulis perasaan dan pikiranmu bisa membantumu tumbuh lebih baik\\.\n\nKetik /refleksi dan ceritakan harimu ke Nala 💙",
-	}
+	a.sendReflectionReminderRows(ctx, rows)
+}
 
+func (a *app) sendReflectionReminderRows(ctx context.Context, rows *sql.Rows) {
+	reminderMsgs := []string{
+		"Hai *%s*\\! 🌙\n\nSaatnya luangkan sejenak untuk diri sendiri\\.\n\nYuk tulis refleksimu sekarang dengan /refleksi 📔\n_Hanya butuh 2 menit\\!_",
+		"Hei *%s*\\! 📔\n\nIni pengingat refleksi harianmu\\.\n\nApa yang berkesan dari harimu hari ini? Ceritakan ke Nala lewat /refleksi 🌸",
+		"*%s*, waktunya refleksi\\! 🌙\n\nMenulis perasaan dan pikiranmu bisa membantumu tumbuh lebih baik\\.\n\nKetik /refleksi dan ceritakan harimu ke Nala 💙",
+	}
 	idx := 0
 	for rows.Next() {
 		var tgUID, name string
@@ -5451,6 +5548,6 @@ func (a *app) sendReflectionReminders(ctx context.Context) {
 		go func(cid int64, m string) {
 			_ = a.sendTelegramMessage(context.Background(), cid, m, "idle")
 		}(chatID, msg)
-		time.Sleep(100 * time.Millisecond) // rate limit
+		time.Sleep(100 * time.Millisecond)
 	}
 }
