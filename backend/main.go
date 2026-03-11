@@ -627,6 +627,12 @@ func (a *app) initDB(ctx context.Context) error {
 	// Tambah group_id ke participant_profiles (nullable = belum punya kelompok)
 	_, _ = a.db.ExecContext(ctx, `ALTER TABLE participant_profiles ADD COLUMN IF NOT EXISTS group_id INT REFERENCES groups(id) ON DELETE SET NULL`)
 
+	// Tambah group_id ke question_categories (nullable = global/semua kelompok)
+	_, _ = a.db.ExecContext(ctx, `ALTER TABLE question_categories ADD COLUMN IF NOT EXISTS group_id INT REFERENCES groups(id) ON DELETE SET NULL`)
+
+	// Tambah group_id ke redeem_items (nullable = global/semua kelompok)
+	_, _ = a.db.ExecContext(ctx, `ALTER TABLE redeem_items ADD COLUMN IF NOT EXISTS group_id INT REFERENCES groups(id) ON DELETE SET NULL`)
+
 	return nil
 }
 
@@ -1951,7 +1957,11 @@ func (a *app) handleAdminCategories(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		rows, err := a.db.QueryContext(r.Context(), `SELECT id, code, name, is_active FROM question_categories ORDER BY id DESC`)
+		rows, err := a.db.QueryContext(r.Context(), `
+			SELECT qc.id, qc.code, qc.name, qc.is_active, COALESCE(qc.group_id,0), COALESCE(g.name,'')
+			FROM question_categories qc
+			LEFT JOIN groups g ON g.id = qc.group_id
+			ORDER BY qc.id DESC`)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed categories"})
 			return
@@ -1959,14 +1969,14 @@ func (a *app) handleAdminCategories(w http.ResponseWriter, r *http.Request) {
 		defer rows.Close()
 		items := []map[string]any{}
 		for rows.Next() {
-			var id int64
-			var code, name string
+			var id, groupID int64
+			var code, name, groupName string
 			var active bool
-			if rows.Scan(&id, &code, &name, &active) == nil {
-				items = append(items, map[string]any{"id": id, "code": code, "name": name, "is_active": active})
+			if rows.Scan(&id, &code, &name, &active, &groupID, &groupName) == nil {
+				items = append(items, map[string]any{"id": id, "code": code, "name": name, "is_active": active, "group_id": groupID, "group_name": groupName})
 			}
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+		writeJSON(w, http.StatusOK, map[string]any{"categories": items})
 	case http.MethodPost:
 		var req struct {
 			Action   string `json:"action"`
@@ -1974,20 +1984,25 @@ func (a *app) handleAdminCategories(w http.ResponseWriter, r *http.Request) {
 			Code     string `json:"code"`
 			Name     string `json:"name"`
 			IsActive *bool  `json:"is_active"`
+			GroupID  *int64 `json:"group_id"`
 		}
 		if json.NewDecoder(r.Body).Decode(&req) != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 			return
 		}
+		var groupIDVal any = nil
+		if req.GroupID != nil && *req.GroupID > 0 {
+			groupIDVal = *req.GroupID
+		}
 		switch req.Action {
 		case "create":
-			_, err = a.db.ExecContext(r.Context(), `INSERT INTO question_categories(code,name,is_active) VALUES($1,$2,TRUE)`, strings.ToLower(strings.TrimSpace(req.Code)), strings.TrimSpace(req.Name))
+			_, err = a.db.ExecContext(r.Context(), `INSERT INTO question_categories(code,name,is_active,group_id) VALUES($1,$2,TRUE,$3)`, strings.ToLower(strings.TrimSpace(req.Code)), strings.TrimSpace(req.Name), groupIDVal)
 		case "update":
 			active := true
 			if req.IsActive != nil {
 				active = *req.IsActive
 			}
-			_, err = a.db.ExecContext(r.Context(), `UPDATE question_categories SET code=$1,name=$2,is_active=$3,updated_at=NOW() WHERE id=$4`, strings.ToLower(strings.TrimSpace(req.Code)), strings.TrimSpace(req.Name), active, req.ID)
+			_, err = a.db.ExecContext(r.Context(), `UPDATE question_categories SET code=$1,name=$2,is_active=$3,group_id=$4,updated_at=NOW() WHERE id=$5`, strings.ToLower(strings.TrimSpace(req.Code)), strings.TrimSpace(req.Name), active, groupIDVal, req.ID)
 		case "delete":
 			_, err = a.db.ExecContext(r.Context(), `DELETE FROM question_categories WHERE id=$1`, req.ID)
 		default:
@@ -2155,7 +2170,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-groups-phase3"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-groups-phase4"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -2307,7 +2322,9 @@ func (a *app) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(reply) != "" {
 		// Untuk state yang membutuhkan keyboard kategori
 		if state == "quiz_choose_category" || state == "materi_choose_category" {
-			cats, _ := a.getActiveCategoryNames(r.Context())
+			webUIDKb, _ := a.resolveWebUserIDByExternal(r.Context(), uid)
+			groupIDKb := a.getUserGroupID(r.Context(), webUIDKb)
+			cats, _ := a.getActiveCategoryNamesByGroup(r.Context(), groupIDKb)
 			if len(cats) > 0 {
 				// Bagi keyboard jadi baris 2 kolom
 				var rows [][]string
@@ -2530,7 +2547,9 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		if !registered {
 			return "Sebelum akses materi, kamu perlu daftar dulu ya ✨\nKetik /daftar untuk registrasi.", "idle"
 		}
-		cats, err := a.getActiveCategoryNames(ctx)
+		webUID2, _ := a.resolveWebUserIDByExternal(ctx, uid)
+		groupID2 := a.getUserGroupID(ctx, webUID2)
+		cats, err := a.getActiveCategoryNamesByGroup(ctx, groupID2)
 		if err != nil || len(cats) == 0 {
 			return "Maaf, belum ada materi tersedia saat ini 🙏", "idle"
 		}
@@ -3014,7 +3033,9 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 
 	case "materi_choose_category":
 		num, err2 := strconv.Atoi(strings.TrimSpace(text))
-		cats, err3 := a.getActiveCategoryNames(ctx)
+		webUID3, _ := a.resolveWebUserIDByExternal(ctx, uid)
+		groupID3 := a.getUserGroupID(ctx, webUID3)
+		cats, err3 := a.getActiveCategoryNamesByGroup(ctx, groupID3)
 		if err2 != nil || err3 != nil || num < 1 || num > len(cats) {
 			catsText := ""
 			if err3 == nil {
@@ -3905,6 +3926,28 @@ func (a *app) formatQuizCategoriesDB(ctx context.Context) (string, error) {
 	return strings.Join(lines, "\n") + "\n\nKirim nama kategori atau kode dalam kurung.", nil
 }
 
+func (a *app) getActiveCategoryNamesByGroup(ctx context.Context, groupID int64) ([]string, error) {
+	var rows *sql.Rows
+	var err error
+	if groupID > 0 {
+		rows, err = a.db.QueryContext(ctx, `SELECT name FROM question_categories WHERE is_active=TRUE AND (group_id=$1 OR group_id IS NULL) ORDER BY id ASC`, groupID)
+	} else {
+		rows, err = a.db.QueryContext(ctx, `SELECT name FROM question_categories WHERE is_active=TRUE ORDER BY id ASC`)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var names []string
+	for rows.Next() {
+		var name string
+		if rows.Scan(&name) == nil {
+			names = append(names, name)
+		}
+	}
+	return names, nil
+}
+
 func (a *app) getActiveCategoryNames(ctx context.Context) ([]string, error) {
 	rows, err := a.db.QueryContext(ctx, `SELECT name FROM question_categories WHERE is_active = TRUE ORDER BY id ASC`)
 	if err != nil {
@@ -3925,6 +3968,13 @@ type activeGroup struct {
 	ID   int
 	Name string
 	Code string
+}
+
+// getUserGroupID — ambil group_id user dari participant_profiles (0 = tidak ada kelompok)
+func (a *app) getUserGroupID(ctx context.Context, userID int64) int64 {
+	var gid int64
+	_ = a.db.QueryRowContext(ctx, `SELECT COALESCE(group_id,0) FROM participant_profiles WHERE user_id=$1`, userID).Scan(&gid)
+	return gid
 }
 
 func (a *app) getActiveGroups(ctx context.Context) ([]activeGroup, error) {
@@ -4171,6 +4221,36 @@ type redeemClaim struct {
 
 // ─── Redeem helpers ───────────────────────────────────────────────────────────
 
+func (a *app) getActiveRedeemItemsByGroup(ctx context.Context, groupID int64) ([]redeemItem, error) {
+	var rows *sql.Rows
+	var err error
+	if groupID > 0 {
+		rows, err = a.db.QueryContext(ctx, `
+			SELECT id, name, description, point_cost, stock, is_active, image_url, created_at
+			FROM redeem_items WHERE is_active=TRUE AND (group_id=$1 OR group_id IS NULL) ORDER BY id ASC
+		`, groupID)
+	} else {
+		rows, err = a.db.QueryContext(ctx, `
+			SELECT id, name, description, point_cost, stock, is_active, image_url, created_at
+			FROM redeem_items WHERE is_active=TRUE ORDER BY id ASC
+		`)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []redeemItem
+	for rows.Next() {
+		var it redeemItem
+		var ca time.Time
+		if err := rows.Scan(&it.ID, &it.Name, &it.Description, &it.PointCost, &it.Stock, &it.IsActive, &it.ImageURL, &ca); err != nil {
+			return nil, err
+		}
+		items = append(items, it)
+	}
+	return items, nil
+}
+
 func (a *app) getActiveRedeemItems(ctx context.Context) ([]redeemItem, error) {
 	rows, err := a.db.QueryContext(ctx, `
 		SELECT id, name, description, point_cost, stock, is_active, image_url, created_at
@@ -4209,12 +4289,13 @@ func (a *app) notifyTelegramUser(ctx context.Context, webUserID int64, msg strin
 // ─── Participant redeem handlers ──────────────────────────────────────────────
 
 func (a *app) handleParticipantRedeemItems(w http.ResponseWriter, r *http.Request) {
-	_, err := a.currentUser(r.Context(), r)
+	u, err := a.currentUser(r.Context(), r)
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
-	items, err := a.getActiveRedeemItems(r.Context())
+	groupID := a.getUserGroupID(r.Context(), u.ID)
+	items, err := a.getActiveRedeemItemsByGroup(r.Context(), groupID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
 		return
@@ -4349,27 +4430,35 @@ func (a *app) handleAdminRedeemItems(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	if r.Method == http.MethodGet {
-		rows, err := a.db.QueryContext(ctx, `
-			SELECT id, name, description, point_cost, stock, is_active, image_url, created_at
-			FROM redeem_items ORDER BY id DESC
-		`)
+		groupFilter := r.URL.Query().Get("group_id")
+		q := `SELECT ri.id, ri.name, ri.description, ri.point_cost, ri.stock, ri.is_active, ri.image_url, ri.created_at, COALESCE(ri.group_id,0), COALESCE(g.name,'')
+			FROM redeem_items ri LEFT JOIN groups g ON g.id = ri.group_id`
+		var qArgs []any
+		if groupFilter != "" {
+			q += ` WHERE ri.group_id=$1`
+			qArgs = append(qArgs, groupFilter)
+		}
+		q += ` ORDER BY ri.id DESC`
+		rows, err := a.db.QueryContext(ctx, q, qArgs...)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
 			return
 		}
 		defer rows.Close()
-		var items []redeemItem
+		type redeemItemAdmin struct {
+			redeemItem
+			GroupID   int64  `json:"group_id"`
+			GroupName string `json:"group_name"`
+		}
+		items := []redeemItemAdmin{}
 		for rows.Next() {
-			var it redeemItem
+			var it redeemItemAdmin
 			var ca time.Time
-			if err := rows.Scan(&it.ID, &it.Name, &it.Description, &it.PointCost, &it.Stock, &it.IsActive, &it.ImageURL, &ca); err != nil {
+			if err := rows.Scan(&it.ID, &it.Name, &it.Description, &it.PointCost, &it.Stock, &it.IsActive, &it.ImageURL, &ca, &it.GroupID, &it.GroupName); err != nil {
 				continue
 			}
 			it.CreatedAt = ca.Format(time.RFC3339)
 			items = append(items, it)
-		}
-		if items == nil {
-			items = []redeemItem{}
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"items": items})
 		return
@@ -4384,26 +4473,31 @@ func (a *app) handleAdminRedeemItems(w http.ResponseWriter, r *http.Request) {
 			Stock       int    `json:"stock"`
 			IsActive    bool   `json:"is_active"`
 			ImageURL    string `json:"image_url"`
+			GroupID     *int64 `json:"group_id"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
 			return
 		}
+		var gidVal any = nil
+		if req.GroupID != nil && *req.GroupID > 0 {
+			gidVal = *req.GroupID
+		}
 		switch req.Action {
 		case "create":
 			_, err := a.db.ExecContext(ctx, `
-				INSERT INTO redeem_items (name, description, point_cost, stock, is_active, image_url)
-				VALUES ($1, $2, $3, $4, TRUE, $5)
-			`, req.Name, req.Description, req.PointCost, req.Stock, req.ImageURL)
+				INSERT INTO redeem_items (name, description, point_cost, stock, is_active, image_url, group_id)
+				VALUES ($1, $2, $3, $4, TRUE, $5, $6)
+			`, req.Name, req.Description, req.PointCost, req.Stock, req.ImageURL, gidVal)
 			if err != nil {
 				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal tambah hadiah"})
 				return
 			}
 		case "update":
 			_, err := a.db.ExecContext(ctx, `
-				UPDATE redeem_items SET name=$1, description=$2, point_cost=$3, stock=$4, is_active=$5, image_url=$6
-				WHERE id=$7
-			`, req.Name, req.Description, req.PointCost, req.Stock, req.IsActive, req.ImageURL, req.ID)
+				UPDATE redeem_items SET name=$1, description=$2, point_cost=$3, stock=$4, is_active=$5, image_url=$6, group_id=$7
+				WHERE id=$8
+			`, req.Name, req.Description, req.PointCost, req.Stock, req.IsActive, req.ImageURL, gidVal, req.ID)
 			if err != nil {
 				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal update hadiah"})
 				return
