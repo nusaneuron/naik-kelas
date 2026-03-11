@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"net/http"
 	"net/mail"
@@ -63,6 +64,8 @@ type botSession struct {
 	RedeemItemName    string
 	RedeemItemCost    int
 	Email string
+	// Feedback
+	FeedbackRating int
 	// Materi
 	MateriCategoryID   int
 	MateriCategoryName string
@@ -175,6 +178,7 @@ func main() {
 
 	go a.startReminderScheduler(context.Background())
 	go a.startReflectionReminder(context.Background())
+	go a.startFeedbackScheduler(context.Background())
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", a.handleHealth)
@@ -231,6 +235,9 @@ func main() {
 	mux.HandleFunc("/participant/materials/complete", a.handleParticipantMaterialComplete)
 	mux.HandleFunc("/participant/reflections", a.handleParticipantReflections)
 	mux.HandleFunc("/participant/reflection-reminder", a.handleParticipantReflectionReminder)
+	mux.HandleFunc("/admin/feedback/schedule", a.handleAdminFeedbackSchedule)
+	mux.HandleFunc("/admin/feedback/list", a.handleAdminFeedbackList)
+	mux.HandleFunc("/admin/feedback/stats", a.handleAdminFeedbackStats)
 	mux.HandleFunc("/admin/reflections/stats", a.handleAdminReflectionStats)
 
 	port := getenv("PORT", "8080")
@@ -644,6 +651,34 @@ func (a *app) initDB(ctx context.Context) error {
 
 	// Promote designated super admin (Aldythya Nugraha)
 	_, _ = a.db.ExecContext(ctx, `UPDATE users SET role='super_admin' WHERE phone='081284047501' AND role='admin'`)
+
+	// Tabel feedback peserta
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS feedbacks (
+			id         BIGSERIAL PRIMARY KEY,
+			user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			rating     INT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+			message    TEXT NOT NULL DEFAULT '',
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	// Jadwal pengiriman feedback
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS feedback_schedule (
+			id             INT PRIMARY KEY DEFAULT 1,
+			send_time      TEXT NOT NULL DEFAULT '09:00',
+			is_active      BOOLEAN NOT NULL DEFAULT FALSE,
+			last_sent_date DATE
+		)
+	`)
+	if err != nil {
+		return err
+	}
+	_, _ = a.db.ExecContext(ctx, `INSERT INTO feedback_schedule (id, send_time, is_active) VALUES (1, '09:00', FALSE) ON CONFLICT DO NOTHING`)
 
 	// Tabel refleksi harian peserta
 	_, err = a.db.ExecContext(ctx, `
@@ -2303,7 +2338,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-learning-summary"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260312-feedback"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -2453,6 +2488,16 @@ func (a *app) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	reply, state := a.processBotText(r.Context(), uid, displayName, text)
 	if strings.TrimSpace(reply) != "" {
+		// Keyboard rating feedback
+		if state == "feedback_rating" {
+			kb := [][]string{{"1 ⭐", "2 ⭐⭐", "3 ⭐⭐⭐"}, {"4 ⭐⭐⭐⭐", "5 ⭐⭐⭐⭐⭐"}}
+			if err := a.sendTelegramMessageWithKeyboard(r.Context(), upd.Message.Chat.ID, reply, kb); err != nil {
+				log.Printf("telegram send keyboard error: %v", err)
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+			return
+		}
+
 		// Untuk state yang membutuhkan keyboard kategori
 		if state == "quiz_choose_category" || state == "materi_choose_category" {
 			webUIDKb, _ := a.resolveWebUserIDByExternal(r.Context(), uid)
@@ -2505,6 +2550,7 @@ func (a *app) syncTelegramBotCommands(ctx context.Context) error {
 		{"command": "refleksi", "description": "📔 Tulis refleksi & jurnal harianmu"},
 		{"command": "jadwal_belajar", "description": "⏰ Atur pengingat belajar harian"},
 		{"command": "jadwal_refleksi", "description": "⏰ Atur pengingat refleksi harian"},
+		{"command": "feedback", "description": "💬 Beri masukan untuk aplikasi Naik Kelas"},
 		{"command": "batal", "description": "❌ Batalkan proses yang sedang berjalan"},
 	}
 	payload := map[string]any{"commands": commands}
@@ -2741,13 +2787,58 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		return msg, "idle"
 	}
 
+	// ── Feedback ──────────────────────────────────────────────────────
+	if lower == "/feedback" {
+		return "💬 *Feedback untuk Naik Kelas*\n\nHai\\! Nala ingin tahu pendapatmu tentang aplikasi ini 🙏\n\nBerikan penilaianmu dari skala *1 sampai 5*:\n\n⭐ 1 \\— Sangat kurang\n⭐⭐ 2 \\— Kurang\n⭐⭐⭐ 3 \\— Cukup\n⭐⭐⭐⭐ 4 \\— Bagus\n⭐⭐⭐⭐⭐ 5 \\— Sangat bagus\n\nKetik angka *1\\-5* sekarang\\!", "feedback_rating"
+	}
+
+	if s.State == "feedback_rating" {
+		// Support input "1 ⭐" dari keyboard atau "1" langsung
+		ratingStr := strings.TrimSpace(strings.Split(text, " ")[0])
+		rating, convErr := strconv.Atoi(ratingStr)
+		if convErr != nil || rating < 1 || rating > 5 {
+			return "Ketik angka *1 sampai 5* ya 😊", "feedback_rating"
+		}
+		s.FeedbackRating = rating
+		a.botSessions[uid] = s
+		stars := strings.Repeat("⭐", rating)
+		return fmt.Sprintf("Kamu memberi nilai *%s* \\(%d/5\\)\\!\n\nAda pesan atau saran tambahan untuk Naik Kelas? 💬\n_\\(Boleh dilewati, ketik *skip* jika tidak ada\\)_", stars, rating), "feedback_message"
+	}
+
+	if s.State == "feedback_message" {
+		msg := strings.TrimSpace(text)
+		if strings.ToLower(msg) == "skip" {
+			msg = ""
+		}
+		// Simpan feedback — ambil user_id jika terdaftar, else simpan dengan tg_uid
+		var fbUserID int64
+		if webUID, err2 := a.resolveWebUserIDByExternal(ctx, uid); err2 == nil {
+			fbUserID = webUID
+		}
+		if fbUserID > 0 {
+			_, _ = a.db.ExecContext(ctx, `INSERT INTO feedbacks (user_id, rating, message) VALUES ($1,$2,$3)`, fbUserID, s.FeedbackRating, msg)
+		}
+		stars := strings.Repeat("⭐", s.FeedbackRating)
+		a.resetSession(uid)
+		thankMsg := []string{
+			"Terima kasih atas masukannya\\! 🙏\nFeedbackmu sangat berarti untuk pengembangan Naik Kelas ke depannya\\. 💙",
+			"Makasih ya sudah meluangkan waktu untuk kasih feedback\\! 🤍\nNala dan tim akan terus berusaha memberikan yang terbaik\\!",
+			"Wah, terima kasih banyak\\! 🌸\nSetiap masukan dari kamu membantu Naik Kelas jadi lebih baik\\!",
+		}
+		hashIdx := 0
+		for _, c := range uid {
+			hashIdx += int(c)
+		}
+		return fmt.Sprintf("✅ *Feedback diterima\\!*\n\nPenilaian: %s\n\n%s", stars, thankMsg[hashIdx%len(thankMsg)]), "idle"
+	}
+
 	if lower == "/batal" {
 		a.resetSession(uid)
 		return "Oke, proses dibatalkan dulu ya 🙂\nKapan pun siap, ketik /daftar, /quiz, atau /tryout untuk mulai lagi.", "idle"
 	}
 	if lower == "/start" {
 		a.resetSession(uid)
-		return "Halo\\! Perkenalkan, saya *Nala* ✨\nAsisten belajar pintarmu di *Naik Kelas* 🎓\n\n━━━━━━━━━━━━━━━\n📚 *Belajar*\n/materi \\— Belajar materi per kategori\n/quiz \\— Latihan soal pilihan ganda\n/tryout \\— Simulasi tryout soal acak\n/leaderbot \\— Papan ranking tryout 🏆\n\n━━━━━━━━━━━━━━━\n👤 *Akun & Progress*\n/daftar \\— Daftar sebagai peserta baru\n/cek \\— Cek status pendaftaran\n/status \\— Level, EXP & saldo poin\n/exp \\— Detail progress levelmu ⭐\n/poin \\— Riwayat transaksi poin 💰\n\n━━━━━━━━━━━━━━━\n🎁 *Reward*\n/redeem \\— Tukar poin dengan hadiah\n\n━━━━━━━━━━━━━━━\n📔 *Refleksi Diri*\n/refleksi \\— Tulis jurnal & refleksi harianmu\n\n━━━━━━━━━━━━━━━\n⏰ *Pengingat*\n/jadwal\\_belajar \\— Atur pengingat belajar harian\n/jadwal\\_refleksi \\— Atur pengingat refleksi harian\n\n❌ /batal \\— Batalkan proses yang sedang berjalan\n━━━━━━━━━━━━━━━\n\nAda yang bisa Nala bantu? Yuk mulai belajar\\! 💪", "idle"
+		return "Halo\\! Perkenalkan, saya *Nala* ✨\nAsisten belajar pintarmu di *Naik Kelas* 🎓\n\n━━━━━━━━━━━━━━━\n📚 *Belajar*\n/materi \\— Belajar materi per kategori\n/quiz \\— Latihan soal pilihan ganda\n/tryout \\— Simulasi tryout soal acak\n/leaderbot \\— Papan ranking tryout 🏆\n\n━━━━━━━━━━━━━━━\n👤 *Akun & Progress*\n/daftar \\— Daftar sebagai peserta baru\n/cek \\— Cek status pendaftaran\n/status \\— Level, EXP & saldo poin\n/exp \\— Detail progress levelmu ⭐\n/poin \\— Riwayat transaksi poin 💰\n\n━━━━━━━━━━━━━━━\n🎁 *Reward*\n/redeem \\— Tukar poin dengan hadiah\n\n━━━━━━━━━━━━━━━\n📔 *Refleksi Diri*\n/refleksi \\— Tulis jurnal & refleksi harianmu\n\n━━━━━━━━━━━━━━━\n⏰ *Pengingat*\n/jadwal\\_belajar \\— Atur pengingat belajar harian\n/jadwal\\_refleksi \\— Atur pengingat refleksi harian\n\n💬 /feedback \\— Beri masukan untuk aplikasi ini\n\n❌ /batal \\— Batalkan proses yang sedang berjalan\n━━━━━━━━━━━━━━━\n\nAda yang bisa Nala bantu? Yuk mulai belajar\\! 💪", "idle"
 	}
 	if lower == "/daftar" {
 		a.mu.Lock()
@@ -5682,4 +5773,214 @@ func (a *app) handleAdminLearningSummary(w http.ResponseWriter, r *http.Request)
 		"active_week":        activeWeek,
 		"participants":       participants,
 	})
+}
+
+// ── Feedback: Scheduler ─────────────────────────────────────────────────────
+
+func (a *app) startFeedbackScheduler(ctx context.Context) {
+	go func() {
+		wib := time.FixedZone("WIB", 7*3600)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(1 * time.Minute):
+			}
+			now := time.Now().In(wib)
+			currentHHMM := fmt.Sprintf("%02d:%02d", now.Hour(), now.Minute())
+			todayStr := now.Format("2006-01-02")
+
+			var sendTime string
+			var isActive bool
+			var lastSentDate *string
+			err := a.db.QueryRowContext(ctx, `SELECT send_time, is_active, last_sent_date::text FROM feedback_schedule WHERE id=1`).Scan(&sendTime, &isActive, &lastSentDate)
+			if err != nil || !isActive || sendTime != currentHHMM {
+				continue
+			}
+			// Hanya kirim sekali per hari
+			if lastSentDate != nil && *lastSentDate == todayStr {
+				continue
+			}
+			// Update last_sent_date
+			_, _ = a.db.ExecContext(ctx, `UPDATE feedback_schedule SET last_sent_date=$1 WHERE id=1`, todayStr)
+			go a.broadcastFeedbackRequest(ctx)
+		}
+	}()
+}
+
+func (a *app) broadcastFeedbackRequest(ctx context.Context) {
+	if a.telegramBotToken == "" {
+		return
+	}
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT tl.telegram_user_id, COALESCE(pp.name, '')
+		FROM telegram_links tl
+		JOIN users u ON u.id = tl.user_id AND u.is_active = TRUE AND u.role = 'participant'
+		JOIN participant_profiles pp ON pp.user_id = tl.user_id
+	`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	msg := "💬 *Hai\\! Nala butuh pendapatmu\\!*\n\nBagaimana pengalamanmu menggunakan *Naik Kelas* akhir\\-akhir ini?\n\nYuk luangkan 1 menit untuk kasih feedback lewat /feedback 🙏\nMasukanmu sangat membantu pengembangan aplikasi ini\\!"
+	idx := 0
+	for rows.Next() {
+		var tgUID, name string
+		if rows.Scan(&tgUID, &name) != nil {
+			continue
+		}
+		chatID, _ := strconv.ParseInt(tgUID, 10, 64)
+		go func(cid int64, m string) {
+			_ = a.sendTelegramMessage(context.Background(), cid, m, "idle")
+		}(chatID, msg)
+		idx++
+		time.Sleep(120 * time.Millisecond)
+	}
+}
+
+// ── Feedback: Admin Handlers ─────────────────────────────────────────────────
+
+func (a *app) handleAdminFeedbackSchedule(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	// Hanya super_admin yang bisa ubah jadwal
+	ctx := r.Context()
+	if r.Method == http.MethodGet {
+		var sendTime string
+		var isActive bool
+		var lastSent *string
+		_ = a.db.QueryRowContext(ctx, `SELECT send_time, is_active, last_sent_date::text FROM feedback_schedule WHERE id=1`).Scan(&sendTime, &isActive, &lastSent)
+		ls := ""
+		if lastSent != nil {
+			ls = *lastSent
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"send_time": sendTime, "is_active": isActive, "last_sent_date": ls})
+		return
+	}
+	if r.Method == http.MethodPost {
+		if !isSuperAdmin(u) {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "hanya super_admin yang bisa mengubah jadwal feedback"})
+			return
+		}
+		var req struct {
+			SendTime string `json:"send_time"`
+			IsActive bool   `json:"is_active"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			return
+		}
+		t := strings.TrimSpace(req.SendTime)
+		if len(t) != 5 || t[2] != ':' {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "format waktu harus HH:MM"})
+			return
+		}
+		_, err = a.db.ExecContext(ctx, `UPDATE feedback_schedule SET send_time=$1, is_active=$2 WHERE id=1`, t, req.IsActive)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal update jadwal"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "send_time": t, "is_active": req.IsActive})
+		return
+	}
+	writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+}
+
+func (a *app) handleAdminFeedbackStats(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	ctx := r.Context()
+
+	groupFilter := ""
+	if !isSuperAdmin(u) {
+		gid := a.getUserGroupID(ctx, u.ID)
+		if gid > 0 {
+			groupFilter = fmt.Sprintf("%d", gid)
+		}
+	}
+
+	baseJoin := `FROM feedbacks f JOIN participant_profiles pp ON pp.user_id = f.user_id`
+	whereClause := ""
+	var args []any
+	if groupFilter != "" {
+		whereClause = ` WHERE pp.group_id = $1`
+		args = append(args, groupFilter)
+	}
+
+	var totalFeedback int
+	var avgRating float64
+	_ = a.db.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(AVG(rating),0) `+baseJoin+whereClause, args...).Scan(&totalFeedback, &avgRating)
+
+	// Distribusi rating
+	distRows, _ := a.db.QueryContext(ctx, `SELECT rating, COUNT(*) `+baseJoin+whereClause+` GROUP BY rating ORDER BY rating`, args...)
+	dist := map[int]int{1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+	if distRows != nil {
+		defer distRows.Close()
+		for distRows.Next() {
+			var r2, cnt int
+			if distRows.Scan(&r2, &cnt) == nil {
+				dist[r2] = cnt
+			}
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"total":      totalFeedback,
+		"avg_rating": math.Round(avgRating*10) / 10,
+		"dist":       dist,
+	})
+}
+
+func (a *app) handleAdminFeedbackList(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	ctx := r.Context()
+
+	query := `
+		SELECT pp.name, COALESCE(g.name,'-'), f.rating, f.message, f.created_at
+		FROM feedbacks f
+		JOIN participant_profiles pp ON pp.user_id = f.user_id
+		LEFT JOIN groups g ON g.id = pp.group_id`
+	var args []any
+	if !isSuperAdmin(u) {
+		gid := a.getUserGroupID(ctx, u.ID)
+		if gid > 0 {
+			query += ` WHERE pp.group_id = $1`
+			args = append(args, gid)
+		}
+	}
+	query += ` ORDER BY f.created_at DESC LIMIT 200`
+
+	rows, err := a.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
+		return
+	}
+	defer rows.Close()
+	type fbItem struct {
+		Name      string `json:"name"`
+		GroupName string `json:"group_name"`
+		Rating    int    `json:"rating"`
+		Message   string `json:"message"`
+		CreatedAt string `json:"created_at"`
+	}
+	items := []fbItem{}
+	for rows.Next() {
+		var it fbItem
+		var ca time.Time
+		if rows.Scan(&it.Name, &it.GroupName, &it.Rating, &it.Message, &ca) == nil {
+			it.CreatedAt = ca.Format("2006-01-02 15:04")
+			items = append(items, it)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }

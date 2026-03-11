@@ -48,6 +48,11 @@ export default function Page() {
   const [myReflections, setMyReflections] = useState([]);
   const [adminReflectionStats, setAdminReflectionStats] = useState(null);
   const [adminLearningSummary, setAdminLearningSummary] = useState(null);
+  const [adminFeedbackStats, setAdminFeedbackStats] = useState(null);
+  const [adminFeedbackList, setAdminFeedbackList] = useState([]);
+  const [adminFeedbackSchedule, setAdminFeedbackSchedule] = useState({ send_time: '09:00', is_active: false });
+  const [fbScheduleTime, setFbScheduleTime] = useState('09:00');
+  const [fbScheduleActive, setFbScheduleActive] = useState(false);
   const [adminMaterials, setAdminMaterials] = useState([]);
   const [adminCategories, setAdminCategories] = useState([]);
   const [materiFilterCat, setMateriFilterCat] = useState('');
@@ -165,6 +170,19 @@ export default function Page() {
     if (refStatsRes.ok) setAdminReflectionStats(await refStatsRes.json());
     const learnRes = await fetch(`${apiBase}/admin/learning-summary`, { credentials: 'include' });
     if (learnRes.ok) setAdminLearningSummary(await learnRes.json());
+    const [fbStatsRes, fbListRes, fbSchedRes] = await Promise.all([
+      fetch(`${apiBase}/admin/feedback/stats`, { credentials: 'include' }),
+      fetch(`${apiBase}/admin/feedback/list`, { credentials: 'include' }),
+      fetch(`${apiBase}/admin/feedback/schedule`, { credentials: 'include' }),
+    ]);
+    if (fbStatsRes.ok) setAdminFeedbackStats(await fbStatsRes.json());
+    if (fbListRes.ok) setAdminFeedbackList((await fbListRes.json()).items || []);
+    if (fbSchedRes.ok) {
+      const sc = await fbSchedRes.json();
+      setAdminFeedbackSchedule(sc);
+      setFbScheduleTime(sc.send_time || '09:00');
+      setFbScheduleActive(sc.is_active || false);
+    }
   }
 
   async function loadPortal(role) {
@@ -1118,6 +1136,7 @@ export default function Page() {
                   ['materi', '📖', 'Materi'],
                   ['redeem', '🎁', 'Redeem'],
                   ['refleksi', '📔', 'Refleksi'],
+                  ['feedback', '💬', 'Feedback'],
                   ['jadwal', '📅', 'Jadwal Belajar'],
                   ['poin', '💰', 'Poin'],
                   ['exp', '⭐', 'EXP'],
@@ -1477,6 +1496,87 @@ export default function Page() {
                       </table>
                     </div>
                   ) : <div className="nk-empty">Belum ada transaksi poin.</div>}
+                </AdminSection>
+              )}
+
+              {/* Admin — Feedback */}
+              {adminSection === 'feedback' && (
+                <AdminSection title="💬 Feedback Peserta">
+                  {/* Setting jadwal — hanya super admin */}
+                  {isSuperAdmin && (
+                    <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+                      <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>⏰ Jadwal Broadcast Feedback</p>
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <input type="time" value={fbScheduleTime} onChange={e => setFbScheduleTime(e.target.value)}
+                          style={{ background: '#0d1b2e', border: '1px solid #1e2d45', borderRadius: 8, color: '#f1f5f9', padding: '7px 12px', fontSize: 14 }} />
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#94a3b8', cursor: 'pointer' }}>
+                          <input type="checkbox" checked={fbScheduleActive} onChange={e => setFbScheduleActive(e.target.checked)} />
+                          Aktifkan pengiriman otomatis
+                        </label>
+                        <BtnSm color="purple" onClick={async () => {
+                          setBusy(true);
+                          const res = await fetch(`${apiBase}/admin/feedback/schedule`, {
+                            method: 'POST', credentials: 'include',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ send_time: fbScheduleTime, is_active: fbScheduleActive })
+                          });
+                          setBusy(false);
+                          if (res.ok) { showMsg('Jadwal feedback disimpan ✅', 'success'); await loadAdmin(); }
+                          else showMsg('Gagal simpan jadwal', 'error');
+                        }}>💾 Simpan</BtnSm>
+                      </div>
+                      {adminFeedbackSchedule.last_sent_date && (
+                        <p style={{ margin: '10px 0 0', fontSize: 12, color: '#475569' }}>Terakhir dikirim: {adminFeedbackSchedule.last_sent_date}</p>
+                      )}
+                      <p style={{ margin: '6px 0 0', fontSize: 12, color: '#334155', fontStyle: 'italic' }}>Nala akan broadcast permintaan feedback ke semua peserta pada jam tersebut (WIB).</p>
+                    </div>
+                  )}
+
+                  {/* Stats */}
+                  {adminFeedbackStats && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px,1fr))', gap: 12, marginBottom: 20 }}>
+                      <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                        <div style={{ fontSize: 28, fontWeight: 800, color: '#fbbf24' }}>{adminFeedbackStats.avg_rating}</div>
+                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Rata-rata Rating</div>
+                        <div style={{ fontSize: 20, marginTop: 4 }}>{'⭐'.repeat(Math.round(adminFeedbackStats.avg_rating || 0))}</div>
+                      </div>
+                      <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                        <div style={{ fontSize: 28, fontWeight: 800, color: '#be94f5' }}>{adminFeedbackStats.total}</div>
+                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Total Feedback</div>
+                      </div>
+                      {/* Distribusi bintang */}
+                      {[5,4,3,2,1].map(star => (
+                        <div key={star} style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ fontSize: 13, color: '#fbbf24', minWidth: 28 }}>{'⭐'.repeat(star)}</span>
+                          <div style={{ flex: 1, background: '#1e293b', borderRadius: 4, height: 8 }}>
+                            <div style={{ height: 8, borderRadius: 4, background: star >= 4 ? '#34d399' : star === 3 ? '#fbbf24' : '#f87171', width: `${adminFeedbackStats.total ? Math.round((adminFeedbackStats.dist?.[star]||0)/adminFeedbackStats.total*100) : 0}%` }}></div>
+                          </div>
+                          <span style={{ fontSize: 12, color: '#64748b', minWidth: 24 }}>{adminFeedbackStats.dist?.[star] || 0}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Tabel rekapan */}
+                  <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16 }}>
+                    <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>📋 Rekapan Feedback{!isSuperAdmin ? ' (Kelompokmu)' : ''}</p>
+                    {adminFeedbackList.length > 0 ? (
+                      <div className="nk-table-wrap" style={{ maxHeight: 400 }}>
+                        <table className="nk-table">
+                          <thead><tr><th>Nama</th>{isSuperAdmin && <th>Kelompok</th>}<th>Rating</th><th>Pesan</th><th>Waktu</th></tr></thead>
+                          <tbody>{adminFeedbackList.map((f, i) => (
+                            <tr key={i}>
+                              <td style={{ fontWeight: 600 }}>{f.name}</td>
+                              {isSuperAdmin && <td>{f.group_name !== '-' ? <span className="nk-badge nk-badge-purple">🏢 {f.group_name}</span> : <span style={{ color: '#475569', fontSize: 12 }}>—</span>}</td>}
+                              <td><span style={{ color: '#fbbf24' }}>{'⭐'.repeat(f.rating)}</span></td>
+                              <td style={{ color: '#94a3b8', fontSize: 13, maxWidth: 260 }}>{f.message || <span style={{ color: '#334155', fontStyle: 'italic' }}>—</span>}</td>
+                              <td style={{ color: '#64748b', fontSize: 12, whiteSpace: 'nowrap' }}>{f.created_at}</td>
+                            </tr>
+                          ))}</tbody>
+                        </table>
+                      </div>
+                    ) : <p style={{ color: '#475569', fontSize: 13 }}>Belum ada feedback masuk.</p>}
+                  </div>
                 </AdminSection>
               )}
 
