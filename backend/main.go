@@ -2302,7 +2302,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-refleksi-v4"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-refleksi-v5"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -2502,8 +2502,8 @@ func (a *app) syncTelegramBotCommands(ctx context.Context) error {
 		{"command": "poin", "description": "💰 Saldo & riwayat transaksi poin"},
 		{"command": "redeem", "description": "🎁 Tukar poin dengan hadiah"},
 		{"command": "refleksi", "description": "📔 Tulis refleksi & jurnal harianmu"},
-		{"command": "jadwal_refleksi", "description": "⏰ Atur jadwal pengingat refleksi harian"},
 		{"command": "jadwal_belajar", "description": "⏰ Atur pengingat belajar harian"},
+		{"command": "jadwal_refleksi", "description": "⏰ Atur pengingat refleksi harian"},
 		{"command": "batal", "description": "❌ Batalkan proses yang sedang berjalan"},
 	}
 	payload := map[string]any{"commands": commands}
@@ -2746,7 +2746,7 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 	}
 	if lower == "/start" {
 		a.resetSession(uid)
-		return "Halo\\! Perkenalkan, saya *Nala* ✨\nAsisten belajar pintarmu di *Naik Kelas* 🎓\n\n━━━━━━━━━━━━━━━\n📚 *Belajar*\n/materi \\— Belajar materi per kategori\n/quiz \\— Latihan soal pilihan ganda\n/tryout \\— Simulasi tryout soal acak\n/leaderbot \\— Papan ranking tryout 🏆\n\n━━━━━━━━━━━━━━━\n👤 *Akun & Progress*\n/daftar \\— Daftar sebagai peserta baru\n/cek \\— Cek status pendaftaran\n/status \\— Level, EXP & saldo poin\n/exp \\— Detail progress levelmu ⭐\n/poin \\— Riwayat transaksi poin 💰\n\n━━━━━━━━━━━━━━━\n🎁 *Reward*\n/redeem \\— Tukar poin dengan hadiah\n\n━━━━━━━━━━━━━━━\n📔 *Refleksi Diri*\n/refleksi \\— Tulis jurnal & refleksi harianmu\n/jadwal\\_refleksi \\— Atur jadwal pengingat refleksi\n\n━━━━━━━━━━━━━━━\n⏰ *Pengingat Belajar*\n/jadwal\\_belajar \\— Atur jadwal pengingat belajar\n\n❌ /batal \\— Batalkan proses yang sedang berjalan\n━━━━━━━━━━━━━━━\n\nAda yang bisa Nala bantu? Yuk mulai belajar\\! 💪", "idle"
+		return "Halo\\! Perkenalkan, saya *Nala* ✨\nAsisten belajar pintarmu di *Naik Kelas* 🎓\n\n━━━━━━━━━━━━━━━\n📚 *Belajar*\n/materi \\— Belajar materi per kategori\n/quiz \\— Latihan soal pilihan ganda\n/tryout \\— Simulasi tryout soal acak\n/leaderbot \\— Papan ranking tryout 🏆\n\n━━━━━━━━━━━━━━━\n👤 *Akun & Progress*\n/daftar \\— Daftar sebagai peserta baru\n/cek \\— Cek status pendaftaran\n/status \\— Level, EXP & saldo poin\n/exp \\— Detail progress levelmu ⭐\n/poin \\— Riwayat transaksi poin 💰\n\n━━━━━━━━━━━━━━━\n🎁 *Reward*\n/redeem \\— Tukar poin dengan hadiah\n\n━━━━━━━━━━━━━━━\n📔 *Refleksi Diri*\n/refleksi \\— Tulis jurnal & refleksi harianmu\n\n━━━━━━━━━━━━━━━\n⏰ *Pengingat*\n/jadwal\\_belajar \\— Atur pengingat belajar harian\n/jadwal\\_refleksi \\— Atur pengingat refleksi harian\n\n❌ /batal \\— Batalkan proses yang sedang berjalan\n━━━━━━━━━━━━━━━\n\nAda yang bisa Nala bantu? Yuk mulai belajar\\! 💪", "idle"
 	}
 	if lower == "/daftar" {
 		a.mu.Lock()
