@@ -2410,7 +2410,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260312-badges-p1"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260312-badges-p2"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -2836,6 +2836,8 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		// Beri EXP + poin bonus
 		expVal := a.getExpRuleValue(ctx, "reflection_daily", 15)
 		a.applyExpRule(ctx, webUID, "reflection_daily", "Refleksi harian")
+		// Auto-badge check
+		go a.checkAndAwardAutoBadges(context.Background(), webUID, "reflection_streak_7")
 		// Pilih response motivasi
 		responses := []string{
 			"Terima kasih sudah berbagi, *%s*\\! 🤍\n\nMenuliskan apa yang kamu rasakan adalah langkah kecil yang luar biasa\\. Nala bangga kamu meluangkan waktu untuk ini\\.\n\n✨ *\\+%d EXP* sudah kamu dapatkan\\!\nSampai besok\\! 🌙",
@@ -2891,6 +2893,8 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 			_, _ = a.db.ExecContext(ctx, `INSERT INTO feedbacks (user_id, rating, message) VALUES ($1,$2,$3)`, fbUserID, s.FeedbackRating, msg)
 			// EXP + bonus poin dari rule feedback_submit
 			a.applyExpRule(ctx, fbUserID, "feedback_submit", "Mengirim feedback aplikasi")
+			// Auto-badge check
+			go a.checkAndAwardAutoBadges(context.Background(), fbUserID, "feedback_submit")
 		}
 		stars := strings.Repeat("⭐", s.FeedbackRating)
 		a.resetSession(uid)
@@ -3589,6 +3593,9 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 			if pb := a.getPointBonusRule(ctx, "material_complete"); pb > 0 {
 				_, _ = a.adjustPoints(ctx, webUserID, pb, "exp_rule_bonus", "Bonus poin: material_complete", nil)
 			}
+			// Auto-badge check
+			go a.checkAndAwardAutoBadges(context.Background(), webUserID, "materi_all_done")
+			go a.checkAndAwardAutoBadges(context.Background(), webUserID, "leaderboard_top3")
 		}
 		// Update status lokal di sesi
 		for i := range s.MateriList {
@@ -3877,6 +3884,11 @@ func (a *app) saveTryoutResult(ctx context.Context, userID, displayName string, 
 		reason = "Selesai tryout dengan hasil perfect"
 	}
 	a.applyRuleByExternalUser(ctx, userID, ruleKey, "tryout", reason, "tryout_results")
+	// Auto-badge check
+	if webUID, err2 := a.resolveWebUserIDByExternal(ctx, userID); err2 == nil {
+		go a.checkAndAwardAutoBadges(context.Background(), webUID, "tryout_perfect_3")
+		go a.checkAndAwardAutoBadges(context.Background(), webUID, "leaderboard_top3")
+	}
 	return nil
 }
 
@@ -3907,6 +3919,11 @@ func (a *app) saveQuizAttempt(ctx context.Context, userID, displayName string, c
 		reasonQ = "Selesai latihan quiz dengan nilai sempurna"
 	}
 	a.applyRuleByExternalUser(ctx, userID, ruleKeyQ, "quiz", reasonQ, cat.Code)
+	// Auto-badge check
+	if webUID, err2 := a.resolveWebUserIDByExternal(ctx, userID); err2 == nil {
+		go a.checkAndAwardAutoBadges(context.Background(), webUID, "quiz_perfect_5")
+		go a.checkAndAwardAutoBadges(context.Background(), webUID, "leaderboard_top3")
+	}
 	return attemptNo, nil
 }
 
@@ -5340,6 +5357,9 @@ func (a *app) handleParticipantMaterialComplete(w http.ResponseWriter, r *http.R
 	if pb := a.getPointBonusRule(ctx, "material_complete"); pb > 0 {
 		_, _ = a.adjustPoints(ctx, u.ID, pb, "exp_rule_bonus", "Bonus poin: material_complete", nil)
 	}
+	// Auto-badge check
+	go a.checkAndAwardAutoBadges(context.Background(), u.ID, "materi_all_done")
+	go a.checkAndAwardAutoBadges(context.Background(), u.ID, "leaderboard_top3")
 
 	// Cek apakah semua materi kategori sudah selesai → notif Telegram
 	go func() {
@@ -6261,6 +6281,119 @@ func (a *app) handleAdminBadgeRevoke(w http.ResponseWriter, r *http.Request) {
 	}
 	_, _ = a.db.ExecContext(r.Context(), `DELETE FROM participant_badges WHERE id=$1`, req.AwardID)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// checkAndAwardAutoBadges: cek trigger lalu beri badge otomatis jika kondisi terpenuhi.
+// Untuk badge auto, satu user hanya bisa dapat badge yang sama sekali (tidak duplikat).
+func (a *app) checkAndAwardAutoBadges(ctx context.Context, userID int64, triggerKey string) {
+	// Ambil semua badge aktif dengan trigger_key ini
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT id FROM badge_definitions WHERE badge_type='auto' AND trigger_key=$1 AND is_active=TRUE
+	`, triggerKey)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	var badgeIDs []int64
+	for rows.Next() {
+		var bid int64
+		if rows.Scan(&bid) == nil {
+			badgeIDs = append(badgeIDs, bid)
+		}
+	}
+	if len(badgeIDs) == 0 {
+		return
+	}
+
+	// Cek kondisi terpenuhi sesuai trigger
+	if !a.checkBadgeTriggerCondition(ctx, userID, triggerKey) {
+		return
+	}
+
+	for _, badgeID := range badgeIDs {
+		// Cek apakah sudah punya badge ini (auto badge tidak duplikat)
+		var exists int
+		_ = a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM participant_badges WHERE user_id=$1 AND badge_id=$2`, userID, badgeID).Scan(&exists)
+		if exists > 0 {
+			continue
+		}
+		// Berikan badge
+		var awardID int64
+		if err2 := a.db.QueryRowContext(ctx, `
+			INSERT INTO participant_badges (user_id, badge_id, note, awarded_by)
+			VALUES ($1,$2,'Diberikan otomatis oleh sistem',NULL) RETURNING id
+		`, userID, badgeID).Scan(&awardID); err2 == nil && awardID > 0 {
+			go a.sendBadgeNotification(context.Background(), userID, badgeID, "")
+		}
+	}
+}
+
+func (a *app) checkBadgeTriggerCondition(ctx context.Context, userID int64, triggerKey string) bool {
+	switch triggerKey {
+	case "materi_all_done":
+		// Selesaikan minimal 1 kategori penuh (semua materi aktif dalam 1 kategori)
+		var count int
+		_ = a.db.QueryRowContext(ctx, `
+			SELECT COUNT(*) FROM question_categories qc
+			WHERE qc.is_active = TRUE
+			AND (SELECT COUNT(*) FROM learning_materials lm WHERE lm.category_id=qc.id AND lm.is_active=TRUE) > 0
+			AND (SELECT COUNT(*) FROM learning_materials lm WHERE lm.category_id=qc.id AND lm.is_active=TRUE)
+			  = (SELECT COUNT(*) FROM material_progress mp
+			     JOIN learning_materials lm2 ON lm2.id=mp.material_id AND lm2.category_id=qc.id AND lm2.is_active=TRUE
+			     WHERE mp.user_id=$1)
+		`, userID).Scan(&count)
+		return count > 0
+
+	case "quiz_perfect_5":
+		var count int
+		_ = a.db.QueryRowContext(ctx, `
+			SELECT COUNT(*) FROM quiz_attempts
+			WHERE CAST(user_id AS BIGINT)=$1 AND wrong_count=0
+		`, userID).Scan(&count)
+		return count >= 5
+
+	case "tryout_perfect_3":
+		var count int
+		_ = a.db.QueryRowContext(ctx, `
+			SELECT COUNT(*) FROM tryout_results
+			WHERE CAST(user_id AS BIGINT)=$1 AND wrong_count=0
+		`, userID).Scan(&count)
+		return count >= 3
+
+	case "reflection_streak_7":
+		// Cek 7 hari berturut-turut (mundur dari hari ini)
+		var streak int
+		_ = a.db.QueryRowContext(ctx, `
+			SELECT COUNT(*) FROM (
+				SELECT generate_series(0,6) AS offset_day
+			) gs
+			WHERE EXISTS (
+				SELECT 1 FROM reflections
+				WHERE user_id=$1 AND reflected_date = CURRENT_DATE - gs.offset_day
+			)
+		`, userID).Scan(&streak)
+		return streak >= 7
+
+	case "leaderboard_top3":
+		var rank int
+		_ = a.db.QueryRowContext(ctx, `
+			SELECT pos FROM (
+				SELECT user_id, RANK() OVER (ORDER BY total_exp DESC) as pos
+				FROM exp_wallets
+			) ranked WHERE user_id=$1
+		`, userID).Scan(&rank)
+		return rank > 0 && rank <= 3
+
+	case "feedback_submit":
+		// Cukup sudah kirim 1 feedback
+		var count int
+		_ = a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM feedbacks WHERE user_id=$1`, userID).Scan(&count)
+		return count >= 1
+
+	default:
+		return false
+	}
 }
 
 func (a *app) sendBadgeNotification(ctx context.Context, userID, badgeID int64, note string) {
