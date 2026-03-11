@@ -47,6 +47,7 @@ export default function Page() {
   const [adminMaterials, setAdminMaterials] = useState([]);
   const [adminCategories, setAdminCategories] = useState([]);
   const [materiFilterCat, setMateriFilterCat] = useState('');
+  const [materiFilterGroup, setMateriFilterGroup] = useState('');
   const [editingMateriId, setEditingMateriId] = useState('');
   const [materiCatId, setMateriCatId] = useState('');
   const [materiTitle, setMateriTitle] = useState('');
@@ -1450,18 +1451,28 @@ export default function Page() {
                       </div>
                     </div>
 
-                    {/* Filter kategori */}
-                    <div style={{ marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {/* Filter kategori + kelompok */}
+                    <div style={{ marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                       <label style={{ fontSize: 13, color: '#94a3b8' }}>Filter:</label>
-                      <select value={materiFilterCat} onChange={e => setMateriFilterCat(e.target.value)} style={{ width: "100%", width: 'auto' }}>
+                      <select className="nk-input-sm" value={materiFilterGroup} onChange={e => { setMateriFilterGroup(e.target.value); setMateriFilterCat(''); }}>
+                        <option value="">🌐 Semua Kelompok</option>
+                        {adminGroups.map(g => <option key={g.id} value={String(g.id)}>🏢 {g.name}</option>)}
+                      </select>
+                      <select className="nk-input-sm" value={materiFilterCat} onChange={e => setMateriFilterCat(e.target.value)}>
                         <option value="">Semua Kategori</option>
-                        {adminCategories.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
+                        {adminCategories
+                          .filter(c => !materiFilterGroup || String(c.group_id) === materiFilterGroup || c.group_id === 0)
+                          .map(c => <option key={c.id} value={String(c.id)}>{c.name}{c.group_name ? ` (${c.group_name})` : ''}</option>)}
                       </select>
                     </div>
 
                     {/* List materi */}
                     {adminMaterials
-                      .filter(m => !materiFilterCat || String(m.category_id) === materiFilterCat)
+                      .filter(m => {
+                        if (materiFilterCat && String(m.category_id) !== materiFilterCat) return false;
+                        if (materiFilterGroup && String(m.group_id) !== materiFilterGroup) return false;
+                        return true;
+                      })
                       .map(m => {
                         const typeIcon = { text: '📖', video: '🎬', audio: '🎵' }[m.type] || '📄';
                         return (
@@ -1470,8 +1481,9 @@ export default function Page() {
                               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
                                 <span>{typeIcon}</span>
                                 <span style={{ fontWeight: 600, fontSize: 14 }}>{m.title}</span>
-                                <span style={{ fontSize: 11, color: '#be94f5', background: 'rgba(190,148,245,0.1)', padding: '2px 8px', borderRadius: 20 }}>{m.category_name}</span>
-                                {!m.is_active && <span style={{ fontSize: 11, color: '#f87171', background: 'rgba(248,113,113,0.1)', padding: '2px 8px', borderRadius: 20 }}>Nonaktif</span>}
+                                <span className="nk-badge nk-badge-purple">{m.category_name}</span>
+                                {m.group_name ? <span className="nk-badge" style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', fontSize: 11 }}>🏢 {m.group_name}</span> : <span className="nk-badge" style={{ background: '#1e293b', color: '#64748b', fontSize: 11 }}>🌐 Global</span>}
+                                {!m.is_active && <span className="nk-badge" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171', fontSize: 11 }}>Nonaktif</span>}
                               </div>
                               <div style={{ fontSize: 12, color: '#64748b', display: 'flex', gap: 12 }}>
                                 <span>+{m.exp_reward} EXP</span>
@@ -1487,7 +1499,11 @@ export default function Page() {
                         );
                       })
                     }
-                    {adminMaterials.filter(m => !materiFilterCat || String(m.category_id) === materiFilterCat).length === 0 && (
+                    {adminMaterials.filter(m => {
+                      if (materiFilterCat && String(m.category_id) !== materiFilterCat) return false;
+                      if (materiFilterGroup && String(m.group_id) !== materiFilterGroup) return false;
+                      return true;
+                    }).length === 0 && (
                       <p style={{ fontSize: 13, color: '#64748b' }}>Belum ada materi. Tambahkan di atas!</p>
                     )}
                   </AdminSection>

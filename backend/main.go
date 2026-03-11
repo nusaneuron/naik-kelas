@@ -2235,7 +2235,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-superadmin-final"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-materi-group"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -4730,15 +4730,25 @@ func (a *app) handleAdminMaterials(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodGet {
 		catID := r.URL.Query().Get("category_id")
+		groupFilter := r.URL.Query().Get("group_id")
 		query := `
 			SELECT lm.id, lm.category_id, lm.title, lm.type, lm.content, lm.exp_reward, lm.order_no, lm.is_active,
-			       qc.name
+			       qc.name, COALESCE(qc.group_id, 0), COALESCE(g.name, '')
 			FROM learning_materials lm
-			JOIN question_categories qc ON qc.id = lm.category_id`
+			JOIN question_categories qc ON qc.id = lm.category_id
+			LEFT JOIN groups g ON g.id = qc.group_id`
 		args := []any{}
+		conds := []string{}
 		if catID != "" {
-			query += ` WHERE lm.category_id = $1`
+			conds = append(conds, fmt.Sprintf(`lm.category_id = $%d`, len(args)+1))
 			args = append(args, catID)
+		}
+		if groupFilter != "" {
+			conds = append(conds, fmt.Sprintf(`qc.group_id = $%d`, len(args)+1))
+			args = append(args, groupFilter)
+		}
+		if len(conds) > 0 {
+			query += ` WHERE ` + strings.Join(conds, ` AND `)
 		}
 		query += ` ORDER BY lm.category_id, lm.order_no, lm.id`
 
@@ -4751,14 +4761,16 @@ func (a *app) handleAdminMaterials(w http.ResponseWriter, r *http.Request) {
 
 		type adminItem struct {
 			learningMaterial
-			CategoryName  string `json:"category_name"`
-			CompletedCount int   `json:"completed_count"`
+			CategoryName   string `json:"category_name"`
+			CompletedCount int    `json:"completed_count"`
+			GroupID        int64  `json:"group_id"`
+			GroupName      string `json:"group_name"`
 		}
 		items := []adminItem{}
 		for rows.Next() {
 			var it adminItem
 			if err := rows.Scan(&it.ID, &it.CategoryID, &it.Title, &it.Type, &it.Content,
-				&it.ExpReward, &it.OrderNo, &it.IsActive, &it.CategoryName); err != nil {
+				&it.ExpReward, &it.OrderNo, &it.IsActive, &it.CategoryName, &it.GroupID, &it.GroupName); err != nil {
 				continue
 			}
 			// hitung jumlah peserta yang sudah selesai
@@ -4870,6 +4882,8 @@ func (a *app) handleParticipantMaterials(w http.ResponseWriter, r *http.Request)
 	}
 
 	catID := r.URL.Query().Get("category_id")
+	groupID := a.getUserGroupID(ctx, u.ID)
+
 	query := `
 		SELECT lm.id, lm.category_id, lm.title, lm.type, lm.content, lm.exp_reward, lm.order_no, lm.is_active,
 		       qc.name,
@@ -4880,7 +4894,15 @@ func (a *app) handleParticipantMaterials(w http.ResponseWriter, r *http.Request)
 		LEFT JOIN material_progress mp ON mp.material_id = lm.id AND mp.user_id = $1
 		WHERE lm.is_active = TRUE`
 	args := []any{u.ID}
-	if catID != "" {
+	// Filter kategori per kelompok
+	if groupID > 0 {
+		query += ` AND (qc.group_id = $2 OR qc.group_id IS NULL)`
+		args = append(args, groupID)
+		if catID != "" {
+			query += fmt.Sprintf(` AND lm.category_id = $%d`, len(args)+1)
+			args = append(args, catID)
+		}
+	} else if catID != "" {
 		query += ` AND lm.category_id = $2`
 		args = append(args, catID)
 	}
