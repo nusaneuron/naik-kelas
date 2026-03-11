@@ -48,6 +48,7 @@ export default function Page() {
   const [myReflections, setMyReflections] = useState([]);
   const [adminReflectionStats, setAdminReflectionStats] = useState(null);
   const [adminLearningSummary, setAdminLearningSummary] = useState(null);
+  const [myBadges, setMyBadges] = useState([]);
   const [adminBadges, setAdminBadges] = useState([]);
   const [adminBadgeAwards, setAdminBadgeAwards] = useState([]);
   const [badgeForm, setBadgeForm] = useState({ id: 0, name: '', description: '', icon_url: '', badge_type: 'manual', trigger_key: '', is_active: true });
@@ -112,7 +113,7 @@ export default function Page() {
   }
 
   async function loadParticipant() {
-    const [mRes, hRes, lRes, rRes, pRes, phRes, riRes, rcRes, matRes] = await Promise.all([
+    const [mRes, hRes, lRes, rRes, pRes, phRes, riRes, rcRes, matRes, bdgRes] = await Promise.all([
       fetch(`${apiBase}/participant/me`, { credentials: 'include' }),
       fetch(`${apiBase}/participant/history`, { credentials: 'include' }),
       fetch(`${apiBase}/participant/leaderboard`, { credentials: 'include' }),
@@ -122,6 +123,7 @@ export default function Page() {
       fetch(`${apiBase}/participant/redeem/items`, { credentials: 'include' }),
       fetch(`${apiBase}/participant/redeem/claims`, { credentials: 'include' }),
       fetch(`${apiBase}/participant/materials`, { credentials: 'include' }),
+      fetch(`${apiBase}/participant/badges`, { credentials: 'include' }),
     ]);
     if (mRes.ok) { const pd = await mRes.json(); setProfile(pd); if (pd.reflection_reminder_time) setReflectionReminderTime(pd.reflection_reminder_time); }
     if (hRes.ok) setHistory(await hRes.json());
@@ -132,6 +134,7 @@ export default function Page() {
     if (riRes.ok) setRedeemItems((await riRes.json()).items || []);
     if (rcRes.ok) setRedeemClaims((await rcRes.json()).items || []);
     if (matRes.ok) setMyMaterials((await matRes.json()).items || []);
+    if (bdgRes.ok) setMyBadges((await bdgRes.json()).items || []);
     const refRes = await fetch(`${apiBase}/participant/reflections`, { credentials: 'include' });
     if (refRes.ok) setMyReflections((await refRes.json()).items || []);
   }
@@ -852,6 +855,27 @@ export default function Page() {
             </>)}
 
             {/* ── Poin ── */}
+            {/* Badges di profil */}
+            {participantSection === 'profil' && myBadges.length > 0 && (
+              <Section title="🎖️ Badges Saya">
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                  {myBadges.map((b, i) => (
+                    <div key={i} title={`${b.name}${b.description ? ` — ${b.description}` : ''}${b.note ? `\n📝 ${b.note}` : ''}\n📅 ${b.awarded_at}`}
+                      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '12px 14px', width: 90, textAlign: 'center', cursor: 'default', transition: 'border-color 0.2s' }}
+                      onMouseEnter={e => e.currentTarget.style.borderColor='#7c3aed'}
+                      onMouseLeave={e => e.currentTarget.style.borderColor='#1e2d45'}>
+                      {b.icon_url
+                        ? <img src={b.icon_url} alt={b.name} style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover' }} onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
+                        : null}
+                      <span style={{ fontSize: 32, display: b.icon_url ? 'none' : 'flex' }}>🎖️</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#e2e8f0', lineHeight: 1.3 }}>{b.name}</span>
+                      <span style={{ fontSize: 10, color: '#475569' }}>{b.awarded_at}</span>
+                    </div>
+                  ))}
+                </div>
+              </Section>
+            )}
+
             {participantSection === 'poin' && (<>
             <Section title="💰 Riwayat Poin">
               {myPointHistory.length ? (
@@ -880,7 +904,7 @@ export default function Page() {
               {leaderboard.length ? (
                 <div className="nk-table-wrap" style={{ maxHeight: 280 }}>
                   <table className="nk-table" style={{ minWidth: 500 }}>
-                    <thead><tr><th>#</th><th>Nama</th><th>Telegram</th><th>Waktu Terbaik</th><th>Perfect</th></tr></thead>
+                    <thead><tr><th>#</th><th>Nama</th><th>Badges</th><th>Telegram</th><th>Waktu Terbaik</th><th>Perfect</th></tr></thead>
                     <tbody>{leaderboard.map((it) => (
                       <tr key={it.rank}>
                         <td>
@@ -889,6 +913,16 @@ export default function Page() {
                           </span>
                         </td>
                         <td style={{ fontWeight: 600 }}>{it.name}</td>
+                        <td>
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                            {(it.badges || []).map((b, bi) => (
+                              b.icon_url
+                                ? <img key={bi} src={b.icon_url} alt={b.name} title={b.name} style={{ width: 24, height: 24, borderRadius: 4, objectFit: 'cover' }} onError={e => { e.target.style.display='none'; }} />
+                                : <span key={bi} title={b.name} style={{ fontSize: 18 }}>🎖️</span>
+                            ))}
+                            {(!it.badges || it.badges.length === 0) && <span style={{ color: '#334155', fontSize: 12 }}>—</span>}
+                          </div>
+                        </td>
                         <td style={{ color: '#94a3b8' }}>@{it.telegram}</td>
                         <td><span className="nk-badge nk-badge-orange">⚡ {it.best_seconds}s</span></td>
                         <td><span className="nk-badge nk-badge-purple">{it.perfect_count}x</span></td>

@@ -235,6 +235,7 @@ func main() {
 	mux.HandleFunc("/participant/materials/complete", a.handleParticipantMaterialComplete)
 	mux.HandleFunc("/participant/reflections", a.handleParticipantReflections)
 	mux.HandleFunc("/participant/reflection-reminder", a.handleParticipantReflectionReminder)
+	mux.HandleFunc("/participant/badges", a.handleParticipantBadges)
 	mux.HandleFunc("/admin/badges", a.handleAdminBadges)
 	mux.HandleFunc("/admin/badges/award", a.handleAdminBadgeAward)
 	mux.HandleFunc("/admin/badges/revoke", a.handleAdminBadgeRevoke)
@@ -1189,13 +1190,61 @@ func (a *app) handleParticipantLeaderboard(w http.ResponseWriter, r *http.Reques
 	defer rows.Close()
 	items := make([]map[string]any, 0)
 	rank := 1
+
+	// Kumpulkan dulu semua hasil + user_ids untuk fetch badges
+	type leaderRow struct {
+		userID       string
+		name         string
+		tg           string
+		bestSec      int
+		perfectCount int
+	}
+	var leaderRows []leaderRow
 	for rows.Next() {
-		var userID, name, tg string
-		var bestSec, perfectCount int
-		if err := rows.Scan(&userID, &name, &tg, &bestSec, &perfectCount); err == nil {
-			items = append(items, map[string]any{"rank": rank, "name": name, "telegram": cleanTelegramHandle(tg), "best_seconds": bestSec, "perfect_count": perfectCount})
-			rank++
+		var lr leaderRow
+		if err := rows.Scan(&lr.userID, &lr.name, &lr.tg, &lr.bestSec, &lr.perfectCount); err == nil {
+			leaderRows = append(leaderRows, lr)
 		}
+	}
+	rows.Close()
+
+	// Ambil badges per user (via telegram_user_id → user_id → badges)
+	for _, lr := range leaderRows {
+		// Resolve web user_id dari telegram_user_id
+		var webUID int64
+		_ = a.db.QueryRowContext(r.Context(), `SELECT user_id FROM telegram_links WHERE telegram_user_id=$1 AND is_active=TRUE`, lr.userID).Scan(&webUID)
+
+		type badgeMini struct {
+			Name    string `json:"name"`
+			IconURL string `json:"icon_url"`
+		}
+		badges := []badgeMini{}
+		if webUID > 0 {
+			bRows, _ := a.db.QueryContext(r.Context(), `
+				SELECT bd.name, bd.icon_url
+				FROM participant_badges pb
+				JOIN badge_definitions bd ON bd.id = pb.badge_id
+				WHERE pb.user_id = $1 ORDER BY pb.awarded_at DESC LIMIT 5
+			`, webUID)
+			if bRows != nil {
+				for bRows.Next() {
+					var bm badgeMini
+					if bRows.Scan(&bm.Name, &bm.IconURL) == nil {
+						badges = append(badges, bm)
+					}
+				}
+				bRows.Close()
+			}
+		}
+		items = append(items, map[string]any{
+			"rank":          rank,
+			"name":          lr.name,
+			"telegram":      cleanTelegramHandle(lr.tg),
+			"best_seconds":  lr.bestSec,
+			"perfect_count": lr.perfectCount,
+			"badges":        badges,
+		})
+		rank++
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
@@ -2410,7 +2459,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260312-badges-p2"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260312-badges-p3"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -6424,4 +6473,45 @@ func (a *app) sendBadgeNotification(ctx context.Context, userID, badgeID int64, 
 	}
 	msg += "\n\nTeruskan semangatmu\\! 💪🔥"
 	_ = a.sendTelegramMessage(ctx, chatID, msg, "idle")
+}
+
+// ── Participant: My Badges ────────────────────────────────────────────────────
+
+func (a *app) handleParticipantBadges(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	rows, err := a.db.QueryContext(r.Context(), `
+		SELECT bd.id, bd.name, bd.description, bd.icon_url, bd.badge_type, pb.note, pb.awarded_at
+		FROM participant_badges pb
+		JOIN badge_definitions bd ON bd.id = pb.badge_id
+		WHERE pb.user_id = $1
+		ORDER BY pb.awarded_at DESC
+	`, u.ID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
+		return
+	}
+	defer rows.Close()
+	type badgeItem struct {
+		ID        int64  `json:"id"`
+		Name      string `json:"name"`
+		Desc      string `json:"description"`
+		IconURL   string `json:"icon_url"`
+		BadgeType string `json:"badge_type"`
+		Note      string `json:"note"`
+		AwardedAt string `json:"awarded_at"`
+	}
+	items := []badgeItem{}
+	for rows.Next() {
+		var b badgeItem
+		var at time.Time
+		if rows.Scan(&b.ID, &b.Name, &b.Desc, &b.IconURL, &b.BadgeType, &b.Note, &at) == nil {
+			b.AwardedAt = at.Format("2006-01-02")
+			items = append(items, b)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
