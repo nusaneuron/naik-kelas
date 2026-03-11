@@ -218,6 +218,9 @@ func main() {
 	mux.HandleFunc("/admin/redeem/claims", a.handleAdminRedeemClaims)
 	mux.HandleFunc("/admin/redeem/claims/action", a.handleAdminRedeemClaimAction)
 
+	// Groups
+	mux.HandleFunc("/admin/groups", a.handleAdminGroups)
+
 	// Learning Materials
 	mux.HandleFunc("/admin/materials", a.handleAdminMaterials)
 	mux.HandleFunc("/participant/materials", a.handleParticipantMaterials)
@@ -603,6 +606,25 @@ func (a *app) initDB(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	// ── Groups (Multi-Tenant) ────────────────────────────────
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS groups (
+			id          SERIAL PRIMARY KEY,
+			name        TEXT NOT NULL,
+			code        TEXT NOT NULL UNIQUE,
+			description TEXT NOT NULL DEFAULT '',
+			is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	// Tambah group_id ke participant_profiles (nullable = belum punya kelompok)
+	_, _ = a.db.ExecContext(ctx, `ALTER TABLE participant_profiles ADD COLUMN IF NOT EXISTS group_id INT REFERENCES groups(id) ON DELETE SET NULL`)
 
 	return nil
 }
@@ -2102,7 +2124,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-phase4-gamifikasi"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-groups-phase1"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -4621,4 +4643,124 @@ func (a *app) handleParticipantMaterialComplete(w http.ResponseWriter, r *http.R
 	}()
 
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "exp_gained": expReward, "already_completed": false})
+}
+
+// ─── Groups (Multi-Tenant) ──────────────────────────────────────
+
+type group struct {
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	Code        string `json:"code"`
+	Description string `json:"description"`
+	IsActive    bool   `json:"is_active"`
+	MemberCount int    `json:"member_count"`
+}
+
+// GET  /admin/groups        → list semua kelompok
+// POST /admin/groups        → create | update | delete
+func (a *app) handleAdminGroups(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if _, err := a.requireRole(ctx, r, "admin"); err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	if r.Method == http.MethodGet {
+		rows, err := a.db.QueryContext(ctx, `
+			SELECT g.id, g.name, g.code, g.description, g.is_active,
+			       COUNT(pp.user_id) as member_count
+			FROM groups g
+			LEFT JOIN participant_profiles pp ON pp.group_id = g.id
+			GROUP BY g.id ORDER BY g.created_at DESC
+		`)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
+			return
+		}
+		defer rows.Close()
+		items := []group{}
+		for rows.Next() {
+			var g group
+			if err := rows.Scan(&g.ID, &g.Name, &g.Code, &g.Description, &g.IsActive, &g.MemberCount); err != nil {
+				continue
+			}
+			items = append(items, g)
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		var req struct {
+			Action      string `json:"action"`
+			ID          int    `json:"id"`
+			Name        string `json:"name"`
+			Code        string `json:"code"`
+			Description string `json:"description"`
+			IsActive    *bool  `json:"is_active"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			return
+		}
+
+		switch req.Action {
+		case "create":
+			if req.Name == "" || req.Code == "" {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name dan code wajib diisi"})
+				return
+			}
+			code := strings.ToUpper(strings.TrimSpace(req.Code))
+			var newID int
+			err := a.db.QueryRowContext(ctx, `
+				INSERT INTO groups (name, code, description)
+				VALUES ($1, $2, $3) RETURNING id
+			`, req.Name, code, req.Description).Scan(&newID)
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal buat kelompok (kode mungkin sudah dipakai)"})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": newID})
+
+		case "update":
+			if req.ID == 0 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id wajib diisi"})
+				return
+			}
+			isActive := true
+			if req.IsActive != nil {
+				isActive = *req.IsActive
+			}
+			code := strings.ToUpper(strings.TrimSpace(req.Code))
+			_, err := a.db.ExecContext(ctx, `
+				UPDATE groups SET name=$1, code=$2, description=$3, is_active=$4, updated_at=NOW()
+				WHERE id=$5
+			`, req.Name, code, req.Description, isActive, req.ID)
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal update kelompok"})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+
+		case "delete":
+			if req.ID == 0 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id wajib diisi"})
+				return
+			}
+			// Set group_id = NULL untuk peserta yang ada
+			_, _ = a.db.ExecContext(ctx, `UPDATE participant_profiles SET group_id=NULL WHERE group_id=$1`, req.ID)
+			_, err := a.db.ExecContext(ctx, `DELETE FROM groups WHERE id=$1`, req.ID)
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal hapus kelompok"})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+
+		default:
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "action tidak valid"})
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 }
