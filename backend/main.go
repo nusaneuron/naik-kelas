@@ -679,6 +679,7 @@ func (a *app) initDB(ctx context.Context) error {
 		return err
 	}
 	_, _ = a.db.ExecContext(ctx, `INSERT INTO feedback_schedule (id, send_time, is_active) VALUES (1, '09:00', FALSE) ON CONFLICT DO NOTHING`)
+	_, _ = a.db.ExecContext(ctx, `ALTER TABLE feedback_schedule ADD COLUMN IF NOT EXISTS send_date DATE`)
 
 	// Tabel refleksi harian peserta
 	_, err = a.db.ExecContext(ctx, `
@@ -2338,7 +2339,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260312-feedback"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260312-feedback-v2"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -5792,9 +5793,13 @@ func (a *app) startFeedbackScheduler(ctx context.Context) {
 
 			var sendTime string
 			var isActive bool
-			var lastSentDate *string
-			err := a.db.QueryRowContext(ctx, `SELECT send_time, is_active, last_sent_date::text FROM feedback_schedule WHERE id=1`).Scan(&sendTime, &isActive, &lastSentDate)
+			var lastSentDate, sendDate *string
+			err := a.db.QueryRowContext(ctx, `SELECT send_time, is_active, last_sent_date::text, send_date::text FROM feedback_schedule WHERE id=1`).Scan(&sendTime, &isActive, &lastSentDate, &sendDate)
 			if err != nil || !isActive || sendTime != currentHHMM {
+				continue
+			}
+			// Jika send_date diisi, hanya kirim pada tanggal tersebut
+			if sendDate != nil && *sendDate != "" && *sendDate != todayStr {
 				continue
 			}
 			// Hanya kirim sekali per hari
@@ -5851,13 +5856,12 @@ func (a *app) handleAdminFeedbackSchedule(w http.ResponseWriter, r *http.Request
 	if r.Method == http.MethodGet {
 		var sendTime string
 		var isActive bool
-		var lastSent *string
-		_ = a.db.QueryRowContext(ctx, `SELECT send_time, is_active, last_sent_date::text FROM feedback_schedule WHERE id=1`).Scan(&sendTime, &isActive, &lastSent)
-		ls := ""
-		if lastSent != nil {
-			ls = *lastSent
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"send_time": sendTime, "is_active": isActive, "last_sent_date": ls})
+		var lastSent, sendDate *string
+		_ = a.db.QueryRowContext(ctx, `SELECT send_time, is_active, last_sent_date::text, send_date::text FROM feedback_schedule WHERE id=1`).Scan(&sendTime, &isActive, &lastSent, &sendDate)
+		ls, sd := "", ""
+		if lastSent != nil { ls = *lastSent }
+		if sendDate != nil { sd = *sendDate }
+		writeJSON(w, http.StatusOK, map[string]any{"send_time": sendTime, "is_active": isActive, "last_sent_date": ls, "send_date": sd})
 		return
 	}
 	if r.Method == http.MethodPost {
@@ -5867,6 +5871,7 @@ func (a *app) handleAdminFeedbackSchedule(w http.ResponseWriter, r *http.Request
 		}
 		var req struct {
 			SendTime string `json:"send_time"`
+			SendDate string `json:"send_date"`
 			IsActive bool   `json:"is_active"`
 		}
 		if json.NewDecoder(r.Body).Decode(&req) != nil {
@@ -5878,12 +5883,18 @@ func (a *app) handleAdminFeedbackSchedule(w http.ResponseWriter, r *http.Request
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "format waktu harus HH:MM"})
 			return
 		}
-		_, err = a.db.ExecContext(ctx, `UPDATE feedback_schedule SET send_time=$1, is_active=$2 WHERE id=1`, t, req.IsActive)
+		d := strings.TrimSpace(req.SendDate) // YYYY-MM-DD atau kosong
+		var sendDateVal any
+		if d != "" {
+			sendDateVal = d
+		}
+		// Reset last_sent_date jika tanggal berubah supaya bisa kirim ulang
+		_, err = a.db.ExecContext(ctx, `UPDATE feedback_schedule SET send_time=$1, is_active=$2, send_date=$3, last_sent_date=NULL WHERE id=1`, t, req.IsActive, sendDateVal)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal update jadwal"})
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "send_time": t, "is_active": req.IsActive})
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "send_time": t, "send_date": d, "is_active": req.IsActive})
 		return
 	}
 	writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})

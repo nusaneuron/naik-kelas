@@ -52,6 +52,7 @@ export default function Page() {
   const [adminFeedbackList, setAdminFeedbackList] = useState([]);
   const [adminFeedbackSchedule, setAdminFeedbackSchedule] = useState({ send_time: '09:00', is_active: false });
   const [fbScheduleTime, setFbScheduleTime] = useState('09:00');
+  const [fbScheduleDate, setFbScheduleDate] = useState('');
   const [fbScheduleActive, setFbScheduleActive] = useState(false);
   const [adminMaterials, setAdminMaterials] = useState([]);
   const [adminCategories, setAdminCategories] = useState([]);
@@ -181,6 +182,7 @@ export default function Page() {
       const sc = await fbSchedRes.json();
       setAdminFeedbackSchedule(sc);
       setFbScheduleTime(sc.send_time || '09:00');
+      setFbScheduleDate(sc.send_date || '');
       setFbScheduleActive(sc.is_active || false);
     }
   }
@@ -1507,28 +1509,41 @@ export default function Page() {
                     <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 20 }}>
                       <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>⏰ Jadwal Broadcast Feedback</p>
                       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <input type="time" value={fbScheduleTime} onChange={e => setFbScheduleTime(e.target.value)}
-                          style={{ background: '#0d1b2e', border: '1px solid #1e2d45', borderRadius: 8, color: '#f1f5f9', padding: '7px 12px', fontSize: 14 }} />
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#94a3b8', cursor: 'pointer' }}>
-                          <input type="checkbox" checked={fbScheduleActive} onChange={e => setFbScheduleActive(e.target.checked)} />
-                          Aktifkan pengiriman otomatis
-                        </label>
-                        <BtnSm color="purple" onClick={async () => {
-                          setBusy(true);
-                          const res = await fetch(`${apiBase}/admin/feedback/schedule`, {
-                            method: 'POST', credentials: 'include',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ send_time: fbScheduleTime, is_active: fbScheduleActive })
-                          });
-                          setBusy(false);
-                          if (res.ok) { showMsg('Jadwal feedback disimpan ✅', 'success'); await loadAdmin(); }
-                          else showMsg('Gagal simpan jadwal', 'error');
-                        }}>💾 Simpan</BtnSm>
+                        <div>
+                          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Tanggal</div>
+                          <input type="date" value={fbScheduleDate} onChange={e => setFbScheduleDate(e.target.value)}
+                            style={{ background: '#0d1b2e', border: '1px solid #1e2d45', borderRadius: 8, color: '#f1f5f9', padding: '7px 12px', fontSize: 14 }} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Jam (WIB)</div>
+                          <input type="time" value={fbScheduleTime} onChange={e => setFbScheduleTime(e.target.value)}
+                            style={{ background: '#0d1b2e', border: '1px solid #1e2d45', borderRadius: 8, color: '#f1f5f9', padding: '7px 12px', fontSize: 14 }} />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#94a3b8', cursor: 'pointer' }}>
+                            <input type="checkbox" checked={fbScheduleActive} onChange={e => setFbScheduleActive(e.target.checked)} />
+                            Aktifkan pengiriman otomatis
+                          </label>
+                          <BtnSm color="purple" onClick={async () => {
+                            setBusy(true);
+                            const res = await fetch(`${apiBase}/admin/feedback/schedule`, {
+                              method: 'POST', credentials: 'include',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ send_time: fbScheduleTime, send_date: fbScheduleDate, is_active: fbScheduleActive })
+                            });
+                            setBusy(false);
+                            if (res.ok) { showMsg('Jadwal feedback disimpan ✅', 'success'); await loadAdmin(); }
+                            else showMsg('Gagal simpan jadwal', 'error');
+                          }}>💾 Simpan Jadwal</BtnSm>
+                        </div>
                       </div>
-                      {adminFeedbackSchedule.last_sent_date && (
-                        <p style={{ margin: '10px 0 0', fontSize: 12, color: '#475569' }}>Terakhir dikirim: {adminFeedbackSchedule.last_sent_date}</p>
-                      )}
-                      <p style={{ margin: '6px 0 0', fontSize: 12, color: '#334155', fontStyle: 'italic' }}>Nala akan broadcast permintaan feedback ke semua peserta pada jam tersebut (WIB).</p>
+                      <div style={{ marginTop: 10, fontSize: 12, color: '#475569', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                        {adminFeedbackSchedule.send_date && <span>📅 Jadwal kirim: <b style={{ color: '#a78bfa' }}>{adminFeedbackSchedule.send_date}</b> jam <b style={{ color: '#a78bfa' }}>{adminFeedbackSchedule.send_time}</b></span>}
+                        {adminFeedbackSchedule.last_sent_date && <span>✅ Terakhir dikirim: <b>{adminFeedbackSchedule.last_sent_date}</b></span>}
+                      </div>
+                      <p style={{ margin: '6px 0 0', fontSize: 12, color: '#334155', fontStyle: 'italic' }}>
+                        {fbScheduleDate ? `Nala akan broadcast pada tanggal ${fbScheduleDate} jam ${fbScheduleTime} WIB.` : 'Jika tanggal dikosongkan, broadcast dikirim setiap hari pada jam tersebut.'}
+                      </p>
                     </div>
                   )}
 
