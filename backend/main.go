@@ -235,6 +235,9 @@ func main() {
 	mux.HandleFunc("/participant/materials/complete", a.handleParticipantMaterialComplete)
 	mux.HandleFunc("/participant/reflections", a.handleParticipantReflections)
 	mux.HandleFunc("/participant/reflection-reminder", a.handleParticipantReflectionReminder)
+	mux.HandleFunc("/admin/badges", a.handleAdminBadges)
+	mux.HandleFunc("/admin/badges/award", a.handleAdminBadgeAward)
+	mux.HandleFunc("/admin/badges/revoke", a.handleAdminBadgeRevoke)
 	mux.HandleFunc("/admin/feedback/schedule", a.handleAdminFeedbackSchedule)
 	mux.HandleFunc("/admin/feedback/list", a.handleAdminFeedbackList)
 	mux.HandleFunc("/admin/feedback/stats", a.handleAdminFeedbackStats)
@@ -532,6 +535,31 @@ func (a *app) initDB(ctx context.Context) error {
 		('feedback_submit', 5)
 	ON CONFLICT (rule_key) DO NOTHING`)
 	_, _ = a.db.ExecContext(ctx, `ALTER TABLE exp_rules ADD COLUMN IF NOT EXISTS point_bonus INT NOT NULL DEFAULT 0`)
+
+	// Badges
+	_, _ = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS badge_definitions (
+			id          BIGSERIAL PRIMARY KEY,
+			name        TEXT NOT NULL,
+			description TEXT NOT NULL DEFAULT '',
+			icon_url    TEXT NOT NULL DEFAULT '',
+			badge_type  TEXT NOT NULL DEFAULT 'manual',
+			trigger_key TEXT NOT NULL DEFAULT '',
+			is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+			created_by  BIGINT REFERENCES users(id),
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	_, _ = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS participant_badges (
+			id          BIGSERIAL PRIMARY KEY,
+			user_id     BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			badge_id    BIGINT NOT NULL REFERENCES badge_definitions(id) ON DELETE CASCADE,
+			note        TEXT NOT NULL DEFAULT '',
+			awarded_by  BIGINT REFERENCES users(id),
+			awarded_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
 
 	_, err = a.db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS exp_report_settings (
@@ -2382,7 +2410,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260312-exp-rules-v2"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260312-badges-p1"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -6047,4 +6075,220 @@ func (a *app) handleAdminFeedbackList(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+// ── Badges: Admin CRUD ───────────────────────────────────────────────────────
+
+func (a *app) handleAdminBadges(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	ctx := r.Context()
+
+	switch r.Method {
+	case http.MethodGet:
+		// Ambil semua badge + jumlah penerima
+		rows, err := a.db.QueryContext(ctx, `
+			SELECT bd.id, bd.name, bd.description, bd.icon_url, bd.badge_type, bd.trigger_key, bd.is_active, bd.created_at,
+				COUNT(pb.id) as awarded_count
+			FROM badge_definitions bd
+			LEFT JOIN participant_badges pb ON pb.badge_id = bd.id
+			GROUP BY bd.id ORDER BY bd.created_at DESC
+		`)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
+			return
+		}
+		defer rows.Close()
+		type badgeItem struct {
+			ID           int64  `json:"id"`
+			Name         string `json:"name"`
+			Description  string `json:"description"`
+			IconURL      string `json:"icon_url"`
+			BadgeType    string `json:"badge_type"`
+			TriggerKey   string `json:"trigger_key"`
+			IsActive     bool   `json:"is_active"`
+			CreatedAt    string `json:"created_at"`
+			AwardedCount int    `json:"awarded_count"`
+		}
+		items := []badgeItem{}
+		for rows.Next() {
+			var b badgeItem
+			var ca time.Time
+			if rows.Scan(&b.ID, &b.Name, &b.Description, &b.IconURL, &b.BadgeType, &b.TriggerKey, &b.IsActive, &ca, &b.AwardedCount) == nil {
+				b.CreatedAt = ca.Format("2006-01-02")
+				items = append(items, b)
+			}
+		}
+
+		// Ambil juga daftar penerima per badge (badge_id → list nama+kelompok)
+		awardRows, _ := a.db.QueryContext(ctx, `
+			SELECT pb.badge_id, pb.id, pp.name, COALESCE(g.name,'-'), pb.note, pb.awarded_at
+			FROM participant_badges pb
+			JOIN participant_profiles pp ON pp.user_id = pb.user_id
+			LEFT JOIN groups g ON g.id = pp.group_id
+			ORDER BY pb.awarded_at DESC
+		`)
+		type awardItem struct {
+			AwardID   int64  `json:"award_id"`
+			BadgeID   int64  `json:"badge_id"`
+			Name      string `json:"name"`
+			GroupName string `json:"group_name"`
+			Note      string `json:"note"`
+			AwardedAt string `json:"awarded_at"`
+		}
+		awards := []awardItem{}
+		if awardRows != nil {
+			defer awardRows.Close()
+			for awardRows.Next() {
+				var a2 awardItem
+				var at time.Time
+				if awardRows.Scan(&a2.BadgeID, &a2.AwardID, &a2.Name, &a2.GroupName, &a2.Note, &at) == nil {
+					a2.AwardedAt = at.Format("2006-01-02 15:04")
+					awards = append(awards, a2)
+				}
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items, "awards": awards})
+
+	case http.MethodPost:
+		// Create atau Update badge definition
+		var req struct {
+			ID          int64  `json:"id"`
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			IconURL     string `json:"icon_url"`
+			BadgeType   string `json:"badge_type"`
+			TriggerKey  string `json:"trigger_key"`
+			IsActive    *bool  `json:"is_active"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil || strings.TrimSpace(req.Name) == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name wajib diisi"})
+			return
+		}
+		if req.BadgeType == "" {
+			req.BadgeType = "manual"
+		}
+		isActive := true
+		if req.IsActive != nil {
+			isActive = *req.IsActive
+		}
+		if req.ID > 0 {
+			_, err = a.db.ExecContext(ctx, `
+				UPDATE badge_definitions SET name=$1, description=$2, icon_url=$3, badge_type=$4, trigger_key=$5, is_active=$6
+				WHERE id=$7
+			`, req.Name, req.Description, req.IconURL, req.BadgeType, req.TriggerKey, isActive, req.ID)
+		} else {
+			err = a.db.QueryRowContext(ctx, `
+				INSERT INTO badge_definitions (name, description, icon_url, badge_type, trigger_key, is_active, created_by)
+				VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id
+			`, req.Name, req.Description, req.IconURL, req.BadgeType, req.TriggerKey, isActive, admin.ID).Scan(&req.ID)
+		}
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal simpan badge"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": req.ID})
+
+	case http.MethodDelete:
+		var req struct {
+			ID int64 `json:"id"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil || req.ID == 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id wajib"})
+			return
+		}
+		_, _ = a.db.ExecContext(ctx, `DELETE FROM badge_definitions WHERE id=$1`, req.ID)
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+func (a *app) handleAdminBadgeAward(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req struct {
+		UserID  int64  `json:"user_id"`
+		BadgeID int64  `json:"badge_id"`
+		Note    string `json:"note"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || req.UserID == 0 || req.BadgeID == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "user_id dan badge_id wajib"})
+		return
+	}
+	ctx := r.Context()
+	var awardID int64
+	err = a.db.QueryRowContext(ctx, `
+		INSERT INTO participant_badges (user_id, badge_id, note, awarded_by)
+		VALUES ($1,$2,$3,$4) RETURNING id
+	`, req.UserID, req.BadgeID, req.Note, admin.ID).Scan(&awardID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal memberikan badge"})
+		return
+	}
+	// Kirim notif bot ke peserta
+	go a.sendBadgeNotification(context.Background(), req.UserID, req.BadgeID, req.Note)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "award_id": awardID})
+}
+
+func (a *app) handleAdminBadgeRevoke(w http.ResponseWriter, r *http.Request) {
+	_, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req struct {
+		AwardID int64 `json:"award_id"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || req.AwardID == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "award_id wajib"})
+		return
+	}
+	_, _ = a.db.ExecContext(r.Context(), `DELETE FROM participant_badges WHERE id=$1`, req.AwardID)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *app) sendBadgeNotification(ctx context.Context, userID, badgeID int64, note string) {
+	if a.telegramBotToken == "" {
+		return
+	}
+	var badgeName, badgeDesc, iconURL string
+	if err := a.db.QueryRowContext(ctx, `SELECT name, description, icon_url FROM badge_definitions WHERE id=$1`, badgeID).Scan(&badgeName, &badgeDesc, &iconURL); err != nil {
+		return
+	}
+	var tgUID string
+	if err := a.db.QueryRowContext(ctx, `SELECT telegram_user_id FROM telegram_links WHERE user_id=$1 AND is_active=TRUE`, userID).Scan(&tgUID); err != nil {
+		return
+	}
+	chatID, _ := strconv.ParseInt(tgUID, 10, 64)
+	if chatID == 0 {
+		return
+	}
+	escMD := func(s string) string {
+		for _, c := range []string{"_", "*", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"} {
+			s = strings.ReplaceAll(s, c, "\\"+c)
+		}
+		return s
+	}
+	msg := fmt.Sprintf("🎖️ *Selamat\\! Kamu mendapat Badge Baru\\!*\n\n*%s*\n_%s_", escMD(badgeName), escMD(badgeDesc))
+	if note != "" {
+		msg += fmt.Sprintf("\n\n📝 Catatan: %s", escMD(note))
+	}
+	msg += "\n\nTeruskan semangatmu\\! 💪🔥"
+	_ = a.sendTelegramMessage(ctx, chatID, msg, "idle")
 }

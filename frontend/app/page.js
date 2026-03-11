@@ -48,6 +48,10 @@ export default function Page() {
   const [myReflections, setMyReflections] = useState([]);
   const [adminReflectionStats, setAdminReflectionStats] = useState(null);
   const [adminLearningSummary, setAdminLearningSummary] = useState(null);
+  const [adminBadges, setAdminBadges] = useState([]);
+  const [adminBadgeAwards, setAdminBadgeAwards] = useState([]);
+  const [badgeForm, setBadgeForm] = useState({ id: 0, name: '', description: '', icon_url: '', badge_type: 'manual', trigger_key: '', is_active: true });
+  const [badgeAwardForm, setBadgeAwardForm] = useState({ user_id: 0, badge_id: 0, note: '' });
   const [adminFeedbackStats, setAdminFeedbackStats] = useState(null);
   const [adminFeedbackList, setAdminFeedbackList] = useState([]);
   const [adminFeedbackSchedule, setAdminFeedbackSchedule] = useState({ send_time: '09:00', is_active: false });
@@ -171,6 +175,8 @@ export default function Page() {
     if (refStatsRes.ok) setAdminReflectionStats(await refStatsRes.json());
     const learnRes = await fetch(`${apiBase}/admin/learning-summary`, { credentials: 'include' });
     if (learnRes.ok) setAdminLearningSummary(await learnRes.json());
+    const badgesRes = await fetch(`${apiBase}/admin/badges`, { credentials: 'include' });
+    if (badgesRes.ok) { const bd = await badgesRes.json(); setAdminBadges(bd.items||[]); setAdminBadgeAwards(bd.awards||[]); }
     const [fbStatsRes, fbListRes, fbSchedRes] = await Promise.all([
       fetch(`${apiBase}/admin/feedback/stats`, { credentials: 'include' }),
       fetch(`${apiBase}/admin/feedback/list`, { credentials: 'include' }),
@@ -1138,6 +1144,7 @@ export default function Page() {
                   ['materi', '📖', 'Materi'],
                   ['redeem', '🎁', 'Redeem'],
                   ['refleksi', '📔', 'Refleksi'],
+                  ['badges', '🎖️', 'Badges'],
                   ['feedback', '💬', 'Feedback'],
                   ['jadwal', '📅', 'Jadwal Belajar'],
                   ['poin', '💰', 'Poin'],
@@ -1498,6 +1505,179 @@ export default function Page() {
                       </table>
                     </div>
                   ) : <div className="nk-empty">Belum ada transaksi poin.</div>}
+                </AdminSection>
+              )}
+
+              {/* Admin — Badges */}
+              {adminSection === 'badges' && (
+                <AdminSection title="🎖️ Manajemen Badges">
+
+                  {/* Form buat/edit badge */}
+                  <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+                    <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>{badgeForm.id ? '✏️ Edit Badge' : '➕ Buat Badge Baru'}</p>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+                      <div style={{ flex: '1 1 200px' }}>
+                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Nama Badge *</div>
+                        <input className="nk-input-sm" style={{ width: '100%' }} value={badgeForm.name} onChange={e => setBadgeForm(f=>({...f, name: e.target.value}))} placeholder="cth: Juara Quiz" />
+                      </div>
+                      <div style={{ flex: '1 1 200px' }}>
+                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Deskripsi</div>
+                        <input className="nk-input-sm" style={{ width: '100%' }} value={badgeForm.description} onChange={e => setBadgeForm(f=>({...f, description: e.target.value}))} placeholder="cth: Meraih nilai sempurna 5x" />
+                      </div>
+                      <div style={{ flex: '1 1 220px' }}>
+                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Link Gambar (URL)</div>
+                        <input className="nk-input-sm" style={{ width: '100%' }} value={badgeForm.icon_url} onChange={e => setBadgeForm(f=>({...f, icon_url: e.target.value}))} placeholder="https://i.imgur.com/..." />
+                      </div>
+                      <div style={{ flex: '0 0 140px' }}>
+                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Tipe</div>
+                        <select className="nk-input-sm" style={{ width: '100%' }} value={badgeForm.badge_type} onChange={e => setBadgeForm(f=>({...f, badge_type: e.target.value}))}>
+                          <option value="manual">Manual</option>
+                          <option value="auto">Otomatis</option>
+                        </select>
+                      </div>
+                      {badgeForm.badge_type === 'auto' && (
+                        <div style={{ flex: '1 1 180px' }}>
+                          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Trigger Key</div>
+                          <select className="nk-input-sm" style={{ width: '100%' }} value={badgeForm.trigger_key} onChange={e => setBadgeForm(f=>({...f, trigger_key: e.target.value}))}>
+                            <option value="">-- Pilih --</option>
+                            <option value="materi_all_done">Selesai semua materi</option>
+                            <option value="quiz_perfect_5">Quiz sempurna 5x</option>
+                            <option value="tryout_perfect_3">Tryout sempurna 3x</option>
+                            <option value="reflection_streak_7">Refleksi 7 hari berturut</option>
+                            <option value="leaderboard_top3">Top 3 Leaderboard</option>
+                            <option value="feedback_submit">Kirim feedback</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                    {/* Preview gambar */}
+                    {badgeForm.icon_url && (
+                      <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <img src={badgeForm.icon_url} alt="preview" style={{ width: 56, height: 56, borderRadius: 10, objectFit: 'cover', border: '2px solid #1e2d45' }} onError={e => e.target.style.display='none'} />
+                        <span style={{ fontSize: 12, color: '#64748b' }}>Preview gambar</span>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <BtnSm color="purple" disabled={busy} onClick={async () => {
+                        if (!badgeForm.name.trim()) return showMsg('Nama badge wajib diisi', 'error');
+                        setBusy(true);
+                        const res = await fetch(`${apiBase}/admin/badges`, {
+                          method: 'POST', credentials: 'include',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(badgeForm)
+                        });
+                        setBusy(false);
+                        if (res.ok) { showMsg(badgeForm.id ? 'Badge diupdate ✅' : 'Badge dibuat ✅', 'success'); setBadgeForm({ id: 0, name: '', description: '', icon_url: '', badge_type: 'manual', trigger_key: '', is_active: true }); await loadAdmin(); }
+                        else showMsg('Gagal simpan badge', 'error');
+                      }}>{badgeForm.id ? '💾 Update Badge' : '➕ Buat Badge'}</BtnSm>
+                      {badgeForm.id > 0 && <BtnSm onClick={() => setBadgeForm({ id: 0, name: '', description: '', icon_url: '', badge_type: 'manual', trigger_key: '', is_active: true })}>Batal</BtnSm>}
+                    </div>
+                  </div>
+
+                  {/* Daftar badge */}
+                  <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+                    <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>📋 Daftar Badge ({adminBadges.length})</p>
+                    {adminBadges.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {adminBadges.map(b => (
+                          <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#0d1b2e', borderRadius: 10, padding: '10px 14px', border: '1px solid #1e2d45' }}>
+                            {b.icon_url ? <img src={b.icon_url} alt={b.name} style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} onError={e => { e.target.style.display='none'; }} /> : <div style={{ width: 44, height: 44, borderRadius: 8, background: '#1e2d45', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🎖️</div>}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 700, fontSize: 14 }}>{b.name}</div>
+                              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{b.description}</div>
+                              <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                                <span className={`nk-badge ${b.badge_type === 'auto' ? 'nk-badge-blue' : 'nk-badge-purple'}`}>{b.badge_type === 'auto' ? '⚡ Otomatis' : '👤 Manual'}</span>
+                                {b.trigger_key && <span className="nk-badge" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>{b.trigger_key}</span>}
+                                <span className="nk-badge" style={{ background: 'rgba(56,189,248,0.1)', color: '#38bdf8' }}>🏅 {b.awarded_count} penerima</span>
+                                <span className={`nk-badge ${b.is_active ? 'nk-badge-green' : 'nk-badge-red'}`}>{b.is_active ? '● Aktif' : '○ Nonaktif'}</span>
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                              <BtnSm onClick={() => setBadgeForm({ id: b.id, name: b.name, description: b.description, icon_url: b.icon_url, badge_type: b.badge_type, trigger_key: b.trigger_key, is_active: b.is_active })}>✏️</BtnSm>
+                              <BtnSm color="red" disabled={busy} onClick={async () => {
+                                if (!confirm(`Hapus badge "${b.name}"?`)) return;
+                                setBusy(true);
+                                await fetch(`${apiBase}/admin/badges`, { method: 'DELETE', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ id: b.id }) });
+                                setBusy(false); await loadAdmin();
+                              }}>🗑️</BtnSm>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : <p style={{ color: '#475569', fontSize: 13 }}>Belum ada badge. Buat yang pertama! 🎖️</p>}
+                  </div>
+
+                  {/* Form kasih badge ke peserta */}
+                  <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+                    <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>🏅 Berikan Badge ke Peserta</p>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                      <div style={{ flex: '1 1 180px' }}>
+                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Peserta</div>
+                        <select className="nk-input-sm" style={{ width: '100%' }} value={badgeAwardForm.user_id} onChange={e => setBadgeAwardForm(f=>({...f, user_id: Number(e.target.value)}))}>
+                          <option value={0}>-- Pilih Peserta --</option>
+                          {adminParticipants.map(p => <option key={p.id} value={p.id}>{p.name} {p.group_name ? `(${p.group_name})` : ''}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ flex: '1 1 180px' }}>
+                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Badge</div>
+                        <select className="nk-input-sm" style={{ width: '100%' }} value={badgeAwardForm.badge_id} onChange={e => setBadgeAwardForm(f=>({...f, badge_id: Number(e.target.value)}))}>
+                          <option value={0}>-- Pilih Badge --</option>
+                          {adminBadges.filter(b=>b.is_active).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ flex: '1 1 200px' }}>
+                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Catatan (opsional)</div>
+                        <input className="nk-input-sm" style={{ width: '100%' }} value={badgeAwardForm.note} onChange={e => setBadgeAwardForm(f=>({...f, note: e.target.value}))} placeholder="cth: Juara 1 Lomba Quiz Maret 2026" />
+                      </div>
+                      <BtnSm color="purple" disabled={busy} onClick={async () => {
+                        if (!badgeAwardForm.user_id || !badgeAwardForm.badge_id) return showMsg('Pilih peserta dan badge dulu', 'error');
+                        setBusy(true);
+                        const res = await fetch(`${apiBase}/admin/badges/award`, {
+                          method: 'POST', credentials: 'include',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(badgeAwardForm)
+                        });
+                        setBusy(false);
+                        if (res.ok) { showMsg('Badge berhasil diberikan ✅ Notif bot dikirim!', 'success'); setBadgeAwardForm({ user_id: 0, badge_id: 0, note: '' }); await loadAdmin(); }
+                        else showMsg('Gagal memberikan badge', 'error');
+                      }}>🏅 Berikan Badge</BtnSm>
+                    </div>
+                  </div>
+
+                  {/* Riwayat pemberian badge */}
+                  <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16 }}>
+                    <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>📜 Riwayat Pemberian Badge</p>
+                    {adminBadgeAwards.length > 0 ? (
+                      <div className="nk-table-wrap" style={{ maxHeight: 360 }}>
+                        <table className="nk-table">
+                          <thead><tr><th>Peserta</th><th>Kelompok</th><th>Badge</th><th>Catatan</th><th>Diberikan</th><th></th></tr></thead>
+                          <tbody>{adminBadgeAwards.map((aw, i) => {
+                            const badge = adminBadges.find(b => b.id === aw.badge_id);
+                            return (
+                              <tr key={i}>
+                                <td style={{ fontWeight: 600 }}>{aw.name}</td>
+                                <td>{aw.group_name !== '-' ? <span className="nk-badge nk-badge-purple">🏢 {aw.group_name}</span> : <span style={{ color: '#475569' }}>—</span>}</td>
+                                <td>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    {badge?.icon_url && <img src={badge.icon_url} alt="" style={{ width: 24, height: 24, borderRadius: 4, objectFit: 'cover' }} />}
+                                    <span style={{ fontWeight: 600, fontSize: 13 }}>{badge?.name || `#${aw.badge_id}`}</span>
+                                  </div>
+                                </td>
+                                <td style={{ color: '#94a3b8', fontSize: 12 }}>{aw.note || '—'}</td>
+                                <td style={{ color: '#64748b', fontSize: 12, whiteSpace: 'nowrap' }}>{aw.awarded_at}</td>
+                                <td><BtnSm color="red" disabled={busy} onClick={async () => {
+                                  if (!confirm('Cabut badge ini?')) return;
+                                  setBusy(true);
+                                  await fetch(`${apiBase}/admin/badges/revoke`, { method: 'POST', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ award_id: aw.award_id }) });
+                                  setBusy(false); await loadAdmin();
+                                }}>Cabut</BtnSm></td>
+                              </tr>
+                            );
+                          })}</tbody>
+                        </table>
+                      </div>
+                    ) : <p style={{ color: '#475569', fontSize: 13 }}>Belum ada badge yang diberikan.</p>}
+                  </div>
                 </AdminSection>
               )}
 
