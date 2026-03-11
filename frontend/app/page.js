@@ -701,6 +701,15 @@ export default function Page() {
                   {isSuperAdmin && <span className="nk-badge" style={{ background: 'linear-gradient(135deg,#f59e0b,#ef4444)', color: '#fff', fontWeight: 800 }}>👑 Super Admin</span>}
                   {isAdmin && !isSuperAdmin && <span className="nk-badge nk-badge-orange">⚙️ Admin</span>}
                 </div>
+                {profile?.group_name && (
+                  <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 11, color: '#64748b' }}>Kelompok:</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#fbbf24', background: 'rgba(251,191,36,0.1)', padding: '3px 10px', borderRadius: 20, border: '1px solid rgba(251,191,36,0.2)' }}>🏢 {profile.group_name}</span>
+                  </div>
+                )}
+                {!profile?.group_name && !isAdmin && (
+                  <div style={{ marginTop: 10, fontSize: 12, color: '#475569' }}>Belum tergabung dalam kelompok</div>
+                )}
                 {isAdmin && (
                   <div style={{ marginTop: 14, display: 'flex', gap: 6 }}>
                     <button

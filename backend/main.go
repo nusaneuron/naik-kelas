@@ -978,11 +978,21 @@ func (a *app) handleParticipantMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var name, email, source string
-	_ = a.db.QueryRowContext(r.Context(), `SELECT COALESCE(name,''), COALESCE(email,''), COALESCE(source,'') FROM participant_profiles WHERE user_id=$1`, u.ID).Scan(&name, &email, &source)
+	var groupID int64
+	_ = a.db.QueryRowContext(r.Context(), `SELECT COALESCE(name,''), COALESCE(email,''), COALESCE(source,''), COALESCE(group_id,0) FROM participant_profiles WHERE user_id=$1`, u.ID).Scan(&name, &email, &source, &groupID)
+	var groupName string
+	if groupID > 0 {
+		_ = a.db.QueryRowContext(r.Context(), `SELECT name FROM groups WHERE id=$1`, groupID).Scan(&groupName)
+	}
 	totalExp, _ := a.getExpTotal(r.Context(), u.ID)
 	levelStep := a.getExpRuleValue(r.Context(), "level_step", 100)
 	level, progress := calcLevel(totalExp, levelStep)
-	writeJSON(w, http.StatusOK, map[string]any{"id": u.ID, "phone": u.Phone, "role": u.Role, "must_change_password": u.MustChangePassword, "name": name, "email": email, "source": source, "exp": totalExp, "level": level, "level_progress": progress, "level_step": levelStep})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id": u.ID, "phone": u.Phone, "role": u.Role, "must_change_password": u.MustChangePassword,
+		"name": name, "email": email, "source": source,
+		"exp": totalExp, "level": level, "level_progress": progress, "level_step": levelStep,
+		"group_id": groupID, "group_name": groupName,
+	})
 }
 
 func (a *app) handleParticipantHistory(w http.ResponseWriter, r *http.Request) {
@@ -2267,7 +2277,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-global-guard"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260311-profile-group"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
