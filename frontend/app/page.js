@@ -48,6 +48,43 @@ export default function Page() {
   const [myReflections, setMyReflections] = useState([]);
   const [adminReflectionStats, setAdminReflectionStats] = useState(null);
   const [adminLearningSummary, setAdminLearningSummary] = useState(null);
+  // Render Markdown → HTML untuk web display
+  function renderMD(md) {
+    if (!md) return '';
+    const lines = md.split('\n');
+    let html = '';
+    let inCode = false, codeLines = [];
+    for (let line of lines) {
+      if (line.startsWith('```')) {
+        if (inCode) { html += `<pre style="background:#0a1628;border-radius:6px;padding:10px;overflow-x:auto;font-size:12px;color:#a5f3fc;margin:6px 0">${line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`; inCode = false; codeLines = []; }
+        else inCode = true;
+        continue;
+      }
+      if (inCode) { codeLines.push(line); html += `<pre style="background:#0a1628;border-radius:6px;padding:10px;overflow-x:auto;font-size:12px;color:#a5f3fc;margin:6px 0">${codeLines.join('\n').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`; continue; }
+      if (line.trim() === '---' || line.trim() === '***') { html += '<hr style="border:none;border-top:1px solid #1e2d45;margin:10px 0"/>'; continue; }
+      if (line.startsWith('# ')) { html += `<p style="font-weight:800;font-size:16px;color:#f1f5f9;margin:10px 0 4px">📌 ${inlineMD(line.slice(2))}</p>`; continue; }
+      if (line.startsWith('## ')) { html += `<p style="font-weight:700;font-size:15px;color:#e2e8f0;margin:8px 0 4px">${inlineMD(line.slice(3))}</p>`; continue; }
+      if (line.startsWith('### ')) { html += `<p style="font-weight:700;font-size:14px;color:#cbd5e1;margin:6px 0 2px">${inlineMD(line.slice(4))}</p>`; continue; }
+      if (line.startsWith('> ')) { html += `<div style="border-left:3px solid #7c3aed;padding:4px 10px;margin:4px 0;color:#94a3b8;font-style:italic;font-size:13px">${inlineMD(line.slice(2))}</div>`; continue; }
+      if (line.startsWith('- ') || line.startsWith('* ')) { html += `<div style="display:flex;gap:6px;margin:2px 0;font-size:13px"><span style="color:#7c3aed;flex-shrink:0">•</span><span>${inlineMD(line.slice(2))}</span></div>`; continue; }
+      const numMatch = line.match(/^(\d+)\. (.+)/);
+      if (numMatch) { html += `<div style="display:flex;gap:6px;margin:2px 0;font-size:13px"><span style="color:#7c3aed;flex-shrink:0;font-weight:700">${numMatch[1]}.</span><span>${inlineMD(numMatch[2])}</span></div>`; continue; }
+      if (line.trim() === '') { html += '<div style="height:6px"></div>'; continue; }
+      html += `<p style="margin:3px 0;font-size:13px;line-height:1.7;color:#94a3b8">${inlineMD(line)}</p>`;
+    }
+    return html;
+  }
+  function inlineMD(s) {
+    s = s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    s = s.replace(/\*\*(.+?)\*\*/g, '<strong style="color:#e2e8f0">$1</strong>');
+    s = s.replace(/__(.+?)__/g, '<strong style="color:#e2e8f0">$1</strong>');
+    s = s.replace(/~~(.+?)~~/g, '<s>$1</s>');
+    s = s.replace(/_(.+?)_/g, '<em>$1</em>');
+    s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    s = s.replace(/`(.+?)`/g, '<code style="background:#1e2d45;padding:1px 5px;border-radius:4px;font-size:12px;color:#a5f3fc">$1</code>');
+    return s;
+  }
+
   const [myBadges, setMyBadges] = useState([]);
   const [adminBadges, setAdminBadges] = useState([]);
   const [adminBadgeAwards, setAdminBadgeAwards] = useState([]);
@@ -1061,11 +1098,18 @@ export default function Page() {
                             </div>
                             <div style={{ fontSize: 12, color: '#64748b', paddingLeft: 24 }}>+{m.exp_reward} EXP</div>
                             {/* Konten materi */}
-                            {m.type === 'text' && (
-                              <div style={{ marginTop: 8, fontSize: 13, color: '#94a3b8', background: '#0a1628', borderRadius: 8, padding: '10px 12px', whiteSpace: 'pre-wrap', maxHeight: 200, overflowY: 'auto', paddingLeft: 24 }}>
-                                {m.content}
-                              </div>
-                            )}
+                            {m.type === 'text' && (() => {
+                              let bubbles = [m.content];
+                              if (m.content?.startsWith('[')) { try { bubbles = JSON.parse(m.content); } catch {} }
+                              return (
+                                <div style={{ marginTop: 8, paddingLeft: 24 }}>
+                                  {bubbles.map((bubble, bi) => (
+                                    <div key={bi} style={{ background: '#0a1628', border: '1px solid #1e2d45', borderRadius: 10, padding: '10px 14px', marginBottom: bi < bubbles.length-1 ? 8 : 0 }}
+                                      dangerouslySetInnerHTML={{ __html: renderMD(bubble) }} />
+                                  ))}
+                                </div>
+                              );
+                            })()}
                             {(m.type === 'video' || m.type === 'audio') && (
                               <a href={m.content} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 13, color: '#be94f5', textDecoration: 'none', paddingLeft: 24 }}>
                                 🔗 Buka {m.type === 'video' ? 'Video' : 'Audio'}
