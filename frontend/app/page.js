@@ -85,6 +85,8 @@ export default function Page() {
     return s;
   }
 
+  const [openCats, setOpenCats] = useState({});
+  const [openMateri, setOpenMateri] = useState({});
   const [myBadges, setMyBadges] = useState([]);
   const [adminBadges, setAdminBadges] = useState([]);
   const [adminBadgeAwards, setAdminBadgeAwards] = useState([]);
@@ -1062,73 +1064,120 @@ export default function Page() {
 
             {/* ── Materi ── */}
             {participantSection === 'materi' && (<>
-            <Section title="📚 Materi Belajar">
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>📚 Materi Belajar</h2>
+                {/* Ringkasan total progress */}
+                {(() => {
+                  const total = (myMaterials||[]).length;
+                  const done = (myMaterials||[]).filter(m=>m.is_completed).length;
+                  const pct = total ? Math.round(done/total*100) : 0;
+                  return total > 0 ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 100, height: 6, background: '#1e2d45', borderRadius: 99, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${pct}%`, background: pct===100?'#22c55e':'#be94f5', borderRadius: 99, transition: 'width 0.4s' }} />
+                      </div>
+                      <span style={{ fontSize: 12, color: '#64748b' }}>{done}/{total} selesai ({pct}%)</span>
+                    </div>
+                  ) : null;
+                })()}
+              </div>
+
               {(() => {
-                // Kelompokkan per kategori
                 const catMap = {};
-                (myMaterials || []).forEach(m => {
+                (myMaterials||[]).forEach(m => {
                   if (!catMap[m.category_name]) catMap[m.category_name] = [];
                   catMap[m.category_name].push(m);
                 });
                 const cats = Object.entries(catMap);
-                if (cats.length === 0) return <p style={{ fontSize: 13, color: '#64748b' }}>Belum ada materi tersedia.</p>;
-                return cats.map(([catName, items]) => {
+                if (cats.length === 0) return <p style={{ fontSize: 13, color: '#64748b', textAlign: 'center', padding: 40 }}>Belum ada materi tersedia.</p>;
+                const typeIcon = { text: '📖', video: '🎬', audio: '🎵' };
+
+                return cats.map(([catName, items], ci) => {
                   const done = items.filter(m => m.is_completed).length;
-                  const pct = Math.round((done / items.length) * 100);
-                  const typeIcon = { text: '📖', video: '🎬', audio: '🎵' };
+                  const pct = Math.round(done/items.length*100);
+                  const isOpen = openCats[catName] !== false; // default buka kategori pertama, tutup sisanya
+                  const catIsOpen = ci === 0 ? (openCats[catName] !== false) : !!openCats[catName];
+
                   return (
-                    <div key={catName} style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 14 }}>
-                      {/* Header kategori + progress */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                        <span style={{ fontWeight: 700, fontSize: 15 }}>{catName}</span>
-                        <span style={{ fontSize: 12, color: '#94a3b8' }}>{done}/{items.length} selesai</span>
-                      </div>
-                      {/* Progress bar */}
-                      <div style={{ height: 6, background: '#1e2d45', borderRadius: 99, marginBottom: 12, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? '#22c55e' : '#be94f5', borderRadius: 99, transition: 'width 0.4s' }} />
-                      </div>
-                      {/* List materi */}
-                      {items.map(m => (
-                        <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, padding: '10px 0', borderTop: '1px solid #1e2d45' }}>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
-                              <span style={{ fontSize: 16 }}>{typeIcon[m.type] || '📄'}</span>
-                              <span style={{ fontSize: 14, fontWeight: m.is_completed ? 400 : 600, color: m.is_completed ? '#64748b' : '#f1f5f9' }}>{m.title}</span>
-                              {m.is_completed && <span style={{ fontSize: 12, color: '#22c55e' }}>✅</span>}
+                    <div key={catName} style={{ background: '#0f172a', border: `1px solid ${pct===100?'rgba(34,197,94,0.3)':'#1e2d45'}`, borderRadius: 14, marginBottom: 10, overflow: 'hidden' }}>
+                      {/* Header kategori — klik untuk buka/tutup */}
+                      <button onClick={() => setOpenCats(prev => ({...prev, [catName]: !catIsOpen}))}
+                        style={{ width: '100%', background: 'none', border: 'none', padding: '14px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left' }}>
+                        {/* Icon status */}
+                        <span style={{ fontSize: 20, flexShrink: 0 }}>{pct===100 ? '✅' : '📂'}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                            <span style={{ fontWeight: 700, fontSize: 14, color: pct===100?'#4ade80':'#f1f5f9', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth: '60%' }}>{catName}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                              <span className={`nk-badge ${pct===100?'nk-badge-green':done>0?'nk-badge-purple':'nk-badge-red'}`} style={{ fontSize: 11 }}>{done}/{items.length} selesai</span>
+                              <span style={{ color: '#475569', fontSize: 14 }}>{catIsOpen ? '▲' : '▼'}</span>
                             </div>
-                            <div style={{ fontSize: 12, color: '#64748b', paddingLeft: 24 }}>+{m.exp_reward} EXP</div>
-                            {/* Konten materi */}
-                            {m.type === 'text' && (() => {
-                              let bubbles = [m.content];
-                              if (m.content?.startsWith('[')) { try { bubbles = JSON.parse(m.content); } catch {} }
-                              return (
-                                <div style={{ marginTop: 8, paddingLeft: 24 }}>
-                                  {bubbles.map((bubble, bi) => (
-                                    <div key={bi} style={{ background: '#0a1628', border: '1px solid #1e2d45', borderRadius: 10, padding: '10px 14px', marginBottom: bi < bubbles.length-1 ? 8 : 0 }}
-                                      dangerouslySetInnerHTML={{ __html: renderMD(bubble) }} />
-                                  ))}
-                                </div>
-                              );
-                            })()}
-                            {(m.type === 'video' || m.type === 'audio') && (
-                              <a href={m.content} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 13, color: '#be94f5', textDecoration: 'none', paddingLeft: 24 }}>
-                                🔗 Buka {m.type === 'video' ? 'Video' : 'Audio'}
-                              </a>
-                            )}
                           </div>
-                          {!m.is_completed && (
-                            <BtnSm onClick={() => completeMaterial(m.id)} disabled={busy} style={{ flexShrink: 0, marginTop: 4 }}>
-                              ✅ Selesai
-                            </BtnSm>
-                          )}
+                          {/* Mini progress bar */}
+                          <div style={{ height: 4, background: '#1e2d45', borderRadius: 99, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${pct}%`, background: pct===100?'#22c55e':'#be94f5', borderRadius: 99, transition: 'width 0.4s' }} />
+                          </div>
                         </div>
-                      ))}
+                      </button>
+
+                      {/* List materi — hanya tampil saat buka */}
+                      {catIsOpen && (
+                        <div style={{ padding: '0 16px 14px' }}>
+                          {items.map((m, mi) => {
+                            const mKey = `${catName}-${m.id}`;
+                            const mOpen = !!openMateri[mKey];
+                            return (
+                              <div key={m.id} style={{ borderTop: '1px solid #1e2d45', paddingTop: 10, marginTop: 10 }}>
+                                {/* Baris materi — klik untuk buka konten */}
+                                <button onClick={() => setOpenMateri(prev => ({...prev, [mKey]: !mOpen}))}
+                                  style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', padding: 0 }}>
+                                  <span style={{ fontSize: 18, flexShrink: 0 }}>{m.is_completed ? '✅' : typeIcon[m.type] || '📄'}</span>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 14, fontWeight: 600, color: m.is_completed?'#64748b':'#f1f5f9', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.title}</div>
+                                    <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+                                      <span style={{ fontSize: 11, color: '#475569' }}>+{m.exp_reward} EXP</span>
+                                      {m.is_completed && <span style={{ fontSize: 11, color: '#22c55e' }}>Sudah selesai</span>}
+                                    </div>
+                                  </div>
+                                  <span style={{ color: '#334155', fontSize: 12, flexShrink: 0 }}>{mOpen ? '▲ Tutup' : '▼ Baca'}</span>
+                                </button>
+
+                                {/* Konten materi — hanya tampil saat diklik */}
+                                {mOpen && (
+                                  <div style={{ marginTop: 12 }}>
+                                    {m.type === 'text' && (() => {
+                                      let bubbles = [m.content];
+                                      if (m.content?.startsWith('[')) { try { bubbles = JSON.parse(m.content); } catch {} }
+                                      return bubbles.map((bubble, bi) => (
+                                        <div key={bi} style={{ background: '#0a1628', border: '1px solid #1e2d45', borderRadius: 10, padding: '12px 14px', marginBottom: bi < bubbles.length-1 ? 8 : 0 }}
+                                          dangerouslySetInnerHTML={{ __html: renderMD(bubble) }} />
+                                      ));
+                                    })()}
+                                    {(m.type === 'video' || m.type === 'audio') && (
+                                      <a href={m.content} target="_blank" rel="noreferrer"
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.3)', borderRadius: 8, padding: '10px 16px', fontSize: 14, color: '#be94f5', textDecoration: 'none' }}>
+                                        {m.type === 'video' ? '🎬 Tonton Video' : '🎵 Dengarkan Audio'}
+                                      </a>
+                                    )}
+                                    {!m.is_completed && (
+                                      <button onClick={() => completeMaterial(m.id)} disabled={busy}
+                                        style={{ marginTop: 12, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 8, color: '#4ade80', padding: '8px 16px', fontSize: 13, cursor: 'pointer', width: '100%', fontWeight: 600 }}>
+                                        ✅ Tandai Selesai
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 });
               })()}
-            </Section>
-
+            </div>
             </>)}
 
             {/* ── Redeem ── */}
