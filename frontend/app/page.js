@@ -152,93 +152,171 @@ export default function Page() {
     return await res.json();
   }
 
+  // ── CRITICAL: hanya data yang diperlukan saat halaman buka ──────────────────
   async function loadParticipant() {
-    const [mRes, hRes, lRes, rRes, pRes, phRes, riRes, rcRes, matRes, bdgRes] = await Promise.all([
+    const [mRes, pRes, matRes] = await Promise.all([
       fetch(`${apiBase}/participant/me`, { credentials: 'include' }),
-      fetch(`${apiBase}/participant/history`, { credentials: 'include' }),
-      fetch(`${apiBase}/participant/leaderboard`, { credentials: 'include' }),
-      fetch(`${apiBase}/participant/reminder`, { credentials: 'include' }),
       fetch(`${apiBase}/participant/points`, { credentials: 'include' }),
-      fetch(`${apiBase}/participant/points/history`, { credentials: 'include' }),
-      fetch(`${apiBase}/participant/redeem/items`, { credentials: 'include' }),
-      fetch(`${apiBase}/participant/redeem/claims`, { credentials: 'include' }),
       fetch(`${apiBase}/participant/materials`, { credentials: 'include' }),
-      fetch(`${apiBase}/participant/badges`, { credentials: 'include' }),
     ]);
     if (mRes.ok) { const pd = await mRes.json(); setProfile(pd); if (pd.reflection_reminder_time) setReflectionReminderTime(pd.reflection_reminder_time); }
-    if (hRes.ok) setHistory(await hRes.json());
-    if (lRes.ok) { const d = await lRes.json(); setLeaderboard(d.items || []); }
-    if (rRes.ok) setMyReminder(await rRes.json());
     if (pRes.ok) setMyPoints((await pRes.json()).balance || 0);
-    if (phRes.ok) setMyPointHistory((await phRes.json()).items || []);
-    if (riRes.ok) setRedeemItems((await riRes.json()).items || []);
-    if (rcRes.ok) setRedeemClaims((await rcRes.json()).items || []);
     if (matRes.ok) setMyMaterials((await matRes.json()).items || []);
-    if (bdgRes.ok) setMyBadges((await bdgRes.json()).items || []);
-    const refRes = await fetch(`${apiBase}/participant/reflections`, { credentials: 'include' });
-    if (refRes.ok) setMyReflections((await refRes.json()).items || []);
+  }
+
+  // ── LAZY: load data per section saat dikunjungi ──────────────────────────────
+  const [loadedSections, setLoadedSections] = useState({});
+
+  async function loadSection(section) {
+    if (loadedSections[section]) return; // sudah pernah load
+    setLoadedSections(prev => ({...prev, [section]: true}));
+    switch (section) {
+      case 'profil':
+        const [rRes, bdgRes] = await Promise.all([
+          fetch(`${apiBase}/participant/reminder`, { credentials: 'include' }),
+          fetch(`${apiBase}/participant/badges`, { credentials: 'include' }),
+        ]);
+        if (rRes.ok) setMyReminder(await rRes.json());
+        if (bdgRes.ok) setMyBadges((await bdgRes.json()).items || []);
+        break;
+      case 'badges':
+        if (!loadedSections['profil']) {
+          const bdgRes2 = await fetch(`${apiBase}/participant/badges`, { credentials: 'include' });
+          if (bdgRes2.ok) setMyBadges((await bdgRes2.json()).items || []);
+        }
+        break;
+      case 'quiz':
+        const hRes = await fetch(`${apiBase}/participant/history`, { credentials: 'include' });
+        if (hRes.ok) setHistory(await hRes.json());
+        break;
+      case 'redeem':
+        const [riRes, rcRes] = await Promise.all([
+          fetch(`${apiBase}/participant/redeem/items`, { credentials: 'include' }),
+          fetch(`${apiBase}/participant/redeem/claims`, { credentials: 'include' }),
+        ]);
+        if (riRes.ok) setRedeemItems((await riRes.json()).items || []);
+        if (rcRes.ok) setRedeemClaims((await rcRes.json()).items || []);
+        break;
+      case 'poin':
+        const phRes = await fetch(`${apiBase}/participant/points/history`, { credentials: 'include' });
+        if (phRes.ok) setMyPointHistory((await phRes.json()).items || []);
+        break;
+      case 'refleksi':
+        const refRes = await fetch(`${apiBase}/participant/reflections`, { credentials: 'include' });
+        if (refRes.ok) setMyReflections((await refRes.json()).items || []);
+        break;
+      case 'leaderboard':
+        const lRes = await fetch(`${apiBase}/participant/leaderboard`, { credentials: 'include' });
+        if (lRes.ok) setLeaderboard((await lRes.json()).items || []);
+        break;
+    }
   }
 
   async function loadAdmin() {
-    const [pRes, cRes, qRes, rRes, phRes, pbRes, erRes, ehRes, esRes, ersRes] = await Promise.all([
+    // Critical admin data — participants, categories, questions
+    const [pRes, cRes, qRes] = await Promise.all([
       fetch(`${apiBase}/admin/participants`, { credentials: 'include' }),
       fetch(`${apiBase}/admin/categories`, { credentials: 'include' }),
       fetch(`${apiBase}/admin/questions`, { credentials: 'include' }),
-      fetch(`${apiBase}/admin/reminders`, { credentials: 'include' }),
-      fetch(`${apiBase}/admin/points/history`, { credentials: 'include' }),
-      fetch(`${apiBase}/admin/points/balances`, { credentials: 'include' }),
-      fetch(`${apiBase}/admin/exp/rules`, { credentials: 'include' }),
-      fetch(`${apiBase}/admin/exp/history`, { credentials: 'include' }),
-      fetch(`${apiBase}/admin/exp/status`, { credentials: 'include' }),
-      fetch(`${apiBase}/admin/exp/report-setting`, { credentials: 'include' })
     ]);
     if (pRes.ok) setParticipants((await pRes.json()).items || []);
-    if (cRes.ok) { const cd = await cRes.json(); setCategories(cd.categories || cd.items || []); }
+    if (cRes.ok) { const cd = await cRes.json(); setCategories(cd.categories || cd.items || []); setAdminCategories(cd.categories || cd.items || []); }
     if (qRes.ok) setQuestions((await qRes.json()).items || []);
-    if (rRes.ok) setAdminReminders((await rRes.json()).items || []);
-    if (phRes.ok) setAdminPointHistory((await phRes.json()).items || []);
-    if (pbRes.ok) setAdminPointBalances((await pbRes.json()).items || []);
-    if (erRes.ok) setAdminExpRules((await erRes.json()).items || []);
-    if (ehRes.ok) setAdminExpHistory((await ehRes.json()).items || []);
-    if (esRes.ok) setAdminExpStatus((await esRes.json()).items || []);
-    if (ersRes.ok) setExpReportSetting(await ersRes.json());
-    const [ariRes, arcRes, amRes, catRes] = await Promise.all([
-      fetch(`${apiBase}/admin/redeem/items`, { credentials: 'include' }),
-      fetch(`${apiBase}/admin/redeem/claims`, { credentials: 'include' }),
+    // Load materi & groups (dipakai di banyak section)
+    const [amRes, grpRes] = await Promise.all([
       fetch(`${apiBase}/admin/materials`, { credentials: 'include' }),
-      fetch(`${apiBase}/admin/categories`, { credentials: 'include' }),
+      fetch(`${apiBase}/admin/groups`, { credentials: 'include' }),
     ]);
-    if (ariRes.ok) setAdminRedeemItems((await ariRes.json()).items || []);
-    if (arcRes.ok) setAdminRedeemClaims((await arcRes.json()).items || []);
     if (amRes.ok) setAdminMaterials((await amRes.json()).items || []);
-    if (catRes.ok) setAdminCategories((await catRes.json()).categories || []);
-    const grpRes = await fetch(`${apiBase}/admin/groups`, { credentials: 'include' });
     if (grpRes.ok) setAdminGroups((await grpRes.json()).items || []);
-    const refStatsRes = await fetch(`${apiBase}/admin/reflections/stats`, { credentials: 'include' });
-    if (refStatsRes.ok) setAdminReflectionStats(await refStatsRes.json());
-    const learnRes = await fetch(`${apiBase}/admin/learning-summary`, { credentials: 'include' });
-    if (learnRes.ok) setAdminLearningSummary(await learnRes.json());
-    const badgesRes = await fetch(`${apiBase}/admin/badges`, { credentials: 'include' });
-    if (badgesRes.ok) { const bd = await badgesRes.json(); setAdminBadges(bd.items||[]); setAdminBadgeAwards(bd.awards||[]); }
-    const [fbStatsRes, fbListRes, fbSchedRes] = await Promise.all([
-      fetch(`${apiBase}/admin/feedback/stats`, { credentials: 'include' }),
-      fetch(`${apiBase}/admin/feedback/list`, { credentials: 'include' }),
-      fetch(`${apiBase}/admin/feedback/schedule`, { credentials: 'include' }),
-    ]);
-    if (fbStatsRes.ok) setAdminFeedbackStats(await fbStatsRes.json());
-    if (fbListRes.ok) setAdminFeedbackList((await fbListRes.json()).items || []);
-    if (fbSchedRes.ok) {
-      const sc = await fbSchedRes.json();
-      setAdminFeedbackSchedule(sc);
-      setFbScheduleTime(sc.send_time || '09:00');
-      setFbScheduleDate(sc.send_date || '');
-      setFbScheduleActive(sc.is_active || false);
+  }
+
+  const [loadedAdminSections, setLoadedAdminSections] = useState({});
+
+  async function loadAdminSection(section) {
+    if (loadedAdminSections[section]) return;
+    setLoadedAdminSections(prev => ({...prev, [section]: true}));
+    switch (section) {
+      case 'peserta':
+        break; // sudah load di loadAdmin
+      case 'poin':
+        const [phRes2, pbRes] = await Promise.all([
+          fetch(`${apiBase}/admin/points/history`, { credentials: 'include' }),
+          fetch(`${apiBase}/admin/points/balances`, { credentials: 'include' }),
+        ]);
+        if (phRes2.ok) setAdminPointHistory((await phRes2.json()).items || []);
+        if (pbRes.ok) setAdminPointBalances((await pbRes.json()).items || []);
+        break;
+      case 'exp':
+        const [erRes, ehRes, esRes, ersRes] = await Promise.all([
+          fetch(`${apiBase}/admin/exp/rules`, { credentials: 'include' }),
+          fetch(`${apiBase}/admin/exp/history`, { credentials: 'include' }),
+          fetch(`${apiBase}/admin/exp/status`, { credentials: 'include' }),
+          fetch(`${apiBase}/admin/exp/report-setting`, { credentials: 'include' }),
+        ]);
+        if (erRes.ok) setAdminExpRules((await erRes.json()).items || []);
+        if (ehRes.ok) setAdminExpHistory((await ehRes.json()).items || []);
+        if (esRes.ok) setAdminExpStatus((await esRes.json()).items || []);
+        if (ersRes.ok) setExpReportSetting(await ersRes.json());
+        break;
+      case 'redeem':
+        const [ariRes, arcRes] = await Promise.all([
+          fetch(`${apiBase}/admin/redeem/items`, { credentials: 'include' }),
+          fetch(`${apiBase}/admin/redeem/claims`, { credentials: 'include' }),
+        ]);
+        if (ariRes.ok) setAdminRedeemItems((await ariRes.json()).items || []);
+        if (arcRes.ok) setAdminRedeemClaims((await arcRes.json()).items || []);
+        break;
+      case 'refleksi':
+        const refStatsRes = await fetch(`${apiBase}/admin/reflections/stats`, { credentials: 'include' });
+        if (refStatsRes.ok) setAdminReflectionStats(await refStatsRes.json());
+        break;
+      case 'badges':
+        const badgesRes = await fetch(`${apiBase}/admin/badges`, { credentials: 'include' });
+        if (badgesRes.ok) { const bd = await badgesRes.json(); setAdminBadges(bd.items||[]); setAdminBadgeAwards(bd.awards||[]); }
+        break;
+      case 'feedback':
+        const [fbStatsRes, fbListRes, fbSchedRes] = await Promise.all([
+          fetch(`${apiBase}/admin/feedback/stats`, { credentials: 'include' }),
+          fetch(`${apiBase}/admin/feedback/list`, { credentials: 'include' }),
+          fetch(`${apiBase}/admin/feedback/schedule`, { credentials: 'include' }),
+        ]);
+        if (fbStatsRes.ok) setAdminFeedbackStats(await fbStatsRes.json());
+        if (fbListRes.ok) setAdminFeedbackList((await fbListRes.json()).items || []);
+        if (fbSchedRes.ok) {
+          const sc = await fbSchedRes.json();
+          setAdminFeedbackSchedule(sc); setFbScheduleTime(sc.send_time||'09:00');
+          setFbScheduleDate(sc.send_date||''); setFbScheduleActive(sc.is_active||false);
+        }
+        break;
+      case 'jadwal':
+        const [remRes, lsRes] = await Promise.all([
+          fetch(`${apiBase}/admin/reminders`, { credentials: 'include' }),
+          fetch(`${apiBase}/admin/learning-summary`, { credentials: 'include' }),
+        ]);
+        if (remRes.ok) setAdminReminders((await remRes.json()).items || []);
+        if (lsRes.ok) setAdminLearningSummary(await lsRes.json());
+        break;
     }
   }
 
   async function loadPortal(role) {
     await loadParticipant();
-    if (role === 'admin' || role === 'super_admin') await loadAdmin();
+    if (role === 'admin' || role === 'super_admin') await refreshAdmin();
+    await loadSection('profil');
+  }
+
+  // Refresh admin — reset cache section yang aktif lalu reload
+  const origLoadAdmin = loadAdmin;
+  async function refreshAdmin() {
+    setLoadedAdminSections({});
+    await refreshAdmin();
+    await loadAdminSection(adminSection);
+  }
+  async function refreshParticipant() {
+    setLoadedSections({});
+    await loadParticipant();
+    await loadSection(participantSection);
   }
 
   useEffect(() => {
@@ -293,7 +371,7 @@ export default function Page() {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ user_id: userId })
     });
-    await loadAdmin();
+    await refreshAdmin();
     setActionType('success'); setActionMsg('Password peserta berhasil direset.'); setBusy(false);
   }
 
@@ -304,7 +382,7 @@ export default function Page() {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ user_id: p.id, role: nextRole })
     });
-    await loadAdmin();
+    await refreshAdmin();
     setActionType('success'); setActionMsg(`Role ${p.phone} diubah ke ${nextRole}.`); setBusy(false);
   }
 
@@ -314,7 +392,7 @@ export default function Page() {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ user_id: p.id, is_active: !p.is_active })
     });
-    await loadAdmin();
+    await refreshAdmin();
     setActionType('success'); setActionMsg(`Status ${p.phone} berhasil diperbarui.`); setBusy(false);
   }
 
@@ -326,7 +404,7 @@ export default function Page() {
     });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal menghapus peserta.'); setBusy(false); return; }
-    await loadAdmin();
+    await refreshAdmin();
     setActionType('success'); setActionMsg('Peserta berhasil dihapus.'); setBusy(false);
   }
 
@@ -340,7 +418,7 @@ export default function Page() {
         : { action: 'create', code: newCategoryCode, name: newCategoryName, group_id: newCategoryGroupId ? parseInt(newCategoryGroupId) : null })
     });
     setNewCategoryCode(''); setNewCategoryName(''); setEditingCategoryId('');
-    await loadAdmin();
+    await refreshAdmin();
     setActionType('success'); setActionMsg(isEdit ? 'Kategori berhasil diupdate.' : 'Kategori berhasil ditambahkan.'); setBusy(false);
   }
 
@@ -358,7 +436,7 @@ export default function Page() {
       body: JSON.stringify({ action: 'delete', id: Number(catId) })
     });
     if (String(editingCategoryId) === String(catId)) { setEditingCategoryId(''); setNewCategoryCode(''); setNewCategoryName(''); }
-    await loadAdmin();
+    await refreshAdmin();
     setActionType('success'); setActionMsg('Kategori berhasil dihapus.'); setBusy(false);
   }
 
@@ -380,7 +458,7 @@ export default function Page() {
       body: JSON.stringify({ action: 'delete', id: Number(qId) })
     });
     if (String(editingQuestionId) === String(qId)) { setEditingQuestionId(''); setQCategoryId(''); setQText(''); setQA(''); setQB(''); setQC(''); setQD(''); setQCorrect('A'); }
-    await loadAdmin();
+    await refreshAdmin();
     setActionType('success'); setActionMsg('Soal berhasil dihapus.'); setBusy(false);
   }
 
@@ -394,7 +472,7 @@ export default function Page() {
         : { action: 'create', category_id: Number(qCategoryId), question_text: qText, option_a: qA, option_b: qB, option_c: qC, option_d: qD, correct_option: qCorrect })
     });
     setQText(''); setQA(''); setQB(''); setQC(''); setQD(''); setQCorrect('A'); setQCategoryId(''); setEditingQuestionId('');
-    await loadAdmin();
+    await refreshAdmin();
     setActionType('success'); setActionMsg(isEdit ? 'Soal berhasil diupdate.' : 'Soal berhasil ditambahkan.'); setBusy(false);
   }
 
@@ -414,7 +492,7 @@ export default function Page() {
     const d = await res.json().catch(() => ({}));
     if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal update poin.'); setBusy(false); return; }
     setPointPhone(''); setPointDelta(''); setPointReason(''); setEditingPointEntryId('');
-    await loadAdmin(); await loadParticipant();
+    await refreshAdmin(); await refreshParticipant();
     setActionType('success'); setActionMsg(editingPointEntryId ? 'Entry poin berhasil diupdate.' : 'Poin peserta berhasil diperbarui.'); setBusy(false);
   }
 
@@ -433,7 +511,7 @@ export default function Page() {
     });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal menghapus entry poin.'); setBusy(false); return; }
-    await loadAdmin(); await loadParticipant();
+    await refreshAdmin(); await refreshParticipant();
     setActionType('success'); setActionMsg('Entry poin berhasil dihapus.'); setBusy(false);
   }
 
@@ -445,7 +523,7 @@ export default function Page() {
     });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal hitung ulang poin.'); setBusy(false); return; }
-    await loadAdmin(); await loadParticipant();
+    await refreshAdmin(); await refreshParticipant();
     setActionType('success'); setActionMsg(`Recalculate selesai. User dihitung ulang: ${d.recalculated_users ?? '-'}`); setBusy(false);
   }
 
@@ -457,7 +535,7 @@ export default function Page() {
     });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal simpan setting laporan EXP.'); setBusy(false); return; }
-    await loadAdmin();
+    await refreshAdmin();
     setActionType('success'); setActionMsg('Setting laporan EXP berhasil disimpan.'); setBusy(false);
   }
 
@@ -469,7 +547,7 @@ export default function Page() {
     });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal update rule EXP.'); setBusy(false); return; }
-    await loadAdmin();
+    await refreshAdmin();
     setActionType('success'); setActionMsg(`Rule EXP ${ruleKey} berhasil diperbarui.`); setBusy(false);
   }
 
@@ -481,7 +559,7 @@ export default function Page() {
     });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal klaim.'); setBusy(false); return; }
-    await loadParticipant();
+    await refreshParticipant();
     setActionType('success'); setActionMsg('Klaim berhasil! Menunggu konfirmasi admin 🎁'); setBusy(false);
   }
 
@@ -496,7 +574,7 @@ export default function Page() {
       body: JSON.stringify(payload)
     });
     setRedeemName(''); setRedeemDesc(''); setRedeemCost(''); setRedeemStock('-1'); setEditingRedeemId('');
-    await loadAdmin();
+    await refreshAdmin();
     setActionType('success'); setActionMsg(isEdit ? 'Hadiah diupdate.' : 'Hadiah ditambahkan.'); setBusy(false);
   }
 
@@ -513,7 +591,7 @@ export default function Page() {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ action: 'delete', id })
     });
-    await loadAdmin();
+    await refreshAdmin();
     setActionType('success'); setActionMsg('Hadiah dihapus.'); setBusy(false);
   }
 
@@ -525,7 +603,7 @@ export default function Page() {
     });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal.'); setBusy(false); return; }
-    await loadAdmin();
+    await refreshAdmin();
     setActionType('success'); setActionMsg(`Klaim ${action === 'approve' ? 'disetujui' : 'ditolak'}.`); setBusy(false);
   }
 
@@ -553,7 +631,7 @@ export default function Page() {
     const d = await res.json().catch(() => ({}));
     if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal simpan.'); setBusy(false); return; }
     resetMateriForm();
-    await loadAdmin();
+    await refreshAdmin();
     setActionType('success'); setActionMsg(isEdit ? 'Materi diperbarui!' : 'Materi ditambahkan!'); setBusy(false);
   }
 
@@ -583,7 +661,7 @@ export default function Page() {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ action: 'delete', id }),
     });
-    if (res.ok) { await loadAdmin(); setActionType('success'); setActionMsg('Materi dihapus.'); }
+    if (res.ok) { await refreshAdmin(); setActionType('success'); setActionMsg('Materi dihapus.'); }
     setBusy(false);
   }
 
@@ -794,7 +872,7 @@ export default function Page() {
                 ['badges',    '🎖️', 'Badges'],
                 ['leaderboard','🏆','Leaderboard'],
               ].map(([key, icon, label]) => (
-                <button key={key} onClick={() => setParticipantSection(key)} style={{
+                <button key={key} onClick={() => { setParticipantSection(key); loadSection(key); }} style={{
                   display: 'flex', alignItems: 'center', gap: 10,
                   padding: '9px 12px', borderRadius: 10, cursor: 'pointer',
                   border: participantSection === key ? '1px solid rgba(190,148,245,0.3)' : '1px solid transparent',
@@ -921,7 +999,7 @@ export default function Page() {
                     </div>
                   ))}
                 </div>
-                {myBadges.length > 6 && <button onClick={() => setParticipantSection('badges')} style={{ background: 'none', border: 'none', color: '#7c3aed', fontSize: 13, cursor: 'pointer', padding: 0 }}>Lihat semua {myBadges.length} badges →</button>}
+                {myBadges.length > 6 && <button onClick={() => { setParticipantSection('badges'); loadSection('badges'); }} style={{ background: 'none', border: 'none', color: '#7c3aed', fontSize: 13, cursor: 'pointer', padding: 0 }}>Lihat semua {myBadges.length} badges →</button>}
               </Section>
             )}
 
@@ -1324,7 +1402,7 @@ export default function Page() {
                 ].map(([key, icon, label]) => (
                   <button
                     key={key}
-                    onClick={() => setAdminSection(key)}
+                    onClick={() => { setAdminSection(key); loadAdminSection(key); }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10,
                       padding: '9px 12px', borderRadius: 10, cursor: 'pointer',
@@ -1376,7 +1454,7 @@ export default function Page() {
                         if (res.ok) {
                           showMsg(editingGroupId ? 'Kelompok diperbarui' : 'Kelompok ditambahkan', 'success');
                           setGroupName(''); setGroupCode(''); setGroupDesc(''); setGroupActive(true); setEditingGroupId('');
-                          await loadAdmin();
+                          await refreshAdmin();
                         } else showMsg('Gagal simpan kelompok', 'error');
                       }}>{editingGroupId ? '💾 Update' : '➕ Tambah'}</BtnSm>
                       {editingGroupId && <BtnSm color="gray" onClick={() => { setEditingGroupId(''); setGroupName(''); setGroupCode(''); setGroupDesc(''); setGroupActive(true); }}>Batal</BtnSm>}
@@ -1398,7 +1476,7 @@ export default function Page() {
                             <BtnSm color="red" onClick={async () => {
                               if (!confirm(`Hapus kelompok "${g.name}"?`)) return;
                               const res = await fetch(`${apiBase}/admin/groups`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', id: g.id }) });
-                              if (res.ok) { showMsg('Kelompok dihapus', 'success'); await loadAdmin(); }
+                              if (res.ok) { showMsg('Kelompok dihapus', 'success'); await refreshAdmin(); }
                               else showMsg('Gagal hapus', 'error');
                             }}>🗑️</BtnSm>
                           </td>
@@ -1739,7 +1817,7 @@ export default function Page() {
                           body: JSON.stringify(badgeForm)
                         });
                         setBusy(false);
-                        if (res.ok) { showMsg(badgeForm.id ? 'Badge diupdate ✅' : 'Badge dibuat ✅', 'success'); setBadgeForm({ id: 0, name: '', description: '', icon_url: '', badge_type: 'manual', trigger_key: '', is_active: true }); await loadAdmin(); }
+                        if (res.ok) { showMsg(badgeForm.id ? 'Badge diupdate ✅' : 'Badge dibuat ✅', 'success'); setBadgeForm({ id: 0, name: '', description: '', icon_url: '', badge_type: 'manual', trigger_key: '', is_active: true }); await refreshAdmin(); }
                         else showMsg('Gagal simpan badge', 'error');
                       }}>{badgeForm.id ? '💾 Update Badge' : '➕ Buat Badge'}</BtnSm>
                       {badgeForm.id > 0 && <BtnSm onClick={() => setBadgeForm({ id: 0, name: '', description: '', icon_url: '', badge_type: 'manual', trigger_key: '', is_active: true })}>Batal</BtnSm>}
@@ -1770,7 +1848,7 @@ export default function Page() {
                                 if (!confirm(`Hapus badge "${b.name}"?`)) return;
                                 setBusy(true);
                                 await fetch(`${apiBase}/admin/badges`, { method: 'DELETE', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ id: b.id }) });
-                                setBusy(false); await loadAdmin();
+                                setBusy(false); await refreshAdmin();
                               }}>🗑️</BtnSm>
                             </div>
                           </div>
@@ -1810,7 +1888,7 @@ export default function Page() {
                           body: JSON.stringify(badgeAwardForm)
                         });
                         setBusy(false);
-                        if (res.ok) { showMsg('Badge berhasil diberikan ✅ Notif bot dikirim!', 'success'); setBadgeAwardForm({ user_id: 0, badge_id: 0, note: '' }); await loadAdmin(); }
+                        if (res.ok) { showMsg('Badge berhasil diberikan ✅ Notif bot dikirim!', 'success'); setBadgeAwardForm({ user_id: 0, badge_id: 0, note: '' }); await refreshAdmin(); }
                         else showMsg('Gagal memberikan badge', 'error');
                       }}>🏅 Berikan Badge</BtnSm>
                     </div>
@@ -1841,7 +1919,7 @@ export default function Page() {
                                   if (!confirm('Cabut badge ini?')) return;
                                   setBusy(true);
                                   await fetch(`${apiBase}/admin/badges/revoke`, { method: 'POST', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ award_id: aw.award_id }) });
-                                  setBusy(false); await loadAdmin();
+                                  setBusy(false); await refreshAdmin();
                                 }}>Cabut</BtnSm></td>
                               </tr>
                             );
@@ -1884,7 +1962,7 @@ export default function Page() {
                               body: JSON.stringify({ send_time: fbScheduleTime, send_date: fbScheduleDate, is_active: fbScheduleActive })
                             });
                             setBusy(false);
-                            if (res.ok) { showMsg('Jadwal feedback disimpan ✅', 'success'); await loadAdmin(); }
+                            if (res.ok) { showMsg('Jadwal feedback disimpan ✅', 'success'); await refreshAdmin(); }
                             else showMsg('Gagal simpan jadwal', 'error');
                           }}>💾 Simpan Jadwal</BtnSm>
                         </div>
