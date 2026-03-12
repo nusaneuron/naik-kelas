@@ -2459,7 +2459,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260312-badges-p3"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260312-markdown-materi"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -2642,6 +2642,11 @@ func (a *app) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 					log.Printf("telegram send error: %v", err)
 				}
 			}
+		} else if strings.HasPrefix(reply, "§HTML§") {
+			htmlMsg := strings.TrimPrefix(reply, "§HTML§")
+			if err := a.sendTelegramHTMLMessage(r.Context(), upd.Message.Chat.ID, htmlMsg); err != nil {
+				log.Printf("telegram html send error: %v", err)
+			}
 		} else {
 			if err := a.sendTelegramMessage(r.Context(), upd.Message.Chat.ID, reply, state); err != nil {
 				log.Printf("telegram send error: %v", err)
@@ -2690,6 +2695,186 @@ func (a *app) syncTelegramBotCommands(ctx context.Context) error {
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("setMyCommands status %d", resp.StatusCode)
 	}
+	return nil
+}
+
+// markdownToTelegramHTML mengkonversi Markdown sederhana ke HTML yang didukung Telegram.
+// Mendukung: **bold**, *bold*, _italic_, __italic__, ~~strikethrough~~,
+//            # Heading, ## Heading, ### Heading,
+//            - item / * item (bullet), 1. item (numbered),
+//            `code`, ```code block```, > quote, --- (separator)
+func markdownToTelegramHTML(md string) string {
+	lines := strings.Split(md, "\n")
+	var out []string
+	inCodeBlock := false
+	var codeBlockLines []string
+
+	for _, line := range lines {
+		// Code block
+		if strings.HasPrefix(line, "```") {
+			if inCodeBlock {
+				inCodeBlock = false
+				code := strings.Join(codeBlockLines, "\n")
+				out = append(out, "<pre>"+htmlEscape(code)+"</pre>")
+				codeBlockLines = nil
+			} else {
+				inCodeBlock = true
+			}
+			continue
+		}
+		if inCodeBlock {
+			codeBlockLines = append(codeBlockLines, line)
+			continue
+		}
+
+		// Separator
+		if strings.TrimSpace(line) == "---" || strings.TrimSpace(line) == "***" {
+			out = append(out, "──────────────")
+			continue
+		}
+
+		// Heading
+		if strings.HasPrefix(line, "### ") {
+			out = append(out, "<b>"+inlineFormat(strings.TrimPrefix(line, "### "))+"</b>")
+			continue
+		}
+		if strings.HasPrefix(line, "## ") {
+			out = append(out, "\n<b>"+inlineFormat(strings.TrimPrefix(line, "## "))+"</b>")
+			continue
+		}
+		if strings.HasPrefix(line, "# ") {
+			out = append(out, "\n<b>📌 "+inlineFormat(strings.TrimPrefix(line, "# "))+"</b>")
+			continue
+		}
+
+		// Blockquote
+		if strings.HasPrefix(line, "> ") {
+			out = append(out, "│ <i>"+inlineFormat(strings.TrimPrefix(line, "> "))+"</i>")
+			continue
+		}
+
+		// Bullet list
+		if strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") {
+			content := line[2:]
+			out = append(out, "• "+inlineFormat(content))
+			continue
+		}
+
+		// Numbered list (1. 2. dst)
+		if len(line) >= 3 {
+			dotIdx := strings.Index(line, ". ")
+			if dotIdx > 0 && dotIdx <= 3 {
+				num := line[:dotIdx]
+				allDigit := true
+				for _, c := range num {
+					if c < '0' || c > '9' {
+						allDigit = false
+						break
+					}
+				}
+				if allDigit {
+					out = append(out, num+". "+inlineFormat(line[dotIdx+2:]))
+					continue
+				}
+			}
+		}
+
+		// Baris biasa
+		out = append(out, inlineFormat(line))
+	}
+
+	return strings.Join(out, "\n")
+}
+
+// inlineFormat memproses formatting inline: bold, italic, code, strikethrough
+func inlineFormat(s string) string {
+	// Escape HTML dulu pada bagian non-format
+	// Proses dalam urutan: ```inline code``` → bold → italic → strikethrough
+	var result strings.Builder
+	i := 0
+	runes := []rune(s)
+	n := len(runes)
+
+	for i < n {
+		// Inline code `...`
+		if runes[i] == '`' {
+			end := -1
+			for j := i + 1; j < n; j++ {
+				if runes[j] == '`' {
+					end = j
+					break
+				}
+			}
+			if end > i {
+				result.WriteString("<code>" + htmlEscape(string(runes[i+1:end])) + "</code>")
+				i = end + 1
+				continue
+			}
+		}
+		// Bold **text** atau __text__
+		if i+1 < n && ((runes[i] == '*' && runes[i+1] == '*') || (runes[i] == '_' && runes[i+1] == '_')) {
+			marker := string(runes[i : i+2])
+			end := strings.Index(string(runes[i+2:]), marker)
+			if end >= 0 {
+				inner := string(runes[i+2 : i+2+end])
+				result.WriteString("<b>" + htmlEscape(inner) + "</b>")
+				i = i + 2 + end + 2
+				continue
+			}
+		}
+		// Italic *text* atau _text_
+		if runes[i] == '*' || runes[i] == '_' {
+			marker := string(runes[i])
+			end := strings.Index(string(runes[i+1:]), marker)
+			if end >= 0 {
+				inner := string(runes[i+1 : i+1+end])
+				result.WriteString("<i>" + htmlEscape(inner) + "</i>")
+				i = i + 1 + end + 1
+				continue
+			}
+		}
+		// Strikethrough ~~text~~
+		if i+1 < n && runes[i] == '~' && runes[i+1] == '~' {
+			end := strings.Index(string(runes[i+2:]), "~~")
+			if end >= 0 {
+				inner := string(runes[i+2 : i+2+end])
+				result.WriteString("<s>" + htmlEscape(inner) + "</s>")
+				i = i + 2 + end + 2
+				continue
+			}
+		}
+		// Karakter biasa — escape HTML
+		ch := string(runes[i])
+		result.WriteString(htmlEscape(ch))
+		i++
+	}
+	return result.String()
+}
+
+func htmlEscape(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	return s
+}
+
+func (a *app) sendTelegramHTMLMessage(ctx context.Context, chatID int64, html string) error {
+	if a.telegramBotToken == "" {
+		return nil
+	}
+	body, _ := json.Marshal(map[string]any{
+		"chat_id":    chatID,
+		"text":       html,
+		"parse_mode": "HTML",
+	})
+	resp, err := http.Post(
+		fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", a.telegramBotToken),
+		"application/json", bytes.NewReader(body),
+	)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
 	return nil
 }
 
@@ -3569,28 +3754,25 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		var msg string
 		switch chosen.Type {
 		case "text":
-			// Pecah kalau > 3800 karakter
-			content := chosen.Content
-			header := fmt.Sprintf("%s: *%s*\n\n", label, chosen.Title)
-			full := header + content
+			htmlContent := markdownToTelegramHTML(chosen.Content)
+			header := fmt.Sprintf("%s <b>%s</b>\n\n", label, htmlEscape(chosen.Title))
+			full := header + htmlContent
 			if len(full) > 3800 {
-				// Kirim header dulu, konten nanti lewat mekanisme biasa (ambil 3800)
-				msg = full[:3800] + "\n\n_(lanjutan konten dipotong — buka web portal untuk materi lengkap)_"
-			} else {
-				msg = full
+				full = full[:3800] + "\n\n<i>(konten terpotong — buka web portal untuk materi lengkap)</i>"
 			}
+			msg = "§HTML§" + full
 		case "video":
-			msg = fmt.Sprintf("%s: *%s*\n\n🔗 %s\n\n_(Tonton videonya dulu ya! Klik link di atas)_", label, chosen.Title, chosen.Content)
+			msg = fmt.Sprintf("§HTML§%s <b>%s</b>\n\n🔗 %s\n\n<i>Tonton videonya dulu ya! Klik link di atas</i>", label, htmlEscape(chosen.Title), htmlEscape(chosen.Content))
 		case "audio":
-			msg = fmt.Sprintf("%s: *%s*\n\n🔗 %s\n\n_(Dengarkan audionya dulu ya! Klik link di atas)_", label, chosen.Title, chosen.Content)
+			msg = fmt.Sprintf("§HTML§%s <b>%s</b>\n\n🔗 %s\n\n<i>Dengarkan audionya dulu ya! Klik link di atas</i>", label, htmlEscape(chosen.Title), htmlEscape(chosen.Content))
 		default:
-			msg = fmt.Sprintf("*%s*\n\n%s", chosen.Title, chosen.Content)
+			msg = fmt.Sprintf("§HTML§<b>%s</b>\n\n%s", htmlEscape(chosen.Title), markdownToTelegramHTML(chosen.Content))
 		}
 		alreadyDone := ""
 		if chosen.IsCompleted {
-			alreadyDone = "\n\n_Kamu sudah menyelesaikan materi ini sebelumnya ✅_"
+			alreadyDone = "\n\n<i>Kamu sudah menyelesaikan materi ini sebelumnya ✅</i>"
 		}
-		msg += alreadyDone + "\n\n---\nKetik *selesai* jika sudah baca/tonton ✅\nKetik *kembali* untuk list materi\nKetik */batal* untuk keluar"
+		msg += alreadyDone + "\n\n──────────────\nKetik <b>selesai</b> jika sudah baca/tonton ✅\nKetik <b>kembali</b> untuk list materi\nKetik /batal untuk keluar"
 		return msg, "materi_viewing"
 
 	case "materi_viewing":

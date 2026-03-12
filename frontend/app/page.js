@@ -2035,10 +2035,84 @@ export default function Page() {
                         <input value={materiTitle} onChange={e => setMateriTitle(e.target.value)} placeholder="Judul materi..." className="nk-input-sm" style={{ width: "100%" }} />
                       </div>
                       <div style={{ marginBottom: 10 }}>
-                        <label style={fieldLbl}>{materiType === 'text' ? 'Isi Materi' : 'URL ' + (materiType === 'video' ? 'Video (YouTube/GDrive)' : 'Audio (MP3)')}</label>
-                        {materiType === 'text'
-                          ? <textarea value={materiContent} onChange={e => setMateriContent(e.target.value)} rows={5} placeholder="Tulis isi materi di sini..." style={{ width: "100%", resize: 'vertical' }} />
-                          : <input value={materiContent} onChange={e => setMateriContent(e.target.value)} placeholder="https://..." className="nk-input-sm" style={{ width: "100%" }} />
+                        <label style={fieldLbl}>{materiType === 'text' ? 'Isi Materi (Markdown)' : 'URL ' + (materiType === 'video' ? 'Video (YouTube/GDrive)' : 'Audio (MP3)')}</label>
+                        {materiType === 'text' ? (<>
+                          {/* Toolbar Markdown */}
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
+                            {[
+                              { label: 'B',       title: 'Bold',        wrap: ['**','**'],   style: { fontWeight: 800 } },
+                              { label: 'I',       title: 'Italic',      wrap: ['_','_'],     style: { fontStyle: 'italic' } },
+                              { label: 'S',       title: 'Strikethrough', wrap: ['~~','~~'], style: { textDecoration: 'line-through' } },
+                              { label: '`',       title: 'Kode inline', wrap: ['`','`'],     style: { fontFamily: 'monospace' } },
+                              { label: 'H1',      title: 'Heading 1',   prefix: '# ',        style: {} },
+                              { label: 'H2',      title: 'Heading 2',   prefix: '## ',       style: {} },
+                              { label: 'H3',      title: 'Heading 3',   prefix: '### ',      style: {} },
+                              { label: '• List',  title: 'Bullet list', prefix: '- ',        style: {} },
+                              { label: '1. List', title: 'Numbered list', prefix: '1. ',     style: {} },
+                              { label: '❝ Quote', title: 'Blockquote', prefix: '> ',         style: {} },
+                              { label: '───',     title: 'Separator',   insert: '---\n',     style: {} },
+                            ].map((btn, bi) => (
+                              <button key={bi} type="button" title={btn.title}
+                                style={{ background: '#1e2d45', border: '1px solid #2d3f5c', borderRadius: 5, color: '#cbd5e1', padding: '3px 8px', fontSize: 12, cursor: 'pointer', ...btn.style }}
+                                onClick={() => {
+                                  const el = document.getElementById('materi-content-editor');
+                                  if (!el) return;
+                                  const start = el.selectionStart, end = el.selectionEnd;
+                                  const sel = materiContent.slice(start, end);
+                                  let newVal = materiContent;
+                                  let newCursor = end;
+                                  if (btn.wrap) {
+                                    newVal = materiContent.slice(0,start) + btn.wrap[0] + sel + btn.wrap[1] + materiContent.slice(end);
+                                    newCursor = start + btn.wrap[0].length + sel.length + btn.wrap[1].length;
+                                  } else if (btn.prefix) {
+                                    // Tambah prefix di awal baris yang dipilih
+                                    const lineStart = materiContent.lastIndexOf('\n', start - 1) + 1;
+                                    newVal = materiContent.slice(0, lineStart) + btn.prefix + materiContent.slice(lineStart);
+                                    newCursor = start + btn.prefix.length;
+                                  } else if (btn.insert) {
+                                    newVal = materiContent.slice(0, start) + btn.insert + materiContent.slice(end);
+                                    newCursor = start + btn.insert.length;
+                                  }
+                                  setMateriContent(newVal);
+                                  setTimeout(() => { el.focus(); el.setSelectionRange(newCursor, newCursor); }, 0);
+                                }}>{btn.label}</button>
+                            ))}
+                          </div>
+                          <textarea id="materi-content-editor" value={materiContent} onChange={e => setMateriContent(e.target.value)} rows={10}
+                            placeholder="Tulis materi dengan Markdown di sini..."
+                            style={{ width: '100%', resize: 'vertical', fontFamily: 'monospace', fontSize: 13, background: '#0d1b2e', border: '1px solid #1e2d45', borderRadius: 8, color: '#f1f5f9', padding: '10px 12px' }} />
+
+                          {/* Panduan Markdown */}
+                          <details style={{ marginTop: 8 }}>
+                            <summary style={{ fontSize: 12, color: '#64748b', cursor: 'pointer', userSelect: 'none' }}>📖 Panduan format Markdown (klik untuk buka)</summary>
+                            <div style={{ background: '#0a1628', border: '1px solid #1e2d45', borderRadius: 8, padding: 14, marginTop: 8, fontSize: 12, lineHeight: 1.8 }}>
+                              <p style={{ fontWeight: 700, color: '#94a3b8', margin: '0 0 8px' }}>✍️ Cara penulisan teks di Telegram:</p>
+                              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <thead><tr style={{ color: '#475569', borderBottom: '1px solid #1e2d45' }}><th style={{ textAlign: 'left', padding: '4px 8px' }}>Yang kamu tulis</th><th style={{ textAlign: 'left', padding: '4px 8px' }}>Tampil di Telegram</th></tr></thead>
+                                <tbody>{[
+                                  ['**teks**', '𝐭𝐞𝐤𝐬 (tebal/bold)'],
+                                  ['_teks_', '𝑡𝑒𝑘𝑠 (miring/italic)'],
+                                  ['~~teks~~', 'teks (dicoret)'],
+                                  ['`kode`', 'kode (monospace)'],
+                                  ['# Judul Besar', '📌 Judul Besar (heading 1)'],
+                                  ['## Subjudul', 'Subjudul (heading 2)'],
+                                  ['### Poin', 'Poin (heading 3)'],
+                                  ['- item', '• item (bullet list)'],
+                                  ['1. item', '1. item (numbered list)'],
+                                  ['> kutipan', '│ kutipan (blockquote)'],
+                                  ['---', '────── (garis pemisah)'],
+                                  ['```\\nkode\\n```', 'blok kode (preformatted)'],
+                                ].map(([src, res], ri) => (
+                                  <tr key={ri} style={{ borderBottom: '1px solid #0f172a' }}>
+                                    <td style={{ padding: '4px 8px', fontFamily: 'monospace', color: '#fbbf24' }}>{src}</td>
+                                    <td style={{ padding: '4px 8px', color: '#94a3b8' }}>{res}</td>
+                                  </tr>
+                                ))}</tbody>
+                              </table>
+                              <p style={{ margin: '10px 0 4px', color: '#475569' }}>💡 <b style={{ color: '#94a3b8' }}>Tips:</b> Blok di baris kosong = paragraf baru. Kamu bisa pakai tombol toolbar di atas untuk format otomatis.</p>
+                            </div>
+                          </details>
+                        </>) : <input value={materiContent} onChange={e => setMateriContent(e.target.value)} placeholder="https://..." className="nk-input-sm" style={{ width: "100%" }} />
                         }
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
