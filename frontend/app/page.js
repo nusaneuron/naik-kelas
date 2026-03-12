@@ -2105,11 +2105,18 @@ export default function Page() {
                               </div>
                             );
                           })}
-                          {/* Tombol tambah bubble */}
-                          <button type="button" onClick={() => setMateriBubbles(prev => [...prev, ''])}
-                            style={{ background: 'rgba(99,102,241,0.1)', border: '1px dashed rgba(99,102,241,0.4)', borderRadius: 8, color: '#818cf8', padding: '8px 16px', fontSize: 13, cursor: 'pointer', width: '100%', marginBottom: 6 }}>
-                            + Tambah Pesan
-                          </button>
+                          {/* Tombol tambah bubble + counter */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                            <button type="button"
+                              disabled={materiBubbles.length >= 20}
+                              onClick={() => setMateriBubbles(prev => [...prev, ''])}
+                              style={{ flex: 1, background: materiBubbles.length >= 20 ? 'rgba(51,65,85,0.3)' : 'rgba(99,102,241,0.1)', border: `1px dashed ${materiBubbles.length >= 20 ? '#334155' : 'rgba(99,102,241,0.4)'}`, borderRadius: 8, color: materiBubbles.length >= 20 ? '#475569' : '#818cf8', padding: '8px 16px', fontSize: 13, cursor: materiBubbles.length >= 20 ? 'not-allowed' : 'pointer' }}>
+                              {materiBubbles.length >= 20 ? '🚫 Batas maksimal tercapai' : '+ Tambah Pesan'}
+                            </button>
+                            <span style={{ fontSize: 12, color: materiBubbles.length >= 18 ? '#f87171' : '#475569', whiteSpace: 'nowrap', fontWeight: 600 }}>
+                              {materiBubbles.length} / 20
+                            </span>
+                          </div>
 
                           {/* Panduan Markdown */}
                           <details style={{ marginTop: 8 }}>
