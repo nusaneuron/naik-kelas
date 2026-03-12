@@ -195,6 +195,7 @@ func main() {
 	mux.HandleFunc("/auth/me", a.handleAuthMe)
 	mux.HandleFunc("/auth/change-password", a.handleAuthChangePassword)
 	mux.HandleFunc("/participant/me", a.handleParticipantMe)
+	mux.HandleFunc("/participant/change-password", a.handleParticipantChangePassword)
 	mux.HandleFunc("/participant/history", a.handleParticipantHistory)
 	mux.HandleFunc("/participant/leaderboard", a.handleParticipantLeaderboard)
 	mux.HandleFunc("/participant/reminder", a.handleParticipantReminder)
@@ -2462,7 +2463,7 @@ func (a *app) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260312-markdown-materi"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "naik-kelas-backend", "db": "up", "version": "v20260312-change-password"})
 }
 
 func (a *app) handleParticipants(w http.ResponseWriter, r *http.Request) {
@@ -6755,3 +6756,61 @@ func (a *app) handleParticipantBadges(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
+
+// ── Participant: Ubah Password ────────────────────────────────────────────────
+
+func (a *app) handleParticipantChangePassword(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req struct {
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+	if len(strings.TrimSpace(req.NewPassword)) < 6 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Password baru minimal 6 karakter"})
+		return
+	}
+
+	// Ambil hash password saat ini
+	var currentHash string
+	if err := a.db.QueryRowContext(r.Context(), `SELECT password_hash FROM users WHERE id=$1`, u.ID).Scan(&currentHash); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal ambil data"})
+		return
+	}
+
+	// Verifikasi password lama
+	if err := bcrypt.CompareHashAndPassword([]byte(currentHash), []byte(req.OldPassword)); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Password lama tidak sesuai"})
+		return
+	}
+
+	// Hash password baru
+	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal proses password"})
+		return
+	}
+
+	_, err = a.db.ExecContext(r.Context(), `UPDATE users SET password_hash=$1 WHERE id=$2`, string(newHash), u.ID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal simpan password baru"})
+		return
+	}
+
+	_ = a.logAdminAction(r.Context(), u.ID, "participant.change_password", fmt.Sprintf("user:%d", u.ID), nil)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "message": "Password berhasil diubah"})
+}
+
+// ── Admin: Reset Password Peserta ────────────────────────────────────────────
+

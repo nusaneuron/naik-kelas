@@ -19,6 +19,15 @@ export default function Page() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  // Ubah password peserta
+  const [changePassForm, setChangePassForm] = useState({ old: '', new1: '', new2: '' });
+  const [showChangePass, setShowChangePass] = useState(false);
+  const [showPassOld, setShowPassOld] = useState(false);
+  const [showPassNew, setShowPassNew] = useState(false);
+  // Reset password admin
+  const [resetPassUserId, setResetPassUserId] = useState(0);
+  const [resetPassVal, setResetPassVal] = useState('');
+  const [showResetPass, setShowResetPass] = useState(false);
 
   const [history, setHistory] = useState({ quiz: [], tryout: [] });
   const [leaderboard, setLeaderboard] = useState([]);
@@ -975,6 +984,70 @@ export default function Page() {
 
             </>)}
 
+            {/* Ubah Password */}
+            {participantSection === 'profil' && (
+              <Section title="🔒 Keamanan Akun">
+                {!showChangePass ? (
+                  <button onClick={() => setShowChangePass(true)}
+                    style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 8, color: '#818cf8', padding: '8px 18px', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+                    🔑 Ubah Password
+                  </button>
+                ) : (
+                  <div style={{ maxWidth: 400 }}>
+                    {/* Password lama */}
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Password Lama</div>
+                      <div style={{ position: 'relative' }}>
+                        <input type={showPassOld ? 'text' : 'password'} className="nk-input-sm" style={{ width: '100%', paddingRight: 40 }}
+                          value={changePassForm.old} onChange={e => setChangePassForm(f=>({...f, old: e.target.value}))} placeholder="Masukkan password lama" />
+                        <button type="button" onClick={() => setShowPassOld(p=>!p)}
+                          style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 16 }}>
+                          {showPassOld ? '🙈' : '👁️'}
+                        </button>
+                      </div>
+                    </div>
+                    {/* Password baru */}
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Password Baru <span style={{ color: '#475569' }}>(min. 6 karakter)</span></div>
+                      <div style={{ position: 'relative' }}>
+                        <input type={showPassNew ? 'text' : 'password'} className="nk-input-sm" style={{ width: '100%', paddingRight: 40 }}
+                          value={changePassForm.new1} onChange={e => setChangePassForm(f=>({...f, new1: e.target.value}))} placeholder="Password baru" />
+                        <button type="button" onClick={() => setShowPassNew(p=>!p)}
+                          style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 16 }}>
+                          {showPassNew ? '🙈' : '👁️'}
+                        </button>
+                      </div>
+                    </div>
+                    {/* Konfirmasi */}
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Konfirmasi Password Baru</div>
+                      <input type="password" className="nk-input-sm" style={{ width: '100%' }}
+                        value={changePassForm.new2} onChange={e => setChangePassForm(f=>({...f, new2: e.target.value}))} placeholder="Ulangi password baru" />
+                      {changePassForm.new2 && changePassForm.new1 !== changePassForm.new2 && (
+                        <p style={{ margin: '4px 0 0', fontSize: 12, color: '#f87171' }}>⚠️ Password tidak cocok</p>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <BtnSm color="purple" disabled={busy || changePassForm.new1 !== changePassForm.new2 || changePassForm.new1.length < 6}
+                        onClick={async () => {
+                          setBusy(true);
+                          const res = await fetch(`${apiBase}/participant/change-password`, {
+                            method: 'POST', credentials: 'include',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ old_password: changePassForm.old, new_password: changePassForm.new1 })
+                          });
+                          const d = await res.json().catch(()=>({}));
+                          setBusy(false);
+                          if (res.ok) { showMsg('Password berhasil diubah ✅', 'success'); setShowChangePass(false); setChangePassForm({old:'',new1:'',new2:''}); }
+                          else showMsg(d.error || 'Gagal ubah password', 'error');
+                        }}>💾 Simpan Password</BtnSm>
+                      <BtnSm onClick={() => { setShowChangePass(false); setChangePassForm({old:'',new1:'',new2:''}); }}>Batal</BtnSm>
+                    </div>
+                  </div>
+                )}
+              </Section>
+            )}
+
             {/* ── Poin ── */}
             {/* Badges di profil — preview 3 terbaru */}
             {participantSection === 'profil' && myBadges.length > 0 && (
@@ -1496,7 +1569,7 @@ export default function Page() {
                             <td><span className={`nk-badge ${p.is_active ? 'nk-badge-green' : 'nk-badge-red'}`}>{p.is_active ? '● Aktif' : '○ Nonaktif'}</span></td>
                             <td>
                               <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap' }}>
-                                <BtnSm disabled={busy} onClick={() => resetPassword(p.id)}>Reset Pass</BtnSm>
+                                <BtnSm disabled={busy} onClick={() => { setResetPassUserId(p.id); setResetPassVal(''); setShowResetPass(true); }}>🔑 Reset Pass</BtnSm>
                                 <BtnSm disabled={busy} onClick={() => openConfirm('role', p)}>{p.role === 'admin' ? '↓ Peserta' : '↑ Admin'}</BtnSm>
                                 <BtnSm disabled={busy} onClick={() => openConfirm('active', p)}>{p.is_active ? 'Nonaktifkan' : 'Aktifkan'}</BtnSm>
                                 <BtnSm disabled={busy} onClick={() => openConfirm('delete', p)} danger>Hapus</BtnSm>
@@ -1508,6 +1581,46 @@ export default function Page() {
                     </div>
                   ) : <div className="nk-empty">👥 Belum ada peserta.</div>}
                 </AdminSection>
+
+                {/* Modal Reset Password */}
+                {showResetPass && (
+                  <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+                    <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 16, padding: 24, width: '100%', maxWidth: 380 }}>
+                      <p style={{ margin: '0 0 16px', fontWeight: 700, fontSize: 16 }}>🔑 Reset Password Peserta</p>
+                      <p style={{ margin: '0 0 12px', fontSize: 13, color: '#64748b' }}>
+                        Peserta: <b style={{ color: '#f1f5f9' }}>{participants.find(p=>p.id===resetPassUserId)?.name || `#${resetPassUserId}`}</b>
+                      </p>
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>Password Baru <span style={{ color: '#475569' }}>(min. 6 karakter)</span></div>
+                        <div style={{ position: 'relative' }}>
+                          <input type={showResetPass === 'show' ? 'text' : 'password'} className="nk-input-sm" style={{ width: '100%', paddingRight: 40 }}
+                            value={resetPassVal} onChange={e => setResetPassVal(e.target.value)}
+                            placeholder="Ketik password baru..." autoFocus />
+                          <button type="button" onClick={() => setShowResetPass(p => p === 'show' ? true : 'show')}
+                            style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 16 }}>
+                            {showResetPass === 'show' ? '🙈' : '👁️'}
+                          </button>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <BtnSm color="purple" disabled={busy || resetPassVal.length < 6}
+                          onClick={async () => {
+                            setBusy(true);
+                            const res = await fetch(`${apiBase}/admin/participants/reset-password`, {
+                              method: 'POST', credentials: 'include',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ user_id: resetPassUserId, new_password: resetPassVal })
+                            });
+                            const d = await res.json().catch(()=>({}));
+                            setBusy(false);
+                            if (res.ok) { showMsg(`Password berhasil direset ✅`, 'success'); setShowResetPass(false); }
+                            else showMsg(d.error || 'Gagal reset password', 'error');
+                          }}>💾 Reset Password</BtnSm>
+                        <BtnSm onClick={() => setShowResetPass(false)}>Batal</BtnSm>
+                      </div>
+                    </div>
+                  </div>
+                )}
               )}
 
               {/* Admin — Bank Soal */}
