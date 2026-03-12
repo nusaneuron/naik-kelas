@@ -18,6 +18,7 @@ export default function Page() {
 
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const [history, setHistory] = useState({ quiz: [], tryout: [] });
   const [leaderboard, setLeaderboard] = useState([]);
@@ -740,13 +741,21 @@ export default function Page() {
               <label style={{ display: 'block', fontSize: 12, color: '#94a3b8', marginBottom: 6, fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
                 Password
               </label>
-              <input
-                className="nk-input"
-                type="password"
-                placeholder="Masukkan password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+              <div style={{ position: 'relative' }}>
+                <input
+                  className="nk-input"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Masukkan password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  style={{ paddingRight: 42 }}
+                />
+                <button type="button" onClick={() => setShowPassword(p => !p)}
+                  style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 18, lineHeight: 1, padding: 0 }}
+                  title={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}>
+                  {showPassword ? '🙈' : '👁️'}
+                </button>
+              </div>
             </div>
 
             {err && (
