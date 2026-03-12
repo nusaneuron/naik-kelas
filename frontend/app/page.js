@@ -1649,7 +1649,7 @@ export default function Page() {
                         <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Peserta</div>
                         <select className="nk-input-sm" style={{ width: '100%' }} value={badgeAwardForm.user_id} onChange={e => setBadgeAwardForm(f=>({...f, user_id: Number(e.target.value)}))}>
                           <option value={0}>-- Pilih Peserta --</option>
-                          {adminParticipants.map(p => <option key={p.id} value={p.id}>{p.name} {p.group_name ? `(${p.group_name})` : ''}</option>)}
+                          {(participants || []).map(p => <option key={p.id} value={p.id}>{p.name} {p.group_name ? `(${p.group_name})` : ''}</option>)}
                         </select>
                       </div>
                       <div style={{ flex: '1 1 180px' }}>
