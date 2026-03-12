@@ -288,7 +288,7 @@ export default function Page() {
 
   async function refreshAdmin() {
     setLoadedAdminSections({});
-    await refreshAdmin();
+    await loadAdmin();
     await loadAdminSection(adminSection);
   }
   async function refreshParticipant() {
@@ -299,10 +299,15 @@ export default function Page() {
 
   useEffect(() => {
     (async () => {
-      const u = await fetchMe();
-      setMe(u);
-      if (u) await loadPortal(u.role);
-      setLoading(false);
+      try {
+        const u = await fetchMe();
+        setMe(u);
+        if (u) await loadPortal(u.role);
+      } catch(e) {
+        console.error('Portal load error:', e);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
