@@ -68,6 +68,7 @@ export default function Page() {
   const [materiTitle, setMateriTitle] = useState('');
   const [materiType, setMateriType] = useState('text');
   const [materiContent, setMateriContent] = useState('');
+  const [materiBubbles, setMateriBubbles] = useState(['']);
   const [materiExp, setMateriExp] = useState('10');
   const [materiOrder, setMateriOrder] = useState('0');
   const [materiActive, setMateriActive] = useState(true);
@@ -497,7 +498,12 @@ export default function Page() {
       action: isEdit ? 'update' : 'create',
       ...(isEdit && { id: Number(editingMateriId) }),
       category_id: Number(materiCatId), title: materiTitle,
-      type: materiType, content: materiContent,
+      type: materiType,
+      content: materiType === 'text'
+        ? (materiBubbles.filter(b => b.trim()).length > 1
+            ? JSON.stringify(materiBubbles.filter(b => b.trim()))
+            : (materiBubbles[0] || ''))
+        : materiContent,
       exp_reward: Number(materiExp) || 10, order_no: Number(materiOrder) || 0,
       is_active: materiActive,
     };
@@ -515,12 +521,17 @@ export default function Page() {
   function resetMateriForm() {
     setEditingMateriId(''); setMateriCatId(''); setMateriTitle('');
     setMateriType('text'); setMateriContent(''); setMateriExp('10');
-    setMateriOrder('0'); setMateriActive(true);
+    setMateriOrder('0'); setMateriActive(true); setMateriBubbles(['']);
   }
 
   function startEditMateri(m) {
     setEditingMateriId(String(m.id)); setMateriCatId(String(m.category_id));
-    setMateriTitle(m.title); setMateriType(m.type); setMateriContent(m.content);
+    setMateriTitle(m.title); setMateriType(m.type);
+    // Parse bubbles jika JSON array
+    if (m.type === 'text' && m.content?.startsWith('[')) {
+      try { setMateriBubbles(JSON.parse(m.content)); } catch { setMateriBubbles([m.content]); }
+    } else { setMateriBubbles([m.content || '']); }
+    setMateriContent(m.content);
     setMateriExp(String(m.exp_reward)); setMateriOrder(String(m.order_no));
     setMateriActive(m.is_active);
     setAdminSection('materi');
@@ -2037,50 +2048,68 @@ export default function Page() {
                       <div style={{ marginBottom: 10 }}>
                         <label style={fieldLbl}>{materiType === 'text' ? 'Isi Materi (Markdown)' : 'URL ' + (materiType === 'video' ? 'Video (YouTube/GDrive)' : 'Audio (MP3)')}</label>
                         {materiType === 'text' ? (<>
-                          {/* Toolbar Markdown */}
-                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
-                            {[
-                              { label: 'B',       title: 'Bold',        wrap: ['**','**'],   style: { fontWeight: 800 } },
-                              { label: 'I',       title: 'Italic',      wrap: ['_','_'],     style: { fontStyle: 'italic' } },
-                              { label: 'S',       title: 'Strikethrough', wrap: ['~~','~~'], style: { textDecoration: 'line-through' } },
-                              { label: '`',       title: 'Kode inline', wrap: ['`','`'],     style: { fontFamily: 'monospace' } },
-                              { label: 'H1',      title: 'Heading 1',   prefix: '# ',        style: {} },
-                              { label: 'H2',      title: 'Heading 2',   prefix: '## ',       style: {} },
-                              { label: 'H3',      title: 'Heading 3',   prefix: '### ',      style: {} },
-                              { label: '• List',  title: 'Bullet list', prefix: '- ',        style: {} },
-                              { label: '1. List', title: 'Numbered list', prefix: '1. ',     style: {} },
-                              { label: '❝ Quote', title: 'Blockquote', prefix: '> ',         style: {} },
-                              { label: '───',     title: 'Separator',   insert: '---\n',     style: {} },
-                            ].map((btn, bi) => (
-                              <button key={bi} type="button" title={btn.title}
-                                style={{ background: '#1e2d45', border: '1px solid #2d3f5c', borderRadius: 5, color: '#cbd5e1', padding: '3px 8px', fontSize: 12, cursor: 'pointer', ...btn.style }}
-                                onClick={() => {
-                                  const el = document.getElementById('materi-content-editor');
-                                  if (!el) return;
-                                  const start = el.selectionStart, end = el.selectionEnd;
-                                  const sel = materiContent.slice(start, end);
-                                  let newVal = materiContent;
-                                  let newCursor = end;
-                                  if (btn.wrap) {
-                                    newVal = materiContent.slice(0,start) + btn.wrap[0] + sel + btn.wrap[1] + materiContent.slice(end);
-                                    newCursor = start + btn.wrap[0].length + sel.length + btn.wrap[1].length;
-                                  } else if (btn.prefix) {
-                                    // Tambah prefix di awal baris yang dipilih
-                                    const lineStart = materiContent.lastIndexOf('\n', start - 1) + 1;
-                                    newVal = materiContent.slice(0, lineStart) + btn.prefix + materiContent.slice(lineStart);
-                                    newCursor = start + btn.prefix.length;
-                                  } else if (btn.insert) {
-                                    newVal = materiContent.slice(0, start) + btn.insert + materiContent.slice(end);
-                                    newCursor = start + btn.insert.length;
-                                  }
-                                  setMateriContent(newVal);
-                                  setTimeout(() => { el.focus(); el.setSelectionRange(newCursor, newCursor); }, 0);
-                                }}>{btn.label}</button>
-                            ))}
-                          </div>
-                          <textarea id="materi-content-editor" value={materiContent} onChange={e => setMateriContent(e.target.value)} rows={10}
-                            placeholder="Tulis materi dengan Markdown di sini..."
-                            style={{ width: '100%', resize: 'vertical', fontFamily: 'monospace', fontSize: 13, background: '#0d1b2e', border: '1px solid #1e2d45', borderRadius: 8, color: '#f1f5f9', padding: '10px 12px' }} />
+                          {/* Multi-bubble editor */}
+                          {materiBubbles.map((bubble, bi) => {
+                            const editorId = `materi-bubble-${bi}`;
+                            const toolbarBtns = [
+                              { label: 'B', title: 'Bold', wrap: ['**','**'], style: { fontWeight: 800 } },
+                              { label: 'I', title: 'Italic', wrap: ['_','_'], style: { fontStyle: 'italic' } },
+                              { label: 'S', title: 'Strikethrough', wrap: ['~~','~~'], style: { textDecoration: 'line-through' } },
+                              { label: '`', title: 'Kode', wrap: ['`','`'], style: { fontFamily: 'monospace' } },
+                              { label: 'H1', title: 'Heading 1', prefix: '# ', style: {} },
+                              { label: 'H2', title: 'Heading 2', prefix: '## ', style: {} },
+                              { label: 'H3', title: 'Heading 3', prefix: '### ', style: {} },
+                              { label: '• List', title: 'Bullet', prefix: '- ', style: {} },
+                              { label: '1. List', title: 'Numbered', prefix: '1. ', style: {} },
+                              { label: '❝', title: 'Quote', prefix: '> ', style: {} },
+                              { label: '───', title: 'Separator', insert: '---\n', style: {} },
+                            ];
+                            return (
+                              <div key={bi} style={{ marginBottom: 12, background: '#0a1628', border: '1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
+                                {/* Header bubble */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                                  <span style={{ fontSize: 11, color: '#475569', fontWeight: 600 }}>
+                                    💬 Pesan {bi + 1} {materiBubbles.length > 1 ? `/ ${materiBubbles.length}` : ''}
+                                  </span>
+                                  {materiBubbles.length > 1 && (
+                                    <button type="button" onClick={() => setMateriBubbles(prev => prev.filter((_,i2) => i2 !== bi))}
+                                      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 5, color: '#f87171', padding: '2px 8px', fontSize: 11, cursor: 'pointer' }}>
+                                      🗑️ Hapus
+                                    </button>
+                                  )}
+                                </div>
+                                {/* Toolbar */}
+                                <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginBottom: 6 }}>
+                                  {toolbarBtns.map((btn, ti) => (
+                                    <button key={ti} type="button" title={btn.title}
+                                      style={{ background: '#1e2d45', border: '1px solid #2d3f5c', borderRadius: 4, color: '#cbd5e1', padding: '2px 7px', fontSize: 11, cursor: 'pointer', ...btn.style }}
+                                      onClick={() => {
+                                        const el = document.getElementById(editorId);
+                                        if (!el) return;
+                                        const start = el.selectionStart, end = el.selectionEnd;
+                                        const sel = bubble.slice(start, end);
+                                        let newVal = bubble, newCursor = end;
+                                        if (btn.wrap) { newVal = bubble.slice(0,start)+btn.wrap[0]+sel+btn.wrap[1]+bubble.slice(end); newCursor = start+btn.wrap[0].length+sel.length+btn.wrap[1].length; }
+                                        else if (btn.prefix) { const ls = bubble.lastIndexOf('\n', start-1)+1; newVal = bubble.slice(0,ls)+btn.prefix+bubble.slice(ls); newCursor = start+btn.prefix.length; }
+                                        else if (btn.insert) { newVal = bubble.slice(0,start)+btn.insert+bubble.slice(end); newCursor = start+btn.insert.length; }
+                                        setMateriBubbles(prev => prev.map((b,i2) => i2===bi ? newVal : b));
+                                        setTimeout(() => { el.focus(); el.setSelectionRange(newCursor, newCursor); }, 0);
+                                      }}>{btn.label}</button>
+                                  ))}
+                                </div>
+                                {/* Textarea */}
+                                <textarea id={editorId} value={bubble}
+                                  onChange={e => setMateriBubbles(prev => prev.map((b,i2) => i2===bi ? e.target.value : b))}
+                                  rows={4} placeholder={`Tulis isi pesan ${bi+1}...`}
+                                  style={{ width: '100%', resize: 'vertical', fontFamily: 'monospace', fontSize: 12, background: '#0d1b2e', border: '1px solid #1e2d45', borderRadius: 6, color: '#f1f5f9', padding: '8px 10px' }} />
+                              </div>
+                            );
+                          })}
+                          {/* Tombol tambah bubble */}
+                          <button type="button" onClick={() => setMateriBubbles(prev => [...prev, ''])}
+                            style={{ background: 'rgba(99,102,241,0.1)', border: '1px dashed rgba(99,102,241,0.4)', borderRadius: 8, color: '#818cf8', padding: '8px 16px', fontSize: 13, cursor: 'pointer', width: '100%', marginBottom: 6 }}>
+                            + Tambah Pesan
+                          </button>
 
                           {/* Panduan Markdown */}
                           <details style={{ marginTop: 8 }}>

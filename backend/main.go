@@ -66,6 +66,9 @@ type botSession struct {
 	Email string
 	// Feedback
 	FeedbackRating int
+	// Materi multi-bubble
+	MateriBubbles   []string
+	MateriBubbleIdx int
 	// Materi
 	MateriCategoryID   int
 	MateriCategoryName string
@@ -2642,6 +2645,27 @@ func (a *app) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 					log.Printf("telegram send error: %v", err)
 				}
 			}
+		} else if strings.HasPrefix(reply, "§HTML§") && strings.Contains(reply, "§BUBBLES§") {
+			// Multi-bubble: kirim header + semua bubble sebagai pesan terpisah
+			parts := strings.SplitN(reply, "§BUBBLES§", 2)
+			header := strings.TrimPrefix(parts[0], "§HTML§")
+			chatID := upd.Message.Chat.ID
+			// Kirim header
+			_ = a.sendTelegramHTMLMessage(r.Context(), chatID, header)
+			// Ambil bubbles dari session
+			sess := a.botSessions[uid]
+			if sess != nil && len(sess.MateriBubbles) > 0 {
+				for i, bubble := range sess.MateriBubbles {
+					time.Sleep(300 * time.Millisecond)
+					htmlBubble := markdownToTelegramHTML(bubble)
+					isLast := i == len(sess.MateriBubbles)-1
+					if isLast {
+						footer := "\n\n──────────────\nKetik <b>selesai</b> jika sudah baca ✅\nKetik <b>kembali</b> untuk list materi\nKetik /batal untuk keluar"
+						htmlBubble += footer
+					}
+					_ = a.sendTelegramHTMLMessage(r.Context(), chatID, htmlBubble)
+				}
+			}
 		} else if strings.HasPrefix(reply, "§HTML§") {
 			htmlMsg := strings.TrimPrefix(reply, "§HTML§")
 			if err := a.sendTelegramHTMLMessage(r.Context(), upd.Message.Chat.ID, htmlMsg); err != nil {
@@ -3752,27 +3776,61 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 			label = "📄 Materi"
 		}
 		var msg string
+		// Parse content — bisa JSON array (multi-bubble) atau teks biasa
+		var bubbles []string
+		if strings.HasPrefix(strings.TrimSpace(chosen.Content), "[") {
+			if err2 := json.Unmarshal([]byte(chosen.Content), &bubbles); err2 != nil {
+				bubbles = []string{chosen.Content}
+			}
+		} else {
+			bubbles = []string{chosen.Content}
+		}
+
 		switch chosen.Type {
 		case "text":
-			htmlContent := markdownToTelegramHTML(chosen.Content)
-			header := fmt.Sprintf("%s <b>%s</b>\n\n", label, htmlEscape(chosen.Title))
-			full := header + htmlContent
-			if len(full) > 3800 {
-				full = full[:3800] + "\n\n<i>(konten terpotong — buka web portal untuk materi lengkap)</i>"
+			alreadyDone := ""
+			if chosen.IsCompleted {
+				alreadyDone = "\n\n<i>Kamu sudah menyelesaikan materi ini sebelumnya ✅</i>"
 			}
-			msg = "§HTML§" + full
+			footer := alreadyDone + "\n\n──────────────\nKetik <b>selesai</b> jika sudah baca/tonton ✅\nKetik <b>kembali</b> untuk list materi\nKetik /batal untuk keluar"
+
+			if len(bubbles) == 1 {
+				// Single bubble — kirim langsung lewat return
+				htmlContent := markdownToTelegramHTML(bubbles[0])
+				header := fmt.Sprintf("%s <b>%s</b>\n\n", label, htmlEscape(chosen.Title))
+				full := header + htmlContent
+				if len(full) > 3800 {
+					full = full[:3800] + "\n\n<i>(konten terpotong)</i>"
+				}
+				msg = "§HTML§" + full + footer
+			} else {
+				// Multi-bubble — simpan ke session untuk dikirim bertahap
+				s.State = "materi_viewing"
+				s.MateriBubbles = bubbles
+				s.MateriBubbleIdx = 0
+				a.botSessions[uid] = s
+				// Kirim header dulu, lalu bubble pertama
+				msg = fmt.Sprintf("§HTML§%s <b>%s</b>", label, htmlEscape(chosen.Title))
+				// Tandai untuk kirim bubble pertama juga
+				msg += "§BUBBLES§"
+			}
 		case "video":
 			msg = fmt.Sprintf("§HTML§%s <b>%s</b>\n\n🔗 %s\n\n<i>Tonton videonya dulu ya! Klik link di atas</i>", label, htmlEscape(chosen.Title), htmlEscape(chosen.Content))
+			alreadyDone := ""
+			if chosen.IsCompleted {
+				alreadyDone = "\n\n<i>Kamu sudah menyelesaikan materi ini sebelumnya ✅</i>"
+			}
+			msg += alreadyDone + "\n\n──────────────\nKetik <b>selesai</b> jika sudah baca/tonton ✅\nKetik <b>kembali</b> untuk list materi\nKetik /batal untuk keluar"
 		case "audio":
 			msg = fmt.Sprintf("§HTML§%s <b>%s</b>\n\n🔗 %s\n\n<i>Dengarkan audionya dulu ya! Klik link di atas</i>", label, htmlEscape(chosen.Title), htmlEscape(chosen.Content))
+			alreadyDone := ""
+			if chosen.IsCompleted {
+				alreadyDone = "\n\n<i>Kamu sudah menyelesaikan materi ini sebelumnya ✅</i>"
+			}
+			msg += alreadyDone + "\n\n──────────────\nKetik <b>selesai</b> jika sudah baca/tonton ✅\nKetik <b>kembali</b> untuk list materi\nKetik /batal untuk keluar"
 		default:
 			msg = fmt.Sprintf("§HTML§<b>%s</b>\n\n%s", htmlEscape(chosen.Title), markdownToTelegramHTML(chosen.Content))
 		}
-		alreadyDone := ""
-		if chosen.IsCompleted {
-			alreadyDone = "\n\n<i>Kamu sudah menyelesaikan materi ini sebelumnya ✅</i>"
-		}
-		msg += alreadyDone + "\n\n──────────────\nKetik <b>selesai</b> jika sudah baca/tonton ✅\nKetik <b>kembali</b> untuk list materi\nKetik /batal untuk keluar"
 		return msg, "materi_viewing"
 
 	case "materi_viewing":
