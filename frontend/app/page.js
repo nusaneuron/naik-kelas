@@ -168,47 +168,37 @@ export default function Page() {
   const [loadedSections, setLoadedSections] = useState({});
 
   async function loadSection(section) {
-    if (loadedSections[section]) return; // sudah pernah load
+    if (loadedSections[section]) return;
     setLoadedSections(prev => ({...prev, [section]: true}));
-    switch (section) {
-      case 'profil':
-        const [rRes, bdgRes] = await Promise.all([
-          fetch(`${apiBase}/participant/reminder`, { credentials: 'include' }),
-          fetch(`${apiBase}/participant/badges`, { credentials: 'include' }),
-        ]);
-        if (rRes.ok) setMyReminder(await rRes.json());
-        if (bdgRes.ok) setMyBadges((await bdgRes.json()).items || []);
-        break;
-      case 'badges':
-        if (!loadedSections['profil']) {
-          const bdgRes2 = await fetch(`${apiBase}/participant/badges`, { credentials: 'include' });
-          if (bdgRes2.ok) setMyBadges((await bdgRes2.json()).items || []);
-        }
-        break;
-      case 'quiz':
-        const hRes = await fetch(`${apiBase}/participant/history`, { credentials: 'include' });
-        if (hRes.ok) setHistory(await hRes.json());
-        break;
-      case 'redeem':
-        const [riRes, rcRes] = await Promise.all([
-          fetch(`${apiBase}/participant/redeem/items`, { credentials: 'include' }),
-          fetch(`${apiBase}/participant/redeem/claims`, { credentials: 'include' }),
-        ]);
-        if (riRes.ok) setRedeemItems((await riRes.json()).items || []);
-        if (rcRes.ok) setRedeemClaims((await rcRes.json()).items || []);
-        break;
-      case 'poin':
-        const phRes = await fetch(`${apiBase}/participant/points/history`, { credentials: 'include' });
-        if (phRes.ok) setMyPointHistory((await phRes.json()).items || []);
-        break;
-      case 'refleksi':
-        const refRes = await fetch(`${apiBase}/participant/reflections`, { credentials: 'include' });
-        if (refRes.ok) setMyReflections((await refRes.json()).items || []);
-        break;
-      case 'leaderboard':
-        const lRes = await fetch(`${apiBase}/participant/leaderboard`, { credentials: 'include' });
-        if (lRes.ok) setLeaderboard((await lRes.json()).items || []);
-        break;
+    if (section === 'profil') {
+      const [rRes, bdgRes] = await Promise.all([
+        fetch(`${apiBase}/participant/reminder`, { credentials: 'include' }),
+        fetch(`${apiBase}/participant/badges`, { credentials: 'include' }),
+      ]);
+      if (rRes.ok) setMyReminder(await rRes.json());
+      if (bdgRes.ok) setMyBadges((await bdgRes.json()).items || []);
+    } else if (section === 'badges') {
+      const bdgRes2 = await fetch(`${apiBase}/participant/badges`, { credentials: 'include' });
+      if (bdgRes2.ok) setMyBadges((await bdgRes2.json()).items || []);
+    } else if (section === 'quiz') {
+      const hRes = await fetch(`${apiBase}/participant/history`, { credentials: 'include' });
+      if (hRes.ok) setHistory(await hRes.json());
+    } else if (section === 'redeem') {
+      const [riRes, rcRes] = await Promise.all([
+        fetch(`${apiBase}/participant/redeem/items`, { credentials: 'include' }),
+        fetch(`${apiBase}/participant/redeem/claims`, { credentials: 'include' }),
+      ]);
+      if (riRes.ok) setRedeemItems((await riRes.json()).items || []);
+      if (rcRes.ok) setRedeemClaims((await rcRes.json()).items || []);
+    } else if (section === 'poin') {
+      const phRes = await fetch(`${apiBase}/participant/points/history`, { credentials: 'include' });
+      if (phRes.ok) setMyPointHistory((await phRes.json()).items || []);
+    } else if (section === 'refleksi') {
+      const refRes = await fetch(`${apiBase}/participant/reflections`, { credentials: 'include' });
+      if (refRes.ok) setMyReflections((await refRes.json()).items || []);
+    } else if (section === 'leaderboard') {
+      const lRes = await fetch(`${apiBase}/participant/leaderboard`, { credentials: 'include' });
+      if (lRes.ok) setLeaderboard((await lRes.json()).items || []);
     }
   }
 
@@ -236,67 +226,57 @@ export default function Page() {
   async function loadAdminSection(section) {
     if (loadedAdminSections[section]) return;
     setLoadedAdminSections(prev => ({...prev, [section]: true}));
-    switch (section) {
-      case 'peserta':
-        break; // sudah load di loadAdmin
-      case 'poin':
-        const [phRes2, pbRes] = await Promise.all([
-          fetch(`${apiBase}/admin/points/history`, { credentials: 'include' }),
-          fetch(`${apiBase}/admin/points/balances`, { credentials: 'include' }),
-        ]);
-        if (phRes2.ok) setAdminPointHistory((await phRes2.json()).items || []);
-        if (pbRes.ok) setAdminPointBalances((await pbRes.json()).items || []);
-        break;
-      case 'exp':
-        const [erRes, ehRes, esRes, ersRes] = await Promise.all([
-          fetch(`${apiBase}/admin/exp/rules`, { credentials: 'include' }),
-          fetch(`${apiBase}/admin/exp/history`, { credentials: 'include' }),
-          fetch(`${apiBase}/admin/exp/status`, { credentials: 'include' }),
-          fetch(`${apiBase}/admin/exp/report-setting`, { credentials: 'include' }),
-        ]);
-        if (erRes.ok) setAdminExpRules((await erRes.json()).items || []);
-        if (ehRes.ok) setAdminExpHistory((await ehRes.json()).items || []);
-        if (esRes.ok) setAdminExpStatus((await esRes.json()).items || []);
-        if (ersRes.ok) setExpReportSetting(await ersRes.json());
-        break;
-      case 'redeem':
-        const [ariRes, arcRes] = await Promise.all([
-          fetch(`${apiBase}/admin/redeem/items`, { credentials: 'include' }),
-          fetch(`${apiBase}/admin/redeem/claims`, { credentials: 'include' }),
-        ]);
-        if (ariRes.ok) setAdminRedeemItems((await ariRes.json()).items || []);
-        if (arcRes.ok) setAdminRedeemClaims((await arcRes.json()).items || []);
-        break;
-      case 'refleksi':
-        const refStatsRes = await fetch(`${apiBase}/admin/reflections/stats`, { credentials: 'include' });
-        if (refStatsRes.ok) setAdminReflectionStats(await refStatsRes.json());
-        break;
-      case 'badges':
-        const badgesRes = await fetch(`${apiBase}/admin/badges`, { credentials: 'include' });
-        if (badgesRes.ok) { const bd = await badgesRes.json(); setAdminBadges(bd.items||[]); setAdminBadgeAwards(bd.awards||[]); }
-        break;
-      case 'feedback':
-        const [fbStatsRes, fbListRes, fbSchedRes] = await Promise.all([
-          fetch(`${apiBase}/admin/feedback/stats`, { credentials: 'include' }),
-          fetch(`${apiBase}/admin/feedback/list`, { credentials: 'include' }),
-          fetch(`${apiBase}/admin/feedback/schedule`, { credentials: 'include' }),
-        ]);
-        if (fbStatsRes.ok) setAdminFeedbackStats(await fbStatsRes.json());
-        if (fbListRes.ok) setAdminFeedbackList((await fbListRes.json()).items || []);
-        if (fbSchedRes.ok) {
-          const sc = await fbSchedRes.json();
-          setAdminFeedbackSchedule(sc); setFbScheduleTime(sc.send_time||'09:00');
-          setFbScheduleDate(sc.send_date||''); setFbScheduleActive(sc.is_active||false);
-        }
-        break;
-      case 'jadwal':
-        const [remRes, lsRes] = await Promise.all([
-          fetch(`${apiBase}/admin/reminders`, { credentials: 'include' }),
-          fetch(`${apiBase}/admin/learning-summary`, { credentials: 'include' }),
-        ]);
-        if (remRes.ok) setAdminReminders((await remRes.json()).items || []);
-        if (lsRes.ok) setAdminLearningSummary(await lsRes.json());
-        break;
+    if (section === 'poin') {
+      const [phRes2, pbRes] = await Promise.all([
+        fetch(`${apiBase}/admin/points/history`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/points/balances`, { credentials: 'include' }),
+      ]);
+      if (phRes2.ok) setAdminPointHistory((await phRes2.json()).items || []);
+      if (pbRes.ok) setAdminPointBalances((await pbRes.json()).items || []);
+    } else if (section === 'exp') {
+      const [erRes, ehRes, esRes, ersRes] = await Promise.all([
+        fetch(`${apiBase}/admin/exp/rules`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/exp/history`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/exp/status`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/exp/report-setting`, { credentials: 'include' }),
+      ]);
+      if (erRes.ok) setAdminExpRules((await erRes.json()).items || []);
+      if (ehRes.ok) setAdminExpHistory((await ehRes.json()).items || []);
+      if (esRes.ok) setAdminExpStatus((await esRes.json()).items || []);
+      if (ersRes.ok) setExpReportSetting(await ersRes.json());
+    } else if (section === 'redeem') {
+      const [ariRes, arcRes] = await Promise.all([
+        fetch(`${apiBase}/admin/redeem/items`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/redeem/claims`, { credentials: 'include' }),
+      ]);
+      if (ariRes.ok) setAdminRedeemItems((await ariRes.json()).items || []);
+      if (arcRes.ok) setAdminRedeemClaims((await arcRes.json()).items || []);
+    } else if (section === 'refleksi') {
+      const refStatsRes = await fetch(`${apiBase}/admin/reflections/stats`, { credentials: 'include' });
+      if (refStatsRes.ok) setAdminReflectionStats(await refStatsRes.json());
+    } else if (section === 'badges') {
+      const badgesRes = await fetch(`${apiBase}/admin/badges`, { credentials: 'include' });
+      if (badgesRes.ok) { const bd = await badgesRes.json(); setAdminBadges(bd.items||[]); setAdminBadgeAwards(bd.awards||[]); }
+    } else if (section === 'feedback') {
+      const [fbStatsRes, fbListRes, fbSchedRes] = await Promise.all([
+        fetch(`${apiBase}/admin/feedback/stats`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/feedback/list`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/feedback/schedule`, { credentials: 'include' }),
+      ]);
+      if (fbStatsRes.ok) setAdminFeedbackStats(await fbStatsRes.json());
+      if (fbListRes.ok) setAdminFeedbackList((await fbListRes.json()).items || []);
+      if (fbSchedRes.ok) {
+        const sc = await fbSchedRes.json();
+        setAdminFeedbackSchedule(sc); setFbScheduleTime(sc.send_time||'09:00');
+        setFbScheduleDate(sc.send_date||''); setFbScheduleActive(sc.is_active||false);
+      }
+    } else if (section === 'jadwal') {
+      const [remRes, lsRes] = await Promise.all([
+        fetch(`${apiBase}/admin/reminders`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/learning-summary`, { credentials: 'include' }),
+      ]);
+      if (remRes.ok) setAdminReminders((await remRes.json()).items || []);
+      if (lsRes.ok) setAdminLearningSummary(await lsRes.json());
     }
   }
 
@@ -306,8 +286,6 @@ export default function Page() {
     await loadSection('profil');
   }
 
-  // Refresh admin — reset cache section yang aktif lalu reload
-  const origLoadAdmin = loadAdmin;
   async function refreshAdmin() {
     setLoadedAdminSections({});
     await refreshAdmin();
