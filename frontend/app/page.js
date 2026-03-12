@@ -741,6 +741,7 @@ export default function Page() {
                 ['redeem',    '🎁', 'Redeem'],
                 ['poin',      '💰', 'Poin'],
                 ['refleksi',  '📔', 'Refleksi'],
+                ['badges',    '🎖️', 'Badges'],
                 ['leaderboard','🏆','Leaderboard'],
               ].map(([key, icon, label]) => (
                 <button key={key} onClick={() => setParticipantSection(key)} style={{
@@ -855,24 +856,57 @@ export default function Page() {
             </>)}
 
             {/* ── Poin ── */}
-            {/* Badges di profil */}
+            {/* Badges di profil — preview 3 terbaru */}
             {participantSection === 'profil' && myBadges.length > 0 && (
               <Section title="🎖️ Badges Saya">
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-                  {myBadges.map((b, i) => (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: myBadges.length > 3 ? 12 : 0 }}>
+                  {myBadges.slice(0, 6).map((b, i) => (
                     <div key={i} title={`${b.name}${b.description ? ` — ${b.description}` : ''}${b.note ? `\n📝 ${b.note}` : ''}\n📅 ${b.awarded_at}`}
                       style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '12px 14px', width: 90, textAlign: 'center', cursor: 'default', transition: 'border-color 0.2s' }}
                       onMouseEnter={e => e.currentTarget.style.borderColor='#7c3aed'}
                       onMouseLeave={e => e.currentTarget.style.borderColor='#1e2d45'}>
-                      {b.icon_url
-                        ? <img src={b.icon_url} alt={b.name} style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover' }} onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
-                        : null}
-                      <span style={{ fontSize: 32, display: b.icon_url ? 'none' : 'flex' }}>🎖️</span>
+                      {b.icon_url ? <img src={b.icon_url} alt={b.name} style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover' }} /> : <span style={{ fontSize: 32 }}>🎖️</span>}
                       <span style={{ fontSize: 11, fontWeight: 700, color: '#e2e8f0', lineHeight: 1.3 }}>{b.name}</span>
                       <span style={{ fontSize: 10, color: '#475569' }}>{b.awarded_at}</span>
                     </div>
                   ))}
                 </div>
+                {myBadges.length > 6 && <button onClick={() => setParticipantSection('badges')} style={{ background: 'none', border: 'none', color: '#7c3aed', fontSize: 13, cursor: 'pointer', padding: 0 }}>Lihat semua {myBadges.length} badges →</button>}
+              </Section>
+            )}
+
+            {/* ── Badges ── */}
+            {participantSection === 'badges' && (
+              <Section title="🎖️ Koleksi Badges">
+                {myBadges.length > 0 ? (
+                  <>
+                    <p style={{ color: '#64748b', fontSize: 13, margin: '0 0 16px' }}>Kamu punya <b style={{ color: '#a78bfa' }}>{myBadges.length} badge</b> 🎉</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 14 }}>
+                      {myBadges.map((b, i) => (
+                        <div key={i} style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 14, padding: 16, textAlign: 'center', transition: 'all 0.2s', cursor: 'default' }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor='#7c3aed'; e.currentTarget.style.transform='translateY(-2px)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor='#1e2d45'; e.currentTarget.style.transform='none'; }}>
+                          {b.icon_url
+                            ? <img src={b.icon_url} alt={b.name} style={{ width: 64, height: 64, borderRadius: 10, objectFit: 'cover', marginBottom: 10 }} onError={e => { e.target.style.display='none'; e.target.insertAdjacentHTML('afterend','<span style="font-size:48px;display:block;margin-bottom:10px">🎖️</span>'); }} />
+                            : <span style={{ fontSize: 48, display: 'block', marginBottom: 10 }}>🎖️</span>}
+                          <div style={{ fontWeight: 700, fontSize: 13, color: '#e2e8f0', marginBottom: 4 }}>{b.name}</div>
+                          {b.description && <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6, lineHeight: 1.4 }}>{b.description}</div>}
+                          {b.note && <div style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic', marginBottom: 6 }}>📝 {b.note}</div>}
+                          <span className={`nk-badge ${b.badge_type === 'auto' ? 'nk-badge-blue' : 'nk-badge-purple'}`} style={{ fontSize: 10 }}>
+                            {b.badge_type === 'auto' ? '⚡ Otomatis' : '🏅 Manual'}
+                          </span>
+                          <div style={{ fontSize: 10, color: '#334155', marginTop: 8 }}>📅 {b.awarded_at}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                    <div style={{ fontSize: 56, marginBottom: 16 }}>🎖️</div>
+                    <p style={{ color: '#475569', fontSize: 14, fontWeight: 600 }}>Belum ada badge</p>
+                    <p style={{ color: '#334155', fontSize: 13 }}>Selesaikan materi, quiz, tryout, dan refleksi untuk mendapat badge otomatis!</p>
+                  </div>
+                )}
               </Section>
             )}
 
