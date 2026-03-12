@@ -1582,45 +1582,45 @@ export default function Page() {
                   ) : <div className="nk-empty">👥 Belum ada peserta.</div>}
                 </AdminSection>
 
-                {/* Modal Reset Password */}
-                {showResetPass && (
-                  <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-                    <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 16, padding: 24, width: '100%', maxWidth: 380 }}>
-                      <p style={{ margin: '0 0 16px', fontWeight: 700, fontSize: 16 }}>🔑 Reset Password Peserta</p>
-                      <p style={{ margin: '0 0 12px', fontSize: 13, color: '#64748b' }}>
-                        Peserta: <b style={{ color: '#f1f5f9' }}>{participants.find(p=>p.id===resetPassUserId)?.name || `#${resetPassUserId}`}</b>
-                      </p>
-                      <div style={{ marginBottom: 16 }}>
-                        <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>Password Baru <span style={{ color: '#475569' }}>(min. 6 karakter)</span></div>
-                        <div style={{ position: 'relative' }}>
-                          <input type={showResetPass === 'show' ? 'text' : 'password'} className="nk-input-sm" style={{ width: '100%', paddingRight: 40 }}
-                            value={resetPassVal} onChange={e => setResetPassVal(e.target.value)}
-                            placeholder="Ketik password baru..." autoFocus />
-                          <button type="button" onClick={() => setShowResetPass(p => p === 'show' ? true : 'show')}
-                            style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 16 }}>
-                            {showResetPass === 'show' ? '🙈' : '👁️'}
-                          </button>
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <BtnSm color="purple" disabled={busy || resetPassVal.length < 6}
-                          onClick={async () => {
-                            setBusy(true);
-                            const res = await fetch(`${apiBase}/admin/participants/reset-password`, {
-                              method: 'POST', credentials: 'include',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ user_id: resetPassUserId, new_password: resetPassVal })
-                            });
-                            const d = await res.json().catch(()=>({}));
-                            setBusy(false);
-                            if (res.ok) { showMsg(`Password berhasil direset ✅`, 'success'); setShowResetPass(false); }
-                            else showMsg(d.error || 'Gagal reset password', 'error');
-                          }}>💾 Reset Password</BtnSm>
-                        <BtnSm onClick={() => setShowResetPass(false)}>Batal</BtnSm>
+              )}
+
+              {/* Modal Reset Password — di luar AdminSection */}
+              {showResetPass && adminSection === 'peserta' && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+                  <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 16, padding: 24, width: '100%', maxWidth: 380 }}>
+                    <p style={{ margin: '0 0 16px', fontWeight: 700, fontSize: 16 }}>🔑 Reset Password Peserta</p>
+                    <p style={{ margin: '0 0 12px', fontSize: 13, color: '#64748b' }}>
+                      Peserta: <b style={{ color: '#f1f5f9' }}>{participants.find(p=>p.id===resetPassUserId)?.name || `#${resetPassUserId}`}</b>
+                    </p>
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>Password Baru <span style={{ color: '#475569' }}>(min. 6 karakter)</span></div>
+                      <div style={{ position: 'relative' }}>
+                        <input type={showResetPass === 'show' ? 'text' : 'password'} className="nk-input-sm" style={{ width: '100%', paddingRight: 40 }}
+                          value={resetPassVal} onChange={e => setResetPassVal(e.target.value)} placeholder="Ketik password baru..." autoFocus />
+                        <button type="button" onClick={() => setShowResetPass(p => p === 'show' ? true : 'show')}
+                          style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 16 }}>
+                          {showResetPass === 'show' ? '🙈' : '👁️'}
+                        </button>
                       </div>
                     </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <BtnSm color="purple" disabled={busy || resetPassVal.length < 6}
+                        onClick={async () => {
+                          setBusy(true);
+                          const res = await fetch(`${apiBase}/admin/participants/reset-password`, {
+                            method: 'POST', credentials: 'include',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ user_id: resetPassUserId, new_password: resetPassVal })
+                          });
+                          const d = await res.json().catch(()=>({}));
+                          setBusy(false);
+                          if (res.ok) { showMsg('Password berhasil direset ✅', 'success'); setShowResetPass(false); }
+                          else showMsg(d.error || 'Gagal reset password', 'error');
+                        }}>💾 Reset Password</BtnSm>
+                      <BtnSm onClick={() => setShowResetPass(false)}>Batal</BtnSm>
+                    </div>
                   </div>
-                )}
+                </div>
               )}
 
               {/* Admin — Bank Soal */}
