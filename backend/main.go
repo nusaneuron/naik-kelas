@@ -2186,11 +2186,21 @@ func (a *app) handleAdminDeleteParticipant(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot delete current admin account"})
 		return
 	}
+	// Ambil phone dulu sebelum delete (untuk hapus dari tabel participants juga)
+	var deletedPhone string
+	_ = a.db.QueryRowContext(r.Context(), `SELECT phone FROM users WHERE id=$1`, req.UserID).Scan(&deletedPhone)
+
 	_, err = a.db.ExecContext(r.Context(), `DELETE FROM users WHERE id=$1`, req.UserID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed delete user"})
 		return
 	}
+
+	// Hapus juga dari tabel participants (legacy) agar migration tidak re-create user ini
+	if deletedPhone != "" {
+		_, _ = a.db.ExecContext(r.Context(), `DELETE FROM participants WHERE phone=$1`, deletedPhone)
+	}
+
 	_ = a.logAdminAction(r.Context(), admin.ID, "participants.delete", fmt.Sprint(req.UserID), map[string]any{"user_id": req.UserID})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
