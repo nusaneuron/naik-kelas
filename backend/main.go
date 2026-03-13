@@ -1181,9 +1181,8 @@ func (a *app) handleParticipantLeaderboard(w http.ResponseWriter, r *http.Reques
 		leaderArgs = append(leaderArgs, myGroupID)
 	}
 	leaderQuery += `
-		WHERE tr.all_correct = TRUE
 		GROUP BY tr.user_id, name, tg
-		ORDER BY best_seconds ASC, perfect_count DESC, name ASC
+		ORDER BY perfect_count DESC, best_seconds ASC, name ASC
 		LIMIT 20`
 
 	rows, err := a.db.QueryContext(r.Context(), leaderQuery, leaderArgs...)
