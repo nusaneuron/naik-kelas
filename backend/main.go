@@ -775,6 +775,8 @@ func (a *app) initDB(ctx context.Context) error {
 	}
 	_, _ = a.db.ExecContext(ctx, `INSERT INTO feedback_schedule (id, send_time, is_active) VALUES (1, '09:00', FALSE) ON CONFLICT DO NOTHING`)
 	_, _ = a.db.ExecContext(ctx, `ALTER TABLE feedback_schedule ADD COLUMN IF NOT EXISTS send_date DATE`)
+	_, _ = a.db.ExecContext(ctx, `ALTER TABLE notes ADD COLUMN IF NOT EXISTS note_type TEXT NOT NULL DEFAULT 'permanent'`)
+	_, _ = a.db.ExecContext(ctx, `ALTER TABLE notes ADD COLUMN IF NOT EXISTS source_bot TEXT`)
 
 	// Tabel refleksi harian peserta
 	_, err = a.db.ExecContext(ctx, `
@@ -2871,6 +2873,7 @@ func (a *app) syncTelegramBotCommands(ctx context.Context) error {
 		{"command": "exp", "description": "⭐ Detail EXP dan progress level"},
 		{"command": "poin", "description": "💰 Saldo & riwayat transaksi poin"},
 		{"command": "redeem", "description": "🎁 Tukar poin dengan hadiah"},
+		{"command": "catatan", "description": "📝 Simpan catatan sementara (contoh: /catatan isi catatan)"},
 		{"command": "refleksi", "description": "📔 Tulis refleksi & jurnal harianmu"},
 		{"command": "jadwal_belajar", "description": "⏰ Atur pengingat belajar harian"},
 		{"command": "jadwal_refleksi", "description": "⏰ Atur pengingat refleksi harian"},
@@ -3209,6 +3212,37 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 	}
 
 	lower := strings.ToLower(strings.TrimSpace(text))
+
+	// ── Catatan Sementara via Bot ─────────────────────────────────────
+	if strings.HasPrefix(lower, "/catatan") {
+		noteText := strings.TrimSpace(text[len("/catatan"):])
+		if noteText == "" {
+			return "📝 Kirim catatan sementaramu!\n\nContoh:\n`/catatan Tadi belajar tentang K3, poin penting: selalu pakai APD sebelum masuk area produksi`\n\nCatatan akan tersimpan di menu *Catatan* di portal web\\.", "idle"
+		}
+		// Resolve web user_id
+		var webUID int64
+		_ = a.db.QueryRowContext(ctx, `SELECT user_id FROM telegram_links WHERE telegram_user_id=$1 LIMIT 1`, uid).Scan(&webUID)
+		if webUID == 0 {
+			return "Kamu belum terdaftar\\. Ketik /daftar dulu ya\\!", "idle"
+		}
+		// Buat judul otomatis dari 5 kata pertama
+		words := strings.Fields(noteText)
+		titleWords := words
+		if len(titleWords) > 6 { titleWords = titleWords[:6] }
+		autoTitle := strings.Join(titleWords, " ")
+		if len(words) > 6 { autoTitle += "…" }
+		// Simpan sebagai fleeting note
+		var noteID int64
+		saveErr := a.db.QueryRowContext(ctx, `
+			INSERT INTO notes(user_id, title, content, note_type, source_bot)
+			VALUES($1,$2,$3,'fleeting','telegram') RETURNING id`,
+			webUID, autoTitle, noteText).Scan(&noteID)
+		if saveErr != nil {
+			return "Maaf, gagal simpan catatan 🙏 Coba lagi ya\\.", "idle"
+		}
+		return fmt.Sprintf("📝 Catatan sementara tersimpan\\!\n\n_%s_\n\nBuka portal web untuk lihat & ubah jadi catatan permanen\\.", escapeMD(noteText)), "idle"
+	}
+
 	// ── Refleksi Harian ──────────────────────────────────────────────
 	if lower == "/refleksi" {
 		registered, err := a.isRegisteredBotUser(ctx, uid)
@@ -5768,7 +5802,7 @@ func (a *app) handleParticipantNotes(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// List notes
-		q := `SELECT n.id, n.title, n.updated_at,
+		q := `SELECT n.id, n.title, n.updated_at, n.note_type,
 			COALESCE(array_agg(DISTINCT nt.tag) FILTER (WHERE nt.tag IS NOT NULL), ARRAY[]::TEXT[]) as tags
 			FROM notes n
 			LEFT JOIN note_tags nt ON nt.note_id = n.id
@@ -5793,13 +5827,14 @@ func (a *app) handleParticipantNotes(w http.ResponseWriter, r *http.Request) {
 			ID        int64    `json:"id"`
 			Title     string   `json:"title"`
 			UpdatedAt string   `json:"updated_at"`
+			NoteType  string   `json:"note_type"`
 			Tags      []string `json:"tags"`
 		}
 		items := []noteItem{}
 		for rows.Next() {
 			var it noteItem
 			var tagsArr []byte
-			if rows.Scan(&it.ID, &it.Title, &it.UpdatedAt, &tagsArr) == nil {
+			if rows.Scan(&it.ID, &it.Title, &it.UpdatedAt, &it.NoteType, &tagsArr) == nil {
 				// Parse postgres array
 				tagStr := strings.Trim(string(tagsArr), "{}")
 				if tagStr != "" {
@@ -5821,10 +5856,11 @@ func (a *app) handleParticipantNotes(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodPost:
 		var req struct {
-			Action  string `json:"action"`
-			ID      int64  `json:"id"`
-			Title   string `json:"title"`
-			Content string `json:"content"`
+			Action   string `json:"action"`
+			ID       int64  `json:"id"`
+			Title    string `json:"title"`
+			Content  string `json:"content"`
+			NoteType string `json:"note_type"`
 		}
 		if json.NewDecoder(r.Body).Decode(&req) != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -5834,15 +5870,17 @@ func (a *app) handleParticipantNotes(w http.ResponseWriter, r *http.Request) {
 		case "create":
 			title := strings.TrimSpace(req.Title)
 			if title == "" { title = "Untitled" }
+			noteType := req.NoteType
+			if noteType != "fleeting" { noteType = "permanent" }
 			var id int64
 			err := a.db.QueryRowContext(ctx, `
-				INSERT INTO notes(user_id, title, content) VALUES($1,$2,$3) RETURNING id`,
-				u.ID, title, req.Content).Scan(&id)
+				INSERT INTO notes(user_id, title, content, note_type) VALUES($1,$2,$3,$4) RETURNING id`,
+				u.ID, title, req.Content, noteType).Scan(&id)
 			if err != nil {
 				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 				return
 			}
-			a.syncNoteLinks(ctx, id, u.ID, req.Content)
+			if noteType == "permanent" { a.syncNoteLinks(ctx, id, u.ID, req.Content) }
 			writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id})
 
 		case "update":
@@ -5864,6 +5902,18 @@ func (a *app) handleParticipantNotes(w http.ResponseWriter, r *http.Request) {
 			_, _ = a.db.ExecContext(ctx, `DELETE FROM notes WHERE id=$1 AND user_id=$2`, req.ID, u.ID)
 			writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 
+		case "promote":
+			// Ubah fleeting → permanent
+			if req.ID == 0 { writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id required"}); return }
+			title := strings.TrimSpace(req.Title)
+			if title == "" { title = "Untitled" }
+			_, err := a.db.ExecContext(ctx, `
+				UPDATE notes SET note_type='permanent', title=$1, content=$2, updated_at=NOW() WHERE id=$3 AND user_id=$4`,
+				title, req.Content, req.ID, u.ID)
+			if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()}); return }
+			a.syncNoteLinks(ctx, req.ID, u.ID, req.Content)
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+
 		default:
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown action"})
 		}
@@ -5882,13 +5932,13 @@ func (a *app) handleParticipantNotesGraph(w http.ResponseWriter, r *http.Request
 	}
 	ctx := r.Context()
 
-	// Nodes: semua notes user
+	// Nodes: hanya catatan permanen
 	rows, err := a.db.QueryContext(ctx, `
 		SELECT n.id, n.title,
 			COALESCE(array_agg(DISTINCT nt.tag) FILTER (WHERE nt.tag IS NOT NULL), ARRAY[]::TEXT[]) as tags
 		FROM notes n
 		LEFT JOIN note_tags nt ON nt.note_id = n.id
-		WHERE n.user_id=$1
+		WHERE n.user_id=$1 AND n.note_type='permanent'
 		GROUP BY n.id ORDER BY n.updated_at DESC`, u.ID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})

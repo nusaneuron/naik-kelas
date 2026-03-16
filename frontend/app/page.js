@@ -276,7 +276,10 @@ export default function Page() {
   async function saveNote() {
     setNoteSaving(true);
     const isNew = !activeNote?.id;
-    const body = { action: isNew ? 'create' : 'update', title: noteDraft.title, content: noteDraft.content };
+    const isFleeting = activeNote?.note_type === 'fleeting';
+    // Fleeting yang di-edit → promote ke permanent
+    const action = isNew ? 'create' : (isFleeting ? 'promote' : 'update');
+    const body = { action, title: noteDraft.title, content: noteDraft.content };
     if (!isNew) body.id = activeNote.id;
     const res = await fetch(`${apiBase}/participant/notes`, {
       method: 'POST', credentials: 'include',
@@ -1345,21 +1348,64 @@ export default function Page() {
                 )}
 
                 {/* LIST VIEW */}
-                {noteView === 'list' && (
-                  <div style={{ display: 'grid', gap: 8 }}>
-                    {notes.length === 0 && <div className="nk-empty">📝 Belum ada catatan. Buat yang pertama!</div>}
-                    {notes.map(n => (
-                      <div key={n.id} onClick={() => loadNoteDetail(n.id)}
-                        style={{ background: '#0f172a', border: `1px solid ${activeNote?.id === n.id ? '#3b82f6' : '#1e2d45'}`, borderRadius: 10, padding: '12px 14px', cursor: 'pointer', transition: 'border-color 0.15s' }}>
-                        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{n.title}</div>
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                          {n.tags.map(t => <span key={t} style={{ fontSize: 11, color: '#a78bfa', background: 'rgba(167,139,250,0.1)', padding: '1px 7px', borderRadius: 10 }}>#{t}</span>)}
-                          <span style={{ fontSize: 11, color: '#475569', marginLeft: 'auto' }}>{new Date(n.updated_at).toLocaleDateString('id-ID')}</span>
+                {noteView === 'list' && (() => {
+                  const permanent = notes.filter(n => n.note_type !== 'fleeting');
+                  const fleeting = notes.filter(n => n.note_type === 'fleeting');
+                  return (
+                    <div style={{ display: 'grid', gap: 12 }}>
+                      {notes.length === 0 && <div className="nk-empty">📝 Belum ada catatan. Buat yang pertama atau kirim /catatan di bot Nala!</div>}
+
+                      {/* Catatan Permanen */}
+                      {permanent.length > 0 && (
+                        <div>
+                          <p style={{ fontSize: 11, color: '#475569', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, margin: '0 0 6px' }}>📌 Catatan Permanen ({permanent.length})</p>
+                          <div style={{ display: 'grid', gap: 6 }}>
+                            {permanent.map(n => (
+                              <div key={n.id} onClick={() => loadNoteDetail(n.id)}
+                                style={{ background: '#0f172a', border: `1px solid ${activeNote?.id === n.id ? '#3b82f6' : '#1e2d45'}`, borderRadius: 10, padding: '11px 14px', cursor: 'pointer' }}>
+                                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{n.title}</div>
+                                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                                  {n.tags.map(t => <span key={t} style={{ fontSize: 11, color: '#a78bfa', background: 'rgba(167,139,250,0.1)', padding: '1px 7px', borderRadius: 10 }}>#{t}</span>)}
+                                  <span style={{ fontSize: 11, color: '#475569', marginLeft: 'auto' }}>{new Date(n.updated_at).toLocaleDateString('id-ID')}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      )}
+
+                      {/* Catatan Sementara */}
+                      {fleeting.length > 0 && (
+                        <div>
+                          <p style={{ fontSize: 11, color: '#78716c', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, margin: '0 0 6px' }}>⚡ Catatan Sementara dari Bot ({fleeting.length})</p>
+                          <div style={{ display: 'grid', gap: 6 }}>
+                            {fleeting.map(n => (
+                              <div key={n.id}
+                                style={{ background: '#13110e', border: '1px solid #2c2520', borderRadius: 10, padding: '11px 14px' }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                                  <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: 13, color: '#a8a29e', marginBottom: 4, lineHeight: 1.5 }}>{n.title}</div>
+                                    <span style={{ fontSize: 11, color: '#57534e' }}>{new Date(n.updated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                                  </div>
+                                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                                    <button onClick={e => { e.stopPropagation(); loadNoteDetail(n.id); }}
+                                      style={{ padding: '4px 10px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+                                      📌 Jadikan Permanen
+                                    </button>
+                                    <button onClick={async e => { e.stopPropagation(); if (!confirm('Hapus catatan sementara ini?')) return; await deleteNote(n.id); }}
+                                      style={{ padding: '4px 8px', background: 'transparent', color: '#78716c', border: '1px solid #2c2520', borderRadius: 6, cursor: 'pointer', fontSize: 11 }}>
+                                      🗑
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* EDITOR VIEW */}
                 {noteView === 'editor' && (
