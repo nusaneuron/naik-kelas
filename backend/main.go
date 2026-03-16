@@ -200,6 +200,8 @@ func main() {
 	mux.HandleFunc("/participant/history", a.handleParticipantHistory)
 	mux.HandleFunc("/participant/leaderboard", a.handleParticipantLeaderboard)
 	mux.HandleFunc("/participant/reminder", a.handleParticipantReminder)
+	mux.HandleFunc("/participant/notes", a.handleParticipantNotes)
+	mux.HandleFunc("/participant/notes/graph", a.handleParticipantNotesGraph)
 	mux.HandleFunc("/participant/points", a.handleParticipantPoints)
 	mux.HandleFunc("/participant/points/history", a.handleParticipantPointsHistory)
 	mux.HandleFunc("/admin/ping", a.handleAdminPing)
@@ -419,6 +421,29 @@ func (a *app) initDB(ctx context.Context) error {
 			state TEXT NOT NULL DEFAULT 'idle',
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)
+	`)
+	if err != nil {
+		return err
+	}
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS notes (
+			id BIGSERIAL PRIMARY KEY,
+			user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			title TEXT NOT NULL DEFAULT 'Untitled',
+			content TEXT NOT NULL DEFAULT '',
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE TABLE IF NOT EXISTS note_links (
+			from_note_id BIGINT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+			to_note_id   BIGINT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+			PRIMARY KEY (from_note_id, to_note_id)
+		);
+		CREATE TABLE IF NOT EXISTS note_tags (
+			note_id BIGINT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+			tag     TEXT NOT NULL,
+			PRIMARY KEY (note_id, tag)
+		);
 	`)
 	if err != nil {
 		return err
@@ -5626,6 +5651,289 @@ type materialWithProgress struct {
 
 // GET  /admin/materials?category_id=X  → list
 // POST /admin/materials                → create | update | delete
+// ─── Notes Helpers ──────────────────────────────────────────────────────────
+
+// parseBacklinks extracts [[Title]] references from content
+func parseBacklinks(content string) []string {
+	var links []string
+	seen := map[string]bool{}
+	i := 0
+	for i < len(content)-3 {
+		if content[i] == '[' && content[i+1] == '[' {
+			end := strings.Index(content[i+2:], "]]")
+			if end >= 0 {
+				title := strings.TrimSpace(content[i+2 : i+2+end])
+				if title != "" && !seen[title] {
+					links = append(links, title)
+					seen[title] = true
+				}
+				i = i + 2 + end + 2
+				continue
+			}
+		}
+		i++
+	}
+	return links
+}
+
+// parseTags extracts #tag references from content
+func parseTags(content string) []string {
+	var tags []string
+	seen := map[string]bool{}
+	words := strings.FieldsFunc(content, func(r rune) bool {
+		return r == ' ' || r == '\n' || r == '\t' || r == '\r'
+	})
+	for _, w := range words {
+		if strings.HasPrefix(w, "#") {
+			tag := strings.ToLower(strings.Trim(w[1:], ".,!?;:()[]{}\"'"))
+			if len(tag) >= 2 && !seen[tag] {
+				tags = append(tags, tag)
+				seen[tag] = true
+			}
+		}
+	}
+	return tags
+}
+
+// syncNoteLinks rebuilds note_links and note_tags for a given note
+func (a *app) syncNoteLinks(ctx context.Context, noteID, userID int64, content string) {
+	// Clear old links & tags
+	_, _ = a.db.ExecContext(ctx, `DELETE FROM note_links WHERE from_note_id=$1`, noteID)
+	_, _ = a.db.ExecContext(ctx, `DELETE FROM note_tags WHERE note_id=$1`, noteID)
+
+	// Re-insert tags
+	for _, tag := range parseTags(content) {
+		_, _ = a.db.ExecContext(ctx, `INSERT INTO note_tags(note_id, tag) VALUES($1,$2) ON CONFLICT DO NOTHING`, noteID, tag)
+	}
+
+	// Re-insert backlinks (resolve title → note_id)
+	for _, title := range parseBacklinks(content) {
+		var toID int64
+		_ = a.db.QueryRowContext(ctx, `SELECT id FROM notes WHERE user_id=$1 AND title=$2 LIMIT 1`, userID, title).Scan(&toID)
+		if toID > 0 && toID != noteID {
+			_, _ = a.db.ExecContext(ctx, `INSERT INTO note_links(from_note_id, to_note_id) VALUES($1,$2) ON CONFLICT DO NOTHING`, noteID, toID)
+		}
+	}
+}
+
+// ─── Notes Handlers ──────────────────────────────────────────────────────────
+
+// GET  /participant/notes          → list semua notes user (+ tags)
+// GET  /participant/notes?id=X     → single note dengan content
+// POST /participant/notes          → create | update | delete
+func (a *app) handleParticipantNotes(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant", "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	ctx := r.Context()
+
+	switch r.Method {
+	case http.MethodGet:
+		noteID := r.URL.Query().Get("id")
+		tag := r.URL.Query().Get("tag")
+		search := r.URL.Query().Get("q")
+
+		if noteID != "" {
+			// Single note
+			var id int64; var title, content, createdAt, updatedAt string
+			err := a.db.QueryRowContext(ctx, `
+				SELECT id, title, content, created_at, updated_at
+				FROM notes WHERE id=$1 AND user_id=$2`, noteID, u.ID).Scan(&id, &title, &content, &createdAt, &updatedAt)
+			if err != nil {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "note not found"})
+				return
+			}
+			// Load tags
+			tRows, _ := a.db.QueryContext(ctx, `SELECT tag FROM note_tags WHERE note_id=$1 ORDER BY tag`, id)
+			var tags []string
+			if tRows != nil { for tRows.Next() { var t string; if tRows.Scan(&t) == nil { tags = append(tags, t) } }; tRows.Close() }
+			// Load backlinks (notes that link TO this note)
+			blRows, _ := a.db.QueryContext(ctx, `
+				SELECT n.id, n.title FROM note_links nl
+				JOIN notes n ON n.id = nl.from_note_id
+				WHERE nl.to_note_id=$1`, id)
+			type noteMini struct{ ID int64 `json:"id"`; Title string `json:"title"` }
+			var backlinks []noteMini
+			if blRows != nil { for blRows.Next() { var nm noteMini; if blRows.Scan(&nm.ID, &nm.Title) == nil { backlinks = append(backlinks, nm) } }; blRows.Close() }
+			if tags == nil { tags = []string{} }
+			if backlinks == nil { backlinks = []noteMini{} }
+			writeJSON(w, http.StatusOK, map[string]any{
+				"id": id, "title": title, "content": content,
+				"created_at": createdAt, "updated_at": updatedAt,
+				"tags": tags, "backlinks": backlinks,
+			})
+			return
+		}
+
+		// List notes
+		q := `SELECT n.id, n.title, n.updated_at,
+			COALESCE(array_agg(DISTINCT nt.tag) FILTER (WHERE nt.tag IS NOT NULL), ARRAY[]::TEXT[]) as tags
+			FROM notes n
+			LEFT JOIN note_tags nt ON nt.note_id = n.id
+			WHERE n.user_id=$1`
+		args := []any{u.ID}
+		if tag != "" {
+			q += ` AND EXISTS (SELECT 1 FROM note_tags nt2 WHERE nt2.note_id=n.id AND nt2.tag=$2)`
+			args = append(args, tag)
+		}
+		if search != "" {
+			args = append(args, "%"+strings.ToLower(search)+"%")
+			q += fmt.Sprintf(` AND (LOWER(n.title) LIKE $%d OR LOWER(n.content) LIKE $%d)`, len(args), len(args))
+		}
+		q += ` GROUP BY n.id ORDER BY n.updated_at DESC`
+		rows, err := a.db.QueryContext(ctx, q, args...)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		defer rows.Close()
+		type noteItem struct {
+			ID        int64    `json:"id"`
+			Title     string   `json:"title"`
+			UpdatedAt string   `json:"updated_at"`
+			Tags      []string `json:"tags"`
+		}
+		items := []noteItem{}
+		for rows.Next() {
+			var it noteItem
+			var tagsArr []byte
+			if rows.Scan(&it.ID, &it.Title, &it.UpdatedAt, &tagsArr) == nil {
+				// Parse postgres array
+				tagStr := strings.Trim(string(tagsArr), "{}")
+				if tagStr != "" {
+					it.Tags = strings.Split(tagStr, ",")
+				} else {
+					it.Tags = []string{}
+				}
+				items = append(items, it)
+			}
+		}
+		// Ambil semua tag unik user
+		allTagRows, _ := a.db.QueryContext(ctx, `
+			SELECT DISTINCT nt.tag FROM note_tags nt
+			JOIN notes n ON n.id=nt.note_id WHERE n.user_id=$1 ORDER BY nt.tag`, u.ID)
+		var allTags []string
+		if allTagRows != nil { for allTagRows.Next() { var t string; if allTagRows.Scan(&t) == nil { allTags = append(allTags, t) } }; allTagRows.Close() }
+		if allTags == nil { allTags = []string{} }
+		writeJSON(w, http.StatusOK, map[string]any{"notes": items, "all_tags": allTags})
+
+	case http.MethodPost:
+		var req struct {
+			Action  string `json:"action"`
+			ID      int64  `json:"id"`
+			Title   string `json:"title"`
+			Content string `json:"content"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			return
+		}
+		switch req.Action {
+		case "create":
+			title := strings.TrimSpace(req.Title)
+			if title == "" { title = "Untitled" }
+			var id int64
+			err := a.db.QueryRowContext(ctx, `
+				INSERT INTO notes(user_id, title, content) VALUES($1,$2,$3) RETURNING id`,
+				u.ID, title, req.Content).Scan(&id)
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+				return
+			}
+			a.syncNoteLinks(ctx, id, u.ID, req.Content)
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id})
+
+		case "update":
+			if req.ID == 0 { writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id required"}); return }
+			title := strings.TrimSpace(req.Title)
+			if title == "" { title = "Untitled" }
+			_, err := a.db.ExecContext(ctx, `
+				UPDATE notes SET title=$1, content=$2, updated_at=NOW() WHERE id=$3 AND user_id=$4`,
+				title, req.Content, req.ID, u.ID)
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+				return
+			}
+			a.syncNoteLinks(ctx, req.ID, u.ID, req.Content)
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+
+		case "delete":
+			if req.ID == 0 { writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id required"}); return }
+			_, _ = a.db.ExecContext(ctx, `DELETE FROM notes WHERE id=$1 AND user_id=$2`, req.ID, u.ID)
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+
+		default:
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown action"})
+		}
+
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+// GET /participant/notes/graph → nodes & edges untuk network graph
+func (a *app) handleParticipantNotesGraph(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant", "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	ctx := r.Context()
+
+	// Nodes: semua notes user
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT n.id, n.title,
+			COALESCE(array_agg(DISTINCT nt.tag) FILTER (WHERE nt.tag IS NOT NULL), ARRAY[]::TEXT[]) as tags
+		FROM notes n
+		LEFT JOIN note_tags nt ON nt.note_id = n.id
+		WHERE n.user_id=$1
+		GROUP BY n.id ORDER BY n.updated_at DESC`, u.ID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
+	type graphNode struct {
+		ID    int64    `json:"id"`
+		Title string   `json:"title"`
+		Tags  []string `json:"tags"`
+	}
+	nodes := []graphNode{}
+	for rows.Next() {
+		var n graphNode
+		var tagsArr []byte
+		if rows.Scan(&n.ID, &n.Title, &tagsArr) == nil {
+			tagStr := strings.Trim(string(tagsArr), "{}")
+			if tagStr != "" { n.Tags = strings.Split(tagStr, ",") } else { n.Tags = []string{} }
+			nodes = append(nodes, n)
+		}
+	}
+	rows.Close()
+
+	// Edges: semua links antar notes milik user ini
+	eRows, err := a.db.QueryContext(ctx, `
+		SELECT nl.from_note_id, nl.to_note_id
+		FROM note_links nl
+		JOIN notes n1 ON n1.id = nl.from_note_id AND n1.user_id=$1
+		JOIN notes n2 ON n2.id = nl.to_note_id AND n2.user_id=$1`, u.ID)
+	type graphEdge struct {
+		From int64 `json:"from"`
+		To   int64 `json:"to"`
+	}
+	edges := []graphEdge{}
+	if err == nil && eRows != nil {
+		for eRows.Next() {
+			var e graphEdge
+			if eRows.Scan(&e.From, &e.To) == nil { edges = append(edges, e) }
+		}
+		eRows.Close()
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"nodes": nodes, "edges": edges})
+}
+
 func (a *app) handleAdminGenerateQuestions(w http.ResponseWriter, r *http.Request) {
 	_, err := a.requireRole(r.Context(), r, "admin")
 	if err != nil {
