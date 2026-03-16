@@ -3247,68 +3247,93 @@ export default function Page() {
 
 function NoteGraph({ nodes, edges, onNodeClick }) {
   const svgRef = useRef(null);
-  useEffect(() => {
-    if (!nodes?.length) return;
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js';
-    script.onload = () => renderGraph();
-    if (window.d3) { renderGraph(); return; }
-    document.head.appendChild(script);
+  const [d3Ready, setD3Ready] = useState(false);
 
-    function renderGraph() {
-      const d3 = window.d3;
-      const el = svgRef.current;
-      if (!el) return;
-      d3.select(el).selectAll('*').remove();
-      const W = el.clientWidth || 500, H = 420;
-      el.setAttribute('height', H);
-      const svg = d3.select(el);
-      // Zoom
-      const g = svg.append('g');
-      svg.call(d3.zoom().scaleExtent([0.3, 3]).on('zoom', e => g.attr('transform', e.transform)));
-      // Color by tag
-      const tagColors = ['#3b82f6','#a78bfa','#34d399','#fb923c','#f472b6','#facc15'];
-      const tagMap = {};
-      nodes.forEach(n => { if (n.tags?.[0] && !tagMap[n.tags[0]]) tagMap[n.tags[0]] = tagColors[Object.keys(tagMap).length % tagColors.length]; });
-      const nodeColor = n => n.tags?.[0] ? (tagMap[n.tags[0]] || '#3b82f6') : '#3b82f6';
-      // Simulation
-      const sim = d3.forceSimulation(nodes)
-        .force('link', d3.forceLink(edges).id(d => d.id).distance(100))
-        .force('charge', d3.forceManyBody().strength(-180))
-        .force('center', d3.forceCenter(W/2, H/2))
-        .force('collision', d3.forceCollide(30));
-      // Edges
-      const link = g.append('g').selectAll('line').data(edges).join('line')
-        .attr('stroke', '#1e3a5f').attr('stroke-width', 2).attr('stroke-opacity', 0.7);
-      // Nodes
-      const node = g.append('g').selectAll('g').data(nodes).join('g')
-        .style('cursor', 'pointer')
-        .on('click', (_, d) => onNodeClick(d.id))
-        .call(d3.drag()
-          .on('start', (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
-          .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
-          .on('end', (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
-      node.append('circle').attr('r', 18).attr('fill', d => nodeColor(d) + '33').attr('stroke', d => nodeColor(d)).attr('stroke-width', 2);
-      node.append('text').text(d => d.title.length > 12 ? d.title.slice(0,12)+'…' : d.title)
-        .attr('text-anchor', 'middle').attr('dy', '0.35em').attr('fill', '#e2e8f0').attr('font-size', 10).attr('pointer-events', 'none');
-      // Tag label
-      node.append('text').text(d => d.tags?.[0] ? '#'+d.tags[0] : '')
-        .attr('text-anchor', 'middle').attr('dy', '2.2em').attr('fill', d => nodeColor(d)).attr('font-size', 9).attr('pointer-events', 'none');
-      sim.on('tick', () => {
-        link.attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y);
-        node.attr('transform', d => `translate(${d.x},${d.y})`);
-      });
-    }
-  }, [nodes, edges]);
+  useEffect(() => {
+    if (window.d3) { setD3Ready(true); return; }
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js';
+    s.onload = () => setD3Ready(true);
+    document.head.appendChild(s);
+  }, []);
+
+  useEffect(() => {
+    if (!d3Ready || !nodes?.length || !svgRef.current) return;
+    const d3 = window.d3;
+    const el = svgRef.current;
+    d3.select(el).selectAll('*').remove();
+
+    const W = el.parentElement?.clientWidth || 500;
+    const H = 420;
+    el.setAttribute('width', W);
+    el.setAttribute('height', H);
+
+    // Konversi edges: {from,to} → {source,to} agar d3 forceLink bisa resolve
+    const edgesCopy = edges.map(e => ({ source: String(e.from), target: String(e.to) }));
+    const nodesCopy = nodes.map(n => ({ ...n, id: String(n.id) }));
+
+    const tagColors = ['#3b82f6','#a78bfa','#34d399','#fb923c','#f472b6','#facc15'];
+    const tagMap = {};
+    nodesCopy.forEach(n => {
+      if (n.tags?.[0] && !tagMap[n.tags[0]])
+        tagMap[n.tags[0]] = tagColors[Object.keys(tagMap).length % tagColors.length];
+    });
+    const nodeColor = n => tagMap[n.tags?.[0]] || '#3b82f6';
+
+    const svg = d3.select(el);
+    const g = svg.append('g');
+    svg.call(d3.zoom().scaleExtent([0.3, 3]).on('zoom', e => g.attr('transform', e.transform)));
+
+    const sim = d3.forceSimulation(nodesCopy)
+      .force('link', d3.forceLink(edgesCopy).id(d => d.id).distance(120))
+      .force('charge', d3.forceManyBody().strength(-200))
+      .force('center', d3.forceCenter(W / 2, H / 2))
+      .force('collision', d3.forceCollide(36));
+
+    const link = g.append('g').selectAll('line').data(edgesCopy).join('line')
+      .attr('stroke', '#2563eb').attr('stroke-width', 1.5).attr('stroke-opacity', 0.5);
+
+    const node = g.append('g').selectAll('g').data(nodesCopy).join('g')
+      .style('cursor', 'pointer')
+      .on('click', (_, d) => onNodeClick(Number(d.id)))
+      .call(d3.drag()
+        .on('start', (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+        .on('end', (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+
+    node.append('circle')
+      .attr('r', 22)
+      .attr('fill', d => nodeColor(d) + '22')
+      .attr('stroke', d => nodeColor(d))
+      .attr('stroke-width', 2);
+
+    node.append('text')
+      .text(d => d.title.length > 14 ? d.title.slice(0, 14) + '…' : d.title)
+      .attr('text-anchor', 'middle').attr('dy', '0.35em')
+      .attr('fill', '#e2e8f0').attr('font-size', 10).attr('pointer-events', 'none');
+
+    node.append('text')
+      .text(d => d.tags?.[0] ? '#' + d.tags[0] : '')
+      .attr('text-anchor', 'middle').attr('dy', '2.4em')
+      .attr('fill', d => nodeColor(d)).attr('font-size', 9).attr('pointer-events', 'none');
+
+    sim.on('tick', () => {
+      link
+        .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+      node.attr('transform', d => `translate(${d.x},${d.y})`);
+    });
+  }, [d3Ready, nodes, edges]);
 
   return (
     <div style={{ background: '#080d18', border: '1px solid #1e2d45', borderRadius: 12, overflow: 'hidden' }}>
-      <div style={{ padding: '10px 14px', borderBottom: '1px solid #1e2d45', display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ padding: '10px 14px', borderBottom: '1px solid #1e2d45', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <span style={{ fontWeight: 700, fontSize: 13, color: '#93c5fd' }}>🕸️ Network Graph</span>
         <span style={{ fontSize: 12, color: '#475569' }}>{nodes.length} catatan · {edges.length} koneksi</span>
-        <span style={{ fontSize: 11, color: '#334155', marginLeft: 'auto' }}>Klik node untuk buka · Drag untuk pindah · Scroll untuk zoom</span>
+        {!d3Ready && <span style={{ fontSize: 11, color: '#f59e0b' }}>⏳ Memuat D3...</span>}
+        <span style={{ fontSize: 11, color: '#334155', marginLeft: 'auto' }}>Klik · Drag · Scroll zoom</span>
       </div>
-      <svg ref={svgRef} width="100%" style={{ display: 'block', minHeight: 420 }} />
+      <svg ref={svgRef} style={{ display: 'block', width: '100%', minHeight: 420 }} />
     </div>
   );
 }
