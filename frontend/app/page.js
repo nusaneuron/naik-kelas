@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || 'NalaNaikKelas_bot';
@@ -1410,9 +1410,11 @@ export default function Page() {
                           <div style={{ position: 'absolute', bottom: '100%', left: 16, background: '#1e293b', border: '1px solid #334155', borderRadius: 8, overflow: 'hidden', zIndex: 100, minWidth: 200 }}>
                             {noteAutocomplete.map(sug => (
                               <div key={sug.id} onClick={() => {
-                                const cur2 = noteDraft.content.lastIndexOf('[[');
-                                const newContent = noteDraft.content.slice(0, cur2) + '[[' + sug.title + ']]' + noteDraft.content.slice(cur2 + 2 + noteDraft.content.slice(cur2+2).indexOf(noteDraft.content.slice(cur2+2).match(/^([^\]]*)/)[0]) + noteDraft.content.slice(cur2+2).match(/^([^\]]*)/)[0].length + 2);
-                                setNoteDraft(d => ({ ...d, content: noteDraft.content.slice(0, noteDraft.content.lastIndexOf('[[')) + '[[' + sug.title + ']] ' + noteDraft.content.slice(noteDraft.content.lastIndexOf('[[')+2).replace(/^[^\]]*(\]\])?/, '') }));
+                                const idx = noteDraft.content.lastIndexOf('[[');
+                                if (idx < 0) { setNoteAutocomplete([]); return; }
+                                const before = noteDraft.content.slice(0, idx);
+                                const after = noteDraft.content.slice(idx + 2).replace(/^[^\]]*/, '').replace(/^\]\]/, '');
+                                setNoteDraft(d => ({ ...d, content: before + '[[' + sug.title + ']] ' + after }));
                                 setNoteAutocomplete([]);
                               }}
                                 style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, color: '#e2e8f0', borderBottom: '1px solid #1e2d45' }}
@@ -3244,8 +3246,8 @@ export default function Page() {
 // ── Reusable Components ──────────────────────────────────────
 
 function NoteGraph({ nodes, edges, onNodeClick }) {
-  const svgRef = React.useRef(null);
-  React.useEffect(() => {
+  const svgRef = useRef(null);
+  useEffect(() => {
     if (!nodes?.length) return;
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js';
