@@ -1535,16 +1535,17 @@ export default function Page() {
                     key={key}
                     onClick={() => { setAdminSection(key); loadAdminSection(key); }}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
+                      display: 'flex', alignItems: 'center', gap: 8,
                       padding: '9px 12px', borderRadius: 10, cursor: 'pointer',
                       border: adminSection === key ? '1px solid rgba(190,148,245,0.3)' : '1px solid transparent',
                       background: adminSection === key ? 'rgba(190,148,245,0.12)' : 'transparent',
                       color: adminSection === key ? '#be94f5' : '#94a3b8',
                       fontWeight: adminSection === key ? 700 : 500,
-                      fontSize: 14, textAlign: 'left', transition: 'all 160ms ease'
+                      fontSize: 14, textAlign: 'left', transition: 'all 160ms ease', width: '100%'
                     }}
                   >
-                    <span>{icon}</span> {label}
+                    <span style={{ fontSize: 18 }}>{icon}</span>
+                    <span className="nav-label">{label}</span>
                   </button>
                 ))}
               </nav>

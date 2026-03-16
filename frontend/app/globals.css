@@ -429,24 +429,43 @@ button:active { transform: translateY(0); }
   .nk-admin-sidebar {
     border-right: none;
     border-bottom: 1px solid #1e2d45;
-    padding: 12px;
+    padding: 10px 8px;
   }
 
   .nk-admin-sidebar nav {
     display: flex !important;
-    flex-wrap: wrap;
-    gap: 6px;
+    flex-wrap: nowrap !important;
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    gap: 4px !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 4px;
   }
+  .nk-admin-sidebar nav::-webkit-scrollbar { display: none; }
 
   .nk-admin-sidebar nav button {
-    flex: 0 0 auto !important;
+    flex-shrink: 0 !important;
     width: auto !important;
-    padding: 6px 12px !important;
-    font-size: 12px !important;
+    min-width: 44px !important;
+    padding: 8px 10px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 2px !important;
+    font-size: 9px !important;
+    border-radius: 10px !important;
   }
 
   .nk-admin-content {
     padding: 14px 12px;
+  }
+
+  .nk-admin-sidebar nav button .nav-label {
+    font-size: 9px !important;
+    display: block !important;
+    white-space: nowrap;
   }
 
   /* Stat cards: single column on very small screens */
