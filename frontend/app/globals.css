@@ -468,6 +468,53 @@ button:active { transform: translateY(0); }
     white-space: nowrap;
   }
 
+  /* Class-based grid overrides */
+  .nk-grid-2col {
+    grid-template-columns: 1fr !important;
+  }
+
+  .nk-grid-auto {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Semua grid auto-fit/auto-fill jadi 1 kolom di mobile */
+  [style*="minmax(200px"] ,
+  [style*="minmax(220px"] ,
+  [style*="minmax(240px"] ,
+  [style*="minmax(280px"] ,
+  [style*="minmax(400px"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Grid 2-kolom form → 1 kolom */
+  .nk-admin-content [style*="gridTemplateColumns: '1fr 1fr'"],
+  .nk-admin-content [style*='gridTemplateColumns: "1fr 1fr"'] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Tombol-tombol flex jangan overflow */
+  .nk-admin-content [style*="display: 'flex'"],
+  .nk-admin-content [style*='display: "flex"'] {
+    flex-wrap: wrap !important;
+  }
+
+  /* Input & select tidak boleh overflow */
+  .nk-admin-content input,
+  .nk-admin-content select,
+  .nk-admin-content textarea,
+  .nk-main-content input,
+  .nk-main-content select,
+  .nk-main-content textarea {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Generate soal buttons */
+  .nk-admin-content button[style*="flex: 1"] {
+    flex: 1 1 80px !important;
+    min-width: 70px !important;
+  }
+
   /* Stat cards: single column on very small screens */
   .nk-stat-card {
     padding: 14px 14px;

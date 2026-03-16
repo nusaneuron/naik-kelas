@@ -1704,7 +1704,7 @@ export default function Page() {
                       <BtnSm disabled={busy} onClick={addCategory}>{busy ? '...' : (editingCategoryId ? 'Update' : '+ Tambah')}</BtnSm>
                       {editingCategoryId && <BtnSm disabled={busy} onClick={() => { setEditingCategoryId(''); setNewCategoryCode(''); setNewCategoryName(''); setNewCategoryGroupId(''); }}>Batal</BtnSm>}
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
+                    <div className="nk-grid-auto" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
                       {categories.map((c) => (
                         <div key={c.id} style={{
                           border: '1px solid #1e2d45', borderRadius: 12,
@@ -1727,7 +1727,7 @@ export default function Page() {
                     {/* AI Generate Soal */}
                     <div style={{ background: '#0a1e3a', border: '1px dashed #2563eb', borderRadius: 10, padding: '12px 14px', marginBottom: 16 }}>
                       <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, color: '#93c5fd' }}>✨ Generate Soal dengan AI</p>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                      <div className="nk-grid-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
                         <div>
                           <label style={fieldLbl}>Kategori Soal</label>
                           <select className="nk-input-sm" style={{ width: '100%' }} value={qAiCatId}
