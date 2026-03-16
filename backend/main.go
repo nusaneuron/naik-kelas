@@ -6104,17 +6104,25 @@ func (a *app) handleAdminLearningSummary(w http.ResponseWriter, r *http.Request)
 	var totalParticipants, activeToday, activeWeek int
 	_ = a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE role='participant' AND is_active=TRUE`).Scan(&totalParticipants)
 	_ = a.db.QueryRowContext(ctx, `
-		SELECT COUNT(DISTINCT user_id) FROM (
-			SELECT user_id FROM quiz_attempts WHERE created_at >= CURRENT_DATE
-			UNION SELECT user_id FROM tryout_results WHERE created_at >= CURRENT_DATE
-			UNION SELECT CAST(user_id AS TEXT) FROM material_progress WHERE completed_at >= CURRENT_DATE
+		SELECT COUNT(DISTINCT web_uid) FROM (
+			SELECT tl.user_id as web_uid FROM quiz_attempts qa
+			JOIN telegram_links tl ON tl.telegram_user_id = qa.user_id AND tl.is_active = TRUE
+			WHERE qa.created_at >= CURRENT_DATE
+			UNION SELECT tl.user_id FROM tryout_results tr
+			JOIN telegram_links tl ON tl.telegram_user_id = tr.user_id AND tl.is_active = TRUE
+			WHERE tr.created_at >= CURRENT_DATE
+			UNION SELECT user_id FROM material_progress WHERE completed_at >= CURRENT_DATE
 		) x
 	`).Scan(&activeToday)
 	_ = a.db.QueryRowContext(ctx, `
-		SELECT COUNT(DISTINCT user_id) FROM (
-			SELECT user_id FROM quiz_attempts WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
-			UNION SELECT user_id FROM tryout_results WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
-			UNION SELECT CAST(user_id AS TEXT) FROM material_progress WHERE completed_at >= CURRENT_DATE - INTERVAL '7 days'
+		SELECT COUNT(DISTINCT web_uid) FROM (
+			SELECT tl.user_id as web_uid FROM quiz_attempts qa
+			JOIN telegram_links tl ON tl.telegram_user_id = qa.user_id AND tl.is_active = TRUE
+			WHERE qa.created_at >= CURRENT_DATE - INTERVAL '7 days'
+			UNION SELECT tl.user_id FROM tryout_results tr
+			JOIN telegram_links tl ON tl.telegram_user_id = tr.user_id AND tl.is_active = TRUE
+			WHERE tr.created_at >= CURRENT_DATE - INTERVAL '7 days'
+			UNION SELECT user_id FROM material_progress WHERE completed_at >= CURRENT_DATE - INTERVAL '7 days'
 		) x
 	`).Scan(&activeWeek)
 
@@ -6139,13 +6147,17 @@ func (a *app) handleAdminLearningSummary(w http.ResponseWriter, r *http.Request)
 			FROM material_progress GROUP BY user_id
 		) mat ON mat.user_id = pp.user_id
 		LEFT JOIN (
-			SELECT CAST(user_id AS BIGINT) as uid, COUNT(*) as cnt, MAX(created_at) as last_at
-			FROM quiz_attempts GROUP BY user_id
-		) qz ON qz.uid = pp.user_id
+			SELECT tl.user_id as web_uid, COUNT(*) as cnt, MAX(qa.created_at) as last_at
+			FROM quiz_attempts qa
+			JOIN telegram_links tl ON tl.telegram_user_id = qa.user_id AND tl.is_active = TRUE
+			GROUP BY tl.user_id
+		) qz ON qz.web_uid = pp.user_id
 		LEFT JOIN (
-			SELECT CAST(user_id AS BIGINT) as uid, COUNT(*) as cnt, MAX(created_at) as last_at
-			FROM tryout_results GROUP BY user_id
-		) to2 ON to2.uid = pp.user_id
+			SELECT tl.user_id as web_uid, COUNT(*) as cnt, MAX(tr.created_at) as last_at
+			FROM tryout_results tr
+			JOIN telegram_links tl ON tl.telegram_user_id = tr.user_id AND tl.is_active = TRUE
+			GROUP BY tl.user_id
+		) to2 ON to2.web_uid = pp.user_id
 		ORDER BY last_active DESC, pp.name ASC
 	`)
 	participants := []map[string]any{}
