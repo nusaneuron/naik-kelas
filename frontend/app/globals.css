@@ -315,3 +315,136 @@ button:active { transform: translateY(0); }
 @media (max-width: 640px) {
   .nk-hide-mobile { display: none !important; }
 }
+
+/* ─── Portal Layout Responsive ─────────────────────────────── */
+.nk-portal-layout {
+  display: flex;
+  gap: 0;
+  min-height: 600px;
+}
+
+.nk-sidebar {
+  width: 200px;
+  flex-shrink: 0;
+  background: #0a1628;
+  border-right: 1px solid #1e2d45;
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nk-main-content {
+  flex: 1;
+  min-width: 0;
+  padding: 20px;
+  overflow-x: hidden;
+}
+
+/* ─── Admin Layout Responsive ─────────────────────────────── */
+.nk-admin-layout {
+  border: 1px solid #1e2d45;
+  border-radius: 16px;
+  background: #0b1220;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  min-height: 560px;
+}
+
+.nk-admin-sidebar {
+  background: #080d18;
+  border-right: 1px solid #1e2d45;
+  padding: 20px 12px;
+}
+
+.nk-admin-content {
+  padding: 20px;
+  overflow-x: hidden;
+  min-width: 0;
+}
+
+@media (max-width: 680px) {
+  /* Participant layout: sidebar jadi bottom nav */
+  .nk-portal-layout {
+    flex-direction: column;
+    min-height: unset;
+  }
+
+  .nk-sidebar {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 10px 8px;
+    gap: 4px;
+    border-right: none;
+    border-bottom: 1px solid #1e2d45;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .nk-sidebar::-webkit-scrollbar { display: none; }
+
+  .nk-sidebar .nk-sidebar-label {
+    display: none;
+  }
+
+  .nk-sidebar button {
+    flex-shrink: 0;
+    padding: 8px 10px !important;
+    min-width: 48px;
+    justify-content: center;
+    font-size: 18px !important;
+  }
+
+  .nk-sidebar button span.nav-label {
+    display: none;
+  }
+
+  .nk-main-content {
+    padding: 14px 12px;
+  }
+
+  /* Admin layout: stack vertikal */
+  .nk-admin-layout {
+    grid-template-columns: 1fr;
+    border-radius: 12px;
+  }
+
+  .nk-admin-sidebar {
+    border-right: none;
+    border-bottom: 1px solid #1e2d45;
+    padding: 12px;
+  }
+
+  .nk-admin-sidebar nav {
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .nk-admin-sidebar nav button {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    padding: 6px 12px !important;
+    font-size: 12px !important;
+  }
+
+  .nk-admin-content {
+    padding: 14px 12px;
+  }
+
+  /* Stat cards: single column on very small screens */
+  .nk-stat-card {
+    padding: 14px 14px;
+  }
+
+  /* Grid overrides for mobile */
+  .nk-grid-2col {
+    grid-template-columns: 1fr !important;
+  }
+
+  .nk-grid-auto {
+    grid-template-columns: 1fr !important;
+  }
+}

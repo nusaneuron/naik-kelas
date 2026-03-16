@@ -897,11 +897,11 @@ export default function Page() {
 
         {/* ── Participant View ── */}
         {showParticipantView && (
-          <div style={{ display: 'flex', gap: 0, minHeight: 600 }}>
+          <div className="nk-portal-layout">
 
             {/* Sidebar Peserta */}
-            <aside style={{ width: 200, flexShrink: 0, background: '#0a1628', borderRight: '1px solid #1e2d45', padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <p style={{ fontSize: 11, color: '#475569', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', margin: '0 0 12px 8px' }}>Menu</p>
+            <aside className="nk-sidebar">
+              <p className="nk-sidebar-label" style={{ fontSize: 11, color: '#475569', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', margin: '0 0 12px 8px' }}>Menu</p>
               {[
                 ['profil',    '👤', 'Profil'],
                 ['materi',    '📚', 'Materi'],
@@ -921,13 +921,14 @@ export default function Page() {
                   fontWeight: participantSection === key ? 700 : 500,
                   fontSize: 13, textAlign: 'left', transition: 'all 160ms ease', width: '100%'
                 }}>
-                  <span style={{ fontSize: 16 }}>{icon}</span> {label}
+                  <span style={{ fontSize: 16 }}>{icon}</span>
+                  <span className="nav-label"> {label}</span>
                 </button>
               ))}
             </aside>
 
             {/* Content Peserta */}
-            <div style={{ flex: 1, padding: 20, overflowX: 'auto' }}>
+            <div className="nk-main-content">
 
             {/* ── Profil ── */}
             {participantSection === 'profil' && (<>
@@ -1497,13 +1498,9 @@ export default function Page() {
 
         {/* ── Admin View ── */}
         {showAdminView && (
-          <div style={{
-            border: '1px solid #1e2d45', borderRadius: 16,
-            background: '#0b1220', overflow: 'hidden',
-            display: 'grid', gridTemplateColumns: '210px minmax(0,1fr)', minHeight: 560
-          }}>
+          <div className="nk-admin-layout">
             {/* Sidebar */}
-            <aside style={{ background: '#080d18', borderRight: '1px solid #1e2d45', padding: '20px 12px' }}>
+            <aside className="nk-admin-sidebar">
               <button
                 onClick={() => setAdminViewMode('participant')}
                 style={{
@@ -1554,7 +1551,7 @@ export default function Page() {
             </aside>
 
             {/* Content */}
-            <div style={{ padding: 20, overflowX: 'auto' }}>
+            <div className="nk-admin-content">
 
               {/* Admin — Kelompok */}
               {adminSection === 'kelompok' && (
