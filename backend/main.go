@@ -6281,9 +6281,66 @@ func (a *app) handleAdminSendReflectionNow(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
 	}
-	// Kirim ke semua peserta aktif yang belum refleksi hari ini (tanpa filter waktu)
-	go a.sendReflectionReminders(context.Background())
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "message": "Reminder refleksi sedang dikirim ke semua peserta yang belum refleksi hari ini."})
+	ctx := r.Context()
+
+	// Hitung dulu berapa peserta yang bisa dikirim (punya telegram_links)
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT tl.telegram_user_id, COALESCE(pp.name, '')
+		FROM telegram_links tl
+		JOIN users u ON u.id = tl.user_id AND u.is_active = TRUE AND u.role = 'participant'
+		JOIN participant_profiles pp ON pp.user_id = tl.user_id
+		WHERE NOT EXISTS (
+			SELECT 1 FROM reflections r WHERE r.user_id = tl.user_id AND r.reflected_date = CURRENT_DATE
+		)
+	`)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal query peserta"})
+		return
+	}
+	defer rows.Close()
+
+	reminderMsgs := []string{
+		"Hai *%s*! 🌙\n\nSaatnya luangkan sejenak untuk diri sendiri.\n\nYuk tulis refleksimu sekarang dengan /refleksi 📔\n_Hanya butuh 2 menit!_",
+		"Hei *%s*! 📔\n\nIni pengingat refleksi harianmu.\n\nApa yang berkesan dari harimu hari ini? Ceritakan ke Nala lewat /refleksi 🌸",
+		"*%s*, waktunya refleksi! 🌙\n\nMenulis perasaan dan pikiranmu bisa membantumu tumbuh lebih baik.\n\nKetik /refleksi dan ceritakan harimu ke Nala 💙",
+	}
+	sent, failed, idx := 0, 0, 0
+	for rows.Next() {
+		var tgUID, name string
+		if rows.Scan(&tgUID, &name) != nil {
+			continue
+		}
+		firstName := strings.Split(strings.TrimSpace(name), " ")[0]
+		if firstName == "" {
+			firstName = "kamu"
+		}
+		msg := fmt.Sprintf(reminderMsgs[idx%len(reminderMsgs)], escapeMD(firstName))
+		idx++
+		chatID, parseErr := strconv.ParseInt(strings.TrimSpace(tgUID), 10, 64)
+		if parseErr != nil || chatID == 0 {
+			failed++
+			continue
+		}
+		if sendErr := a.sendTelegramMessage(ctx, chatID, msg, "idle"); sendErr != nil {
+			failed++
+		} else {
+			sent++
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	var msg string
+	if sent == 0 && failed == 0 {
+		msg = "Semua peserta sudah refleksi hari ini, atau belum ada yang terhubung ke Telegram bot. 🎉"
+	} else if sent > 0 {
+		msg = fmt.Sprintf("✅ Reminder berhasil dikirim ke %d peserta.", sent)
+		if failed > 0 {
+			msg += fmt.Sprintf(" (%d gagal)", failed)
+		}
+	} else {
+		msg = fmt.Sprintf("❌ Gagal kirim ke %d peserta. Pastikan peserta sudah terhubung ke bot Telegram.", failed)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "sent": sent, "failed": failed, "message": msg})
 }
 
 func (a *app) handleAdminFeedbackSchedule(w http.ResponseWriter, r *http.Request) {

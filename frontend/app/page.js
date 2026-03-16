@@ -358,6 +358,12 @@ export default function Page() {
     if (type === 'delete') return deleteParticipant(participant.id);
   }
 
+  function showMsg(msg, type = 'success') {
+    setActionType(type);
+    setActionMsg(msg);
+    setTimeout(() => setActionMsg(''), 5000);
+  }
+
   async function resetPassword(userId) {
     setBusy(true); setActionMsg('');
     await fetch(`${apiBase}/admin/participants/reset-password`, {
