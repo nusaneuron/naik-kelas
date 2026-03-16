@@ -410,6 +410,17 @@ func (a *app) initDB(ctx context.Context) error {
 	}
 
 	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS bot_session_states (
+			telegram_user_id TEXT PRIMARY KEY,
+			state TEXT NOT NULL DEFAULT 'idle',
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	_, err = a.db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS auth_login_attempts (
 			phone TEXT PRIMARY KEY,
 			failed_count INT NOT NULL DEFAULT 0,
@@ -3004,11 +3015,29 @@ func (a *app) sendTelegramMessageWithKeyboard(ctx context.Context, chatID int64,
 	return nil
 }
 
+func (a *app) saveBotSessionState(ctx context.Context, uid, state string) {
+	_, _ = a.db.ExecContext(ctx, `
+		INSERT INTO bot_session_states (telegram_user_id, state, updated_at)
+		VALUES ($1, $2, NOW())
+		ON CONFLICT (telegram_user_id) DO UPDATE SET state=EXCLUDED.state, updated_at=NOW()
+	`, uid, state)
+}
+
+func (a *app) loadBotSessionState(ctx context.Context, uid string) string {
+	var state string
+	if err := a.db.QueryRowContext(ctx, `SELECT state FROM bot_session_states WHERE telegram_user_id=$1 AND updated_at > NOW() - INTERVAL '30 minutes'`, uid).Scan(&state); err != nil {
+		return "idle"
+	}
+	return state
+}
+
 func (a *app) processBotText(ctx context.Context, uid, displayName, text string) (reply, state string) {
 	a.mu.Lock()
 	s := a.botSessions[uid]
 	if s == nil {
-		s = &botSession{State: "idle"}
+		// Coba restore state dari DB (untuk kasus server restart)
+		dbState := a.loadBotSessionState(ctx, uid)
+		s = &botSession{State: dbState, UpdatedAt: time.Now()}
 		a.botSessions[uid] = s
 	}
 	sessionExpired := false
@@ -3045,6 +3074,7 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 				return "Kamu sudah menulis refleksi hari ini 📔✅\n\nSampai jumpa besok\\! Tetap semangat belajar\\! 💪", "idle"
 			}
 		}
+		a.saveBotSessionState(ctx, uid, "wait_reflection")
 		return "📔 *Yuk, Ceritakan Harimu\\!*\n\n_Tulis bebas, tidak ada jawaban yang salah_ 🤍\n\n• Apa yang kamu pelajari hari ini?\n• Apa yang kamu rasakan?\n• Adakah hal yang ingin kamu syukuri atau perbaiki?\n\n_Ketik /batal untuk membatalkan_", "wait_reflection"
 	}
 
@@ -3127,6 +3157,7 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		}
 		msg := fmt.Sprintf(responses[idx%len(responses)], name, expVal)
 		a.resetSession(uid)
+		a.saveBotSessionState(ctx, uid, "idle")
 		return msg, "idle"
 	}
 
@@ -3181,6 +3212,7 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 
 	if lower == "/batal" {
 		a.resetSession(uid)
+		a.saveBotSessionState(ctx, uid, "idle")
 		return "Oke, proses dibatalkan dulu ya 🙂\nKapan pun siap, ketik /daftar, /quiz, atau /tryout untuk mulai lagi.", "idle"
 	}
 	if lower == "/start" {
