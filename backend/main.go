@@ -1176,7 +1176,7 @@ func (a *app) handleParticipantLeaderboard(w http.ResponseWriter, r *http.Reques
 	_ = a.db.QueryRowContext(r.Context(), `SELECT COALESCE(group_id, 0) FROM participant_profiles WHERE user_id=$1`, u.ID).Scan(&myGroupID)
 
 	// Bangun query — filter per kelompok jika user punya kelompok
-	leaderQuery := `
+	leaderBase := `
 		SELECT tr.user_id,
 		       COALESCE(NULLIF(bp.registered_name, ''), NULLIF(tr.display_name, ''), tr.user_id) as name,
 		       COALESCE(NULLIF(bp.telegram_display, ''), tr.user_id) as tg,
@@ -1186,6 +1186,7 @@ func (a *app) handleParticipantLeaderboard(w http.ResponseWriter, r *http.Reques
 		LEFT JOIN bot_profiles bp ON bp.user_id = tr.user_id`
 
 	var leaderArgs []any
+	leaderQuery := leaderBase
 	if myGroupID > 0 {
 		leaderQuery += `
 		JOIN telegram_links tl ON tl.telegram_user_id = tr.user_id
@@ -1198,6 +1199,31 @@ func (a *app) handleParticipantLeaderboard(w http.ResponseWriter, r *http.Reques
 		LIMIT 20`
 
 	rows, err := a.db.QueryContext(r.Context(), leaderQuery, leaderArgs...)
+	// Jika group filter tidak menghasilkan data, fallback ke global
+	if err == nil && myGroupID > 0 {
+		allRows := []struct{ uid, name, tg string; best, perfect int }{}
+		for rows.Next() {
+			var uid, name, tg string; var best, perfect int
+			if rows.Scan(&uid, &name, &tg, &best, &perfect) == nil {
+				allRows = append(allRows, struct{ uid, name, tg string; best, perfect int }{uid, name, tg, best, perfect})
+			}
+		}
+		rows.Close()
+		if len(allRows) == 0 {
+			// Fallback global
+			rows, err = a.db.QueryContext(r.Context(), leaderBase+`
+				GROUP BY tr.user_id, name, tg
+				ORDER BY perfect_count DESC, best_seconds ASC, name ASC LIMIT 20`)
+		} else {
+			// Kembalikan rows sebagai slice result — wrap ke dummy rows
+			items := make([]map[string]any, 0)
+			for i, r2 := range allRows {
+				items = append(items, map[string]any{"rank": i + 1, "name": r2.name, "telegram": cleanTelegramHandle(r2.tg), "best_seconds": r2.best, "perfect_count": r2.perfect, "badges": []any{}})
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"items": items})
+			return
+		}
+	}
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed leaderboard"})
 		return
