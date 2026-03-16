@@ -32,6 +32,9 @@ export default function Page() {
   const [history, setHistory] = useState({ quiz: [], tryout: [] });
   const [leaderboard, setLeaderboard] = useState([]);
   const [profile, setProfile] = useState(null);
+  const [editingName, setEditingName] = useState(false);
+  const [editNameVal, setEditNameVal] = useState('');
+  const [editNameLoading, setEditNameLoading] = useState(false);
   const [myReminder, setMyReminder] = useState(null);
   const [myPoints, setMyPoints] = useState(0);
   const [myPointHistory, setMyPointHistory] = useState([]);
@@ -928,7 +931,36 @@ export default function Page() {
 
               <div className="nk-stat-card purple">
                 <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 10 }}>👤 Profil</div>
-                <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{profile?.name || '-'}</div>
+                {editingName ? (
+                  <div style={{ marginBottom: 8 }}>
+                    <input autoFocus value={editNameVal} onChange={e => setEditNameVal(e.target.value)}
+                      onKeyDown={async e => {
+                        if (e.key === 'Enter') e.target.blur();
+                        if (e.key === 'Escape') setEditingName(false);
+                      }}
+                      style={{ width: '100%', padding: '6px 10px', background: '#0a1628', border: '1px solid #3b82f6', borderRadius: 8, color: '#fff', fontSize: 15, fontWeight: 700, marginBottom: 6 }} />
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button disabled={editNameLoading || !editNameVal.trim()} onClick={async () => {
+                        if (!editNameVal.trim()) return;
+                        setEditNameLoading(true);
+                        const res = await fetch(`${apiBase}/participant/me`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: editNameVal.trim() }) });
+                        const data = await res.json();
+                        setEditNameLoading(false);
+                        if (data.ok) { setProfile(p => ({ ...p, name: data.name })); setEditingName(false); }
+                        else alert(data.error || 'Gagal update nama');
+                      }} style={{ flex: 1, padding: '5px 0', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                        {editNameLoading ? 'Menyimpan...' : '💾 Simpan'}
+                      </button>
+                      <button onClick={() => setEditingName(false)} style={{ flex: 1, padding: '5px 0', background: 'transparent', color: '#94a3b8', border: '1px solid #1e2d45', borderRadius: 7, cursor: 'pointer', fontSize: 12 }}>Batal</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontWeight: 700, fontSize: 16 }}>{profile?.name || '-'}</span>
+                    <button onClick={() => { setEditNameVal(profile?.name || ''); setEditingName(true); }}
+                      style={{ background: 'none', border: '1px solid #1e3a5f', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', fontSize: 11, color: '#64748b' }}>✏️ Edit</button>
+                  </div>
+                )}
                 <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 2 }}>{profile?.email || '-'}</div>
                 <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <span className="nk-badge nk-badge-purple">Lv. {profile?.level || 1}</span>

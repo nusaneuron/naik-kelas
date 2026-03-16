@@ -1106,6 +1106,29 @@ func (a *app) handleParticipantMe(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
+	// POST → update nama
+	if r.Method == http.MethodPost {
+		var req struct {
+			Name string `json:"name"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil || strings.TrimSpace(req.Name) == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "nama tidak boleh kosong"})
+			return
+		}
+		name := strings.TrimSpace(req.Name)
+		if len([]rune(name)) > 60 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "nama maksimal 60 karakter"})
+			return
+		}
+		_, err := a.db.ExecContext(r.Context(), `
+			UPDATE participant_profiles SET name=$1, updated_at=NOW() WHERE user_id=$2`, name, u.ID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal update nama"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "name": name})
+		return
+	}
 	var name, email, source, reflectionReminderTime string
 	var groupID int64
 	_ = a.db.QueryRowContext(r.Context(), `
