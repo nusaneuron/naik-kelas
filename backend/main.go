@@ -3074,6 +3074,10 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 				return "Kamu sudah menulis refleksi hari ini 📔✅\n\nSampai jumpa besok\\! Tetap semangat belajar\\! 💪", "idle"
 			}
 		}
+		a.mu.Lock()
+		s.State = "wait_reflection"
+		s.UpdatedAt = time.Now()
+		a.mu.Unlock()
 		a.saveBotSessionState(ctx, uid, "wait_reflection")
 		return "📔 *Yuk, Ceritakan Harimu\\!*\n\n_Tulis bebas, tidak ada jawaban yang salah_ 🤍\n\n• Apa yang kamu pelajari hari ini?\n• Apa yang kamu rasakan?\n• Adakah hal yang ingin kamu syukuri atau perbaiki?\n\n_Ketik /batal untuk membatalkan_", "wait_reflection"
 	}
