@@ -1175,119 +1175,85 @@ func (a *app) handleParticipantLeaderboard(w http.ResponseWriter, r *http.Reques
 	var myGroupID int64
 	_ = a.db.QueryRowContext(r.Context(), `SELECT COALESCE(group_id, 0) FROM participant_profiles WHERE user_id=$1`, u.ID).Scan(&myGroupID)
 
-	// Bangun query — filter per kelompok jika user punya kelompok
-	leaderBase := `
-		SELECT tr.user_id,
-		       COALESCE(NULLIF(bp.registered_name, ''), NULLIF(tr.display_name, ''), tr.user_id) as name,
-		       COALESCE(NULLIF(bp.telegram_display, ''), tr.user_id) as tg,
-		       MIN(tr.duration_seconds) as best_seconds,
-		       COUNT(*) FILTER (WHERE tr.all_correct) as perfect_count
+	// Query leaderboard: tampilkan semua peserta yang pernah tryout
+	// Coba filter per kelompok dulu, jika kosong fallback ke global
+	runLeader := func(gid int64) ([]map[string]any, error) {
+		q := `SELECT tr.user_id,
+			COALESCE(NULLIF(bp.registered_name,''), NULLIF(tr.display_name,''), tr.user_id) as name,
+			COALESCE(NULLIF(bp.telegram_display,''), tr.user_id) as tg,
+			MIN(tr.duration_seconds) as best_seconds,
+			COUNT(*) FILTER (WHERE tr.all_correct) as perfect_count
 		FROM tryout_results tr
 		LEFT JOIN bot_profiles bp ON bp.user_id = tr.user_id`
-
-	var leaderArgs []any
-	leaderQuery := leaderBase
-	if myGroupID > 0 {
-		leaderQuery += `
-		JOIN telegram_links tl ON tl.telegram_user_id = tr.user_id
-		JOIN participant_profiles pp ON pp.user_id = tl.user_id AND pp.group_id = $1`
-		leaderArgs = append(leaderArgs, myGroupID)
-	}
-	leaderQuery += `
-		GROUP BY tr.user_id, name, tg
-		ORDER BY perfect_count DESC, best_seconds ASC, name ASC
-		LIMIT 20`
-
-	rows, err := a.db.QueryContext(r.Context(), leaderQuery, leaderArgs...)
-	// Jika group filter tidak menghasilkan data, fallback ke global
-	if err == nil && myGroupID > 0 {
-		allRows := []struct{ uid, name, tg string; best, perfect int }{}
-		for rows.Next() {
-			var uid, name, tg string; var best, perfect int
-			if rows.Scan(&uid, &name, &tg, &best, &perfect) == nil {
-				allRows = append(allRows, struct{ uid, name, tg string; best, perfect int }{uid, name, tg, best, perfect})
+		var args []any
+		if gid > 0 {
+			q += ` JOIN telegram_links tl ON tl.telegram_user_id = tr.user_id
+			JOIN participant_profiles pp ON pp.user_id = tl.user_id AND pp.group_id = $1`
+			args = append(args, gid)
+		}
+		q += ` GROUP BY tr.user_id, name, tg ORDER BY perfect_count DESC, best_seconds ASC, name ASC LIMIT 20`
+		r2, err2 := a.db.QueryContext(r.Context(), q, args...)
+		if err2 != nil {
+			return nil, err2
+		}
+		defer r2.Close()
+		var result []map[string]any
+		rank := 1
+		for r2.Next() {
+			var uid, name, tg string
+			var best, perfect int
+			if r2.Scan(&uid, &name, &tg, &best, &perfect) == nil {
+				result = append(result, map[string]any{
+					"rank": rank, "name": name, "_uid": uid,
+					"telegram": cleanTelegramHandle(tg),
+					"best_seconds": best, "perfect_count": perfect,
+					"badges": []any{},
+				})
+				rank++
 			}
 		}
-		rows.Close()
-		if len(allRows) == 0 {
-			// Fallback global
-			rows, err = a.db.QueryContext(r.Context(), leaderBase+`
-				GROUP BY tr.user_id, name, tg
-				ORDER BY perfect_count DESC, best_seconds ASC, name ASC LIMIT 20`)
-		} else {
-			// Kembalikan rows sebagai slice result — wrap ke dummy rows
-			items := make([]map[string]any, 0)
-			for i, r2 := range allRows {
-				items = append(items, map[string]any{"rank": i + 1, "name": r2.name, "telegram": cleanTelegramHandle(r2.tg), "best_seconds": r2.best, "perfect_count": r2.perfect, "badges": []any{}})
-			}
-			writeJSON(w, http.StatusOK, map[string]any{"items": items})
-			return
-		}
+		return result, nil
 	}
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed leaderboard"})
-		return
-	}
-	defer rows.Close()
-	items := make([]map[string]any, 0)
-	rank := 1
 
-	// Kumpulkan dulu semua hasil + user_ids untuk fetch badges
-	type leaderRow struct {
-		userID       string
-		name         string
-		tg           string
-		bestSec      int
-		perfectCount int
+	leaderItems, _ := runLeader(myGroupID)
+	if len(leaderItems) == 0 && myGroupID > 0 {
+		// Fallback global
+		leaderItems, _ = runLeader(0)
 	}
-	var leaderRows []leaderRow
-	for rows.Next() {
-		var lr leaderRow
-		if err := rows.Scan(&lr.userID, &lr.name, &lr.tg, &lr.bestSec, &lr.perfectCount); err == nil {
-			leaderRows = append(leaderRows, lr)
-		}
-	}
-	rows.Close()
 
-	// Ambil badges per user (via telegram_user_id → user_id → badges)
-	for _, lr := range leaderRows {
-		// Resolve web user_id dari telegram_user_id
+	// Fetch badges per item
+	for i, it := range leaderItems {
+		uid, _ := it["_uid"].(string)
+		delete(leaderItems[i], "_uid")
+		if uid == "" {
+			continue
+		}
 		var webUID int64
-		_ = a.db.QueryRowContext(r.Context(), `SELECT user_id FROM telegram_links WHERE telegram_user_id=$1 AND is_active=TRUE`, lr.userID).Scan(&webUID)
-
-		type badgeMini struct {
-			Name    string `json:"name"`
-			IconURL string `json:"icon_url"`
+		_ = a.db.QueryRowContext(r.Context(), `SELECT user_id FROM telegram_links WHERE telegram_user_id=$1`, uid).Scan(&webUID)
+		if webUID == 0 {
+			continue
 		}
-		badges := []badgeMini{}
-		if webUID > 0 {
-			bRows, _ := a.db.QueryContext(r.Context(), `
-				SELECT bd.name, bd.icon_url
-				FROM participant_badges pb
-				JOIN badge_definitions bd ON bd.id = pb.badge_id
-				WHERE pb.user_id = $1 ORDER BY pb.awarded_at DESC LIMIT 5
-			`, webUID)
-			if bRows != nil {
-				for bRows.Next() {
-					var bm badgeMini
-					if bRows.Scan(&bm.Name, &bm.IconURL) == nil {
-						badges = append(badges, bm)
-					}
+		type badgeMini struct{ Name, IconURL string }
+		var badges []map[string]any
+		bRows, _ := a.db.QueryContext(r.Context(), `
+			SELECT bd.name, bd.icon_url FROM participant_badges pb
+			JOIN badge_definitions bd ON bd.id = pb.badge_id
+			WHERE pb.user_id=$1 ORDER BY pb.awarded_at DESC LIMIT 5`, webUID)
+		if bRows != nil {
+			for bRows.Next() {
+				var bn, bi string
+				if bRows.Scan(&bn, &bi) == nil {
+					badges = append(badges, map[string]any{"name": bn, "icon_url": bi})
 				}
-				bRows.Close()
 			}
+			bRows.Close()
 		}
-		items = append(items, map[string]any{
-			"rank":          rank,
-			"name":          lr.name,
-			"telegram":      cleanTelegramHandle(lr.tg),
-			"best_seconds":  lr.bestSec,
-			"perfect_count": lr.perfectCount,
-			"badges":        badges,
-		})
-		rank++
+		if badges != nil {
+			leaderItems[i]["badges"] = badges
+		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+
+	writeJSON(w, http.StatusOK, map[string]any{"items": leaderItems})
 }
 
 func (a *app) handleParticipantReminder(w http.ResponseWriter, r *http.Request) {
