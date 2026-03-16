@@ -223,6 +223,7 @@ func main() {
 	mux.HandleFunc("/admin/participants/delete", a.handleAdminDeleteParticipant)
 	mux.HandleFunc("/admin/categories", a.handleAdminCategories)
 	mux.HandleFunc("/admin/questions", a.handleAdminQuestions)
+	mux.HandleFunc("/admin/questions/generate", a.handleAdminGenerateQuestions)
 	mux.HandleFunc("/participant/redeem/items", a.handleParticipantRedeemItems)
 	mux.HandleFunc("/participant/redeem/claim", a.handleParticipantRedeemClaim)
 	mux.HandleFunc("/participant/redeem/claims", a.handleParticipantRedeemClaims)
@@ -5519,6 +5520,169 @@ type materialWithProgress struct {
 
 // GET  /admin/materials?category_id=X  → list
 // POST /admin/materials                → create | update | delete
+func (a *app) handleAdminGenerateQuestions(w http.ResponseWriter, r *http.Request) {
+	_, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req struct {
+		CategoryID  int64  `json:"category_id"`
+		MateriID    int64  `json:"materi_id"`
+		QuestionCount int  `json:"question_count"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || req.CategoryID == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "category_id wajib diisi"})
+		return
+	}
+	if req.QuestionCount <= 0 || req.QuestionCount > 20 {
+		req.QuestionCount = 5
+	}
+
+	ctx := r.Context()
+
+	// Ambil konten materi sebagai konteks
+	var materiContext string
+	if req.MateriID > 0 {
+		var title, content string
+		_ = a.db.QueryRowContext(ctx, `SELECT title, content FROM learning_materials WHERE id=$1`, req.MateriID).Scan(&title, &content)
+		if title != "" {
+			// Jika content adalah JSON array (multi-bubble), gabungkan
+			var bubbles []string
+			if json.Unmarshal([]byte(content), &bubbles) == nil {
+				content = strings.Join(bubbles, "\n\n")
+			}
+			materiContext = fmt.Sprintf("Judul Materi: %s\n\nIsi Materi:\n%s", title, content)
+		}
+	} else {
+		// Ambil semua materi dari kategori ini
+		rows, _ := a.db.QueryContext(ctx, `SELECT title, content FROM learning_materials WHERE category_id=$1 AND is_active=TRUE ORDER BY order_no, id LIMIT 5`, req.CategoryID)
+		if rows != nil {
+			var parts []string
+			for rows.Next() {
+				var title, content string
+				if rows.Scan(&title, &content) == nil {
+					var bubbles []string
+					if json.Unmarshal([]byte(content), &bubbles) == nil {
+						content = strings.Join(bubbles, "\n\n")
+					}
+					parts = append(parts, fmt.Sprintf("## %s\n%s", title, content))
+				}
+			}
+			rows.Close()
+			materiContext = strings.Join(parts, "\n\n---\n\n")
+		}
+	}
+
+	if materiContext == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "tidak ada materi ditemukan untuk kategori/materi ini"})
+		return
+	}
+
+	// Ambil nama kategori
+	var catName string
+	_ = a.db.QueryRowContext(ctx, `SELECT name FROM question_categories WHERE id=$1`, req.CategoryID).Scan(&catName)
+
+	systemPrompt := `Kamu adalah pembuat soal ujian profesional untuk program pelatihan karyawan.
+Buat soal pilihan ganda (multiple choice) dalam Bahasa Indonesia berdasarkan materi yang diberikan.
+Format output HARUS berupa JSON array. Setiap soal memiliki format:
+{
+  "question_text": "Pertanyaan di sini?",
+  "option_a": "Pilihan A",
+  "option_b": "Pilihan B",
+  "option_c": "Pilihan C",
+  "option_d": "Pilihan D",
+  "correct_option": "a"
+}
+Aturan:
+- correct_option harus huruf kecil: "a", "b", "c", atau "d"
+- Soal harus berdasarkan isi materi yang diberikan
+- Variasikan jawaban benar (jangan selalu "a")
+- Pilihan jawaban harus masuk akal dan tidak terlalu mudah ditebak
+- Jangan tambahkan teks di luar JSON array
+Output langsung JSON array saja.`
+
+	userPrompt := fmt.Sprintf("Buat %d soal pilihan ganda berdasarkan materi berikut:\n\n%s", req.QuestionCount, materiContext)
+	if catName != "" {
+		userPrompt = fmt.Sprintf("Kategori: %s\n\n", catName) + userPrompt
+	}
+
+	type aiMsg struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+	type aiReqBody struct {
+		Model       string  `json:"model"`
+		Messages    []aiMsg `json:"messages"`
+		MaxTokens   int     `json:"max_tokens"`
+		Temperature float64 `json:"temperature"`
+	}
+	payload, _ := json.Marshal(aiReqBody{
+		Model: "gpt-4o-mini",
+		Messages: []aiMsg{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: userPrompt},
+		},
+		MaxTokens:   3000,
+		Temperature: 0.6,
+	})
+
+	httpReq, _ := http.NewRequestWithContext(ctx, http.MethodPost, "https://ai.sumopod.com/v1/chat/completions", bytes.NewReader(payload))
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer sk-bTZ7vafsuH0O4NMduyvwUA")
+
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err2 := client.Do(httpReq)
+	if err2 != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "gagal hubungi AI: " + err2.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	var aiResp struct {
+		Choices []struct {
+			Message struct{ Content string `json:"content"` } `json:"message"`
+		} `json:"choices"`
+		Error *struct{ Message string `json:"message"` } `json:"error"`
+	}
+	if json.NewDecoder(resp.Body).Decode(&aiResp) != nil || len(aiResp.Choices) == 0 {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal parse respons AI"})
+		return
+	}
+	if aiResp.Error != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "AI error: " + aiResp.Error.Message})
+		return
+	}
+
+	content := strings.TrimSpace(aiResp.Choices[0].Message.Content)
+	start := strings.Index(content, "[")
+	end := strings.LastIndex(content, "]")
+	if start < 0 || end <= start {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "AI tidak menghasilkan format JSON yang valid"})
+		return
+	}
+
+	type generatedQ struct {
+		QuestionText  string `json:"question_text"`
+		OptionA       string `json:"option_a"`
+		OptionB       string `json:"option_b"`
+		OptionC       string `json:"option_c"`
+		OptionD       string `json:"option_d"`
+		CorrectOption string `json:"correct_option"`
+	}
+	var questions []generatedQ
+	if err3 := json.Unmarshal([]byte(content[start:end+1]), &questions); err3 != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal parse soal dari AI: " + err3.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"questions": questions, "count": len(questions)})
+}
+
 func (a *app) handleAdminGenerateMaterial(w http.ResponseWriter, r *http.Request) {
 	_, err := a.requireRole(r.Context(), r, "admin")
 	if err != nil {

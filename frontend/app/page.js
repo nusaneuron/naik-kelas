@@ -123,6 +123,13 @@ export default function Page() {
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiGroupDesc, setAiGroupDesc] = useState('');
   const [aiShowDesc, setAiShowDesc] = useState(false);
+  const [qAiGenerating, setQAiGenerating] = useState(false);
+  const [qAiCatId, setQAiCatId] = useState('');
+  const [qAiMateriId, setQAiMateriId] = useState('');
+  const [qAiCategoryMateri, setQAiCategoryMateri] = useState([]);
+  const [qAiGenerated, setQAiGenerated] = useState([]);
+  const [qAiChecked, setQAiChecked] = useState([]);
+  const [qAiSaving, setQAiSaving] = useState(false);
   const [materiExp, setMateriExp] = useState('10');
   const [materiOrder, setMateriOrder] = useState('0');
   const [materiActive, setMateriActive] = useState(true);
@@ -1668,6 +1675,121 @@ export default function Page() {
                   </AdminSection>
 
                   <AdminSection title="📝 Bank Soal" style={{ marginTop: 14 }}>
+                    {/* AI Generate Soal */}
+                    <div style={{ background: '#0a1e3a', border: '1px dashed #2563eb', borderRadius: 10, padding: '12px 14px', marginBottom: 16 }}>
+                      <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, color: '#93c5fd' }}>✨ Generate Soal dengan AI</p>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                        <div>
+                          <label style={fieldLbl}>Kategori Soal</label>
+                          <select className="nk-input-sm" style={{ width: '100%' }} value={qAiCatId}
+                            onChange={async e => {
+                              const catId = e.target.value;
+                              setQAiCatId(catId);
+                              setQAiMateriId('');
+                              setQAiCategoryMateri([]);
+                              setQAiGenerated([]);
+                              setQAiChecked([]);
+                              if (!catId) return;
+                              const res = await fetch(`${apiBase}/admin/materials?category_id=${catId}`, { credentials: 'include' });
+                              const data = await res.json();
+                              setQAiCategoryMateri(data.items || []);
+                            }}>
+                            <option value="">-- Pilih Kategori --</option>
+                            {categories.filter(c => isSuperAdmin || c.group_id > 0).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={fieldLbl}>Materi Sumber <span style={{ color: '#64748b' }}>(opsional)</span></label>
+                          <select className="nk-input-sm" style={{ width: '100%' }} value={qAiMateriId} onChange={e => { setQAiMateriId(e.target.value); setQAiGenerated([]); setQAiChecked([]); }}>
+                            <option value="">-- Semua Materi Kategori --</option>
+                            {qAiCategoryMateri.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, marginBottom: qAiGenerated.length ? 12 : 0 }}>
+                        {[5, 10, 15].map(n => (
+                          <button key={n} type="button" disabled={qAiGenerating || !qAiCatId}
+                            onClick={async () => {
+                              if (!qAiCatId) { alert('Pilih kategori dulu!'); return; }
+                              setQAiGenerating(true); setQAiGenerated([]); setQAiChecked([]);
+                              try {
+                                const res = await fetch(`${apiBase}/admin/questions/generate`, {
+                                  method: 'POST', credentials: 'include',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ category_id: Number(qAiCatId), materi_id: Number(qAiMateriId) || 0, question_count: n })
+                                });
+                                const data = await res.json();
+                                if (data.questions?.length > 0) {
+                                  setQAiGenerated(data.questions);
+                                  setQAiChecked(data.questions.map((_, i) => i));
+                                } else alert('Gagal generate: ' + (data.error || 'Unknown'));
+                              } catch(e) { alert('Error: ' + e.message); }
+                              setQAiGenerating(false);
+                            }}
+                            style={{ flex: 1, padding: '7px 0', background: qAiGenerating || !qAiCatId ? '#1e3a5f' : '#1d4ed8', color: '#fff', border: 'none', borderRadius: 8, cursor: qAiGenerating || !qAiCatId ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, opacity: !qAiCatId ? 0.5 : 1 }}>
+                            {qAiGenerating ? '⏳ Generating...' : `✨ ${n} Soal`}
+                          </button>
+                        ))}
+                      </div>
+                      {!qAiCatId && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#64748b' }}>Pilih kategori dulu sebelum generate soal.</p>}
+                      {/* Preview hasil generate */}
+                      {qAiGenerated.length > 0 && (
+                        <div style={{ marginTop: 12 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <p style={{ margin: 0, fontSize: 12, color: '#94a3b8' }}>
+                              {qAiGenerated.length} soal dihasilkan — <span style={{ color: '#4ade80' }}>{qAiChecked.length} dipilih</span>
+                            </p>
+                            <button type="button" onClick={() => setQAiChecked(qAiChecked.length === qAiGenerated.length ? [] : qAiGenerated.map((_,i) => i))}
+                              style={{ fontSize: 11, color: '#93c5fd', background: 'none', border: '1px solid #1e3a5f', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}>
+                              {qAiChecked.length === qAiGenerated.length ? 'Batal Semua' : 'Pilih Semua'}
+                            </button>
+                          </div>
+                          {qAiGenerated.map((q, i) => (
+                            <div key={i} onClick={() => setQAiChecked(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i])}
+                              style={{ background: qAiChecked.includes(i) ? '#0d2744' : '#0f172a', border: `1px solid ${qAiChecked.includes(i) ? '#2563eb' : '#1e3a5f'}`, borderRadius: 8, padding: '10px 12px', marginBottom: 8, cursor: 'pointer', transition: 'all 0.15s' }}>
+                              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                                <span style={{ fontSize: 16, marginTop: 1 }}>{qAiChecked.includes(i) ? '✅' : '⬜'}</span>
+                                <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{i+1}. {q.question_text}</span>
+                              </div>
+                              <div style={{ marginTop: 6, paddingLeft: 26, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
+                                {['a','b','c','d'].map(opt => (
+                                  <div key={opt} style={{ fontSize: 12, color: q.correct_option?.toLowerCase() === opt ? '#4ade80' : '#94a3b8', display: 'flex', gap: 4 }}>
+                                    <span style={{ fontWeight: 700, minWidth: 14 }}>{opt.toUpperCase()}.</span>
+                                    <span>{q[`option_${opt}`]}</span>
+                                    {q.correct_option?.toLowerCase() === opt && <span>✓</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                          <button type="button" disabled={qAiSaving || qAiChecked.length === 0}
+                            onClick={async () => {
+                              const selected = qAiGenerated.filter((_, i) => qAiChecked.includes(i));
+                              if (!selected.length) { alert('Pilih minimal 1 soal!'); return; }
+                              setQAiSaving(true);
+                              let saved = 0;
+                              for (const q of selected) {
+                                const res = await fetch(`${apiBase}/admin/questions`, {
+                                  method: 'POST', credentials: 'include',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ action: 'create', category_id: Number(qAiCatId), question_text: q.question_text, option_a: q.option_a, option_b: q.option_b, option_c: q.option_c, option_d: q.option_d, correct_option: q.correct_option?.toUpperCase(), is_active: true })
+                                });
+                                if (res.ok) saved++;
+                              }
+                              setQAiSaving(false);
+                              setQAiGenerated([]); setQAiChecked([]);
+                              alert(`✅ ${saved} soal berhasil disimpan ke bank soal!`);
+                              const r2 = await fetch(`${apiBase}/admin/questions`, { credentials: 'include' });
+                              const d2 = await r2.json();
+                              setQuestions(d2.items || []);
+                            }}
+                            style={{ width: '100%', padding: '9px 0', background: qAiChecked.length === 0 ? '#1e3a5f' : '#16a34a', color: '#fff', border: 'none', borderRadius: 8, cursor: qAiChecked.length === 0 ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 13, opacity: qAiChecked.length === 0 ? 0.5 : 1 }}>
+                            {qAiSaving ? '💾 Menyimpan...' : `💾 Simpan ${qAiChecked.length} Soal Terpilih ke Bank Soal`}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
                     <div style={{ display: 'grid', gap: 10, marginBottom: 16 }}>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                         <div>
