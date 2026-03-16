@@ -235,6 +235,7 @@ func main() {
 
 	// Learning Materials
 	mux.HandleFunc("/admin/materials", a.handleAdminMaterials)
+	mux.HandleFunc("/admin/materials/generate", a.handleAdminGenerateMaterial)
 	mux.HandleFunc("/participant/materials", a.handleParticipantMaterials)
 	mux.HandleFunc("/participant/materials/complete", a.handleParticipantMaterialComplete)
 	mux.HandleFunc("/participant/reflections", a.handleParticipantReflections)
@@ -5518,6 +5519,122 @@ type materialWithProgress struct {
 
 // GET  /admin/materials?category_id=X  → list
 // POST /admin/materials                → create | update | delete
+func (a *app) handleAdminGenerateMaterial(w http.ResponseWriter, r *http.Request) {
+	_, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req struct {
+		Topic            string `json:"topic"`
+		GroupDescription string `json:"group_description"`
+		BubbleCount      int    `json:"bubble_count"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || strings.TrimSpace(req.Topic) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "topic wajib diisi"})
+		return
+	}
+	if req.BubbleCount <= 0 || req.BubbleCount > 8 {
+		req.BubbleCount = 3
+	}
+
+	// Bangun system prompt
+	systemPrompt := `Kamu adalah asisten pembuat materi pembelajaran untuk program pelatihan karyawan.
+Tugas kamu adalah membuat konten materi edukasi dalam Bahasa Indonesia yang informatif, ringkas, dan mudah dipahami.
+Format output HARUS berupa JSON array of strings, dimana setiap string adalah satu "bubble" pesan (seperti pesan chat).
+Setiap bubble maksimal 300 kata. Gunakan Markdown: **bold**, _italic_, bullet list (- item), heading (## Judul).
+Jangan tambahkan penjelasan di luar JSON. Langsung output JSON saja.
+Contoh format: ["bubble 1 content", "bubble 2 content", "bubble 3 content"]`
+
+	userPrompt := fmt.Sprintf(`Buat materi pembelajaran tentang: "%s"`, req.Topic)
+	if req.GroupDescription != "" {
+		userPrompt += fmt.Sprintf("\n\nKonteks kelompok/perusahaan: %s", req.GroupDescription)
+	}
+	userPrompt += fmt.Sprintf("\n\nBagi menjadi %d bubble pesan yang mengalir secara natural.", req.BubbleCount)
+
+	// Call SumoPod AI (OpenAI-compatible)
+	type aiMsg struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+	type aiReq struct {
+		Model       string  `json:"model"`
+		Messages    []aiMsg `json:"messages"`
+		MaxTokens   int     `json:"max_tokens"`
+		Temperature float64 `json:"temperature"`
+	}
+	payload, _ := json.Marshal(aiReq{
+		Model: "gpt-4o-mini",
+		Messages: []aiMsg{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: userPrompt},
+		},
+		MaxTokens:   2000,
+		Temperature: 0.7,
+	})
+
+	httpReq, err2 := http.NewRequestWithContext(r.Context(), http.MethodPost, "https://ai.sumopod.com/v1/chat/completions", bytes.NewReader(payload))
+	if err2 != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal buat request AI"})
+		return
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer sk-bTZ7vafsuH0O4NMduyvwUA")
+
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err3 := client.Do(httpReq)
+	if err3 != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "gagal hubungi AI: " + err3.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	var aiResp struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.NewDecoder(resp.Body).Decode(&aiResp) != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal parse respons AI"})
+		return
+	}
+	if aiResp.Error != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "AI error: " + aiResp.Error.Message})
+		return
+	}
+	if len(aiResp.Choices) == 0 {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "AI tidak menghasilkan konten"})
+		return
+	}
+
+	content := strings.TrimSpace(aiResp.Choices[0].Message.Content)
+	// Coba parse sebagai JSON array
+	var bubbles []string
+	// Cari JSON array dalam respons (kadang AI tambah teks di sekitar JSON)
+	start := strings.Index(content, "[")
+	end := strings.LastIndex(content, "]")
+	if start >= 0 && end > start {
+		jsonPart := content[start : end+1]
+		if json.Unmarshal([]byte(jsonPart), &bubbles) != nil {
+			// Fallback: jadikan 1 bubble
+			bubbles = []string{content}
+		}
+	} else {
+		bubbles = []string{content}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"bubbles": bubbles, "topic": req.Topic})
+}
+
 func (a *app) handleAdminMaterials(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	adminUserM, err := a.requireRole(ctx, r, "admin")
