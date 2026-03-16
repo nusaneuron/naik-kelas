@@ -1755,7 +1755,7 @@ export default function Page() {
                           </select>
                         </div>
                       </div>
-                      <div style={{ display: 'flex', gap: 8, marginBottom: qAiGenerated.length ? 12 : 0 }}>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: qAiGenerated.length ? 12 : 0 }}>
                         {[5, 10, 15].map(n => (
                           <button key={n} type="button" disabled={qAiGenerating || !qAiCatId}
                             onClick={async () => {
@@ -1775,7 +1775,7 @@ export default function Page() {
                               } catch(e) { alert('Error: ' + e.message); }
                               setQAiGenerating(false);
                             }}
-                            style={{ flex: 1, padding: '7px 0', background: qAiGenerating || !qAiCatId ? '#1e3a5f' : '#1d4ed8', color: '#fff', border: 'none', borderRadius: 8, cursor: qAiGenerating || !qAiCatId ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, opacity: !qAiCatId ? 0.5 : 1 }}>
+                            style={{ flex: '1 1 80px', minWidth: 80, padding: '7px 0', background: qAiGenerating || !qAiCatId ? '#1e3a5f' : '#1d4ed8', color: '#fff', border: 'none', borderRadius: 8, cursor: qAiGenerating || !qAiCatId ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, opacity: !qAiCatId ? 0.5 : 1 }}>
                             {qAiGenerating ? '⏳ Generating...' : `✨ ${n} Soal`}
                           </button>
                         ))}
@@ -2651,7 +2651,7 @@ export default function Page() {
                                 style={{ width: '100%', fontSize: 12, resize: 'vertical' }} />
                             </div>
                           )}
-                          <div style={{ display: 'flex', gap: 8 }}>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                             {[3,4,5].map(n => (
                               <button key={n} type="button" disabled={aiGenerating || !materiTitle.trim()}
                                 onClick={async () => {
@@ -2672,7 +2672,7 @@ export default function Page() {
                                   } catch(e) { alert('Error: ' + e.message); }
                                   setAiGenerating(false);
                                 }}
-                                style={{ flex: 1, padding: '6px 0', background: aiGenerating ? '#1e3a5f' : '#1d4ed8', color: '#fff', border: 'none', borderRadius: 8, cursor: aiGenerating || !materiTitle.trim() ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, opacity: !materiTitle.trim() ? 0.5 : 1 }}>
+                                style={{ flex: '1 1 80px', minWidth: 80, padding: '6px 0', background: aiGenerating ? '#1e3a5f' : '#1d4ed8', color: '#fff', border: 'none', borderRadius: 8, cursor: aiGenerating || !materiTitle.trim() ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, opacity: !materiTitle.trim() ? 0.5 : 1 }}>
                                 {aiGenerating ? '⏳ Generating...' : `✨ ${n} Bubble`}
                               </button>
                             ))}
