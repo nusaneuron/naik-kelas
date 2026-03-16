@@ -134,6 +134,19 @@ export default function Page() {
   const [qAiGenerated, setQAiGenerated] = useState([]);
   const [qAiChecked, setQAiChecked] = useState([]);
   const [qAiSaving, setQAiSaving] = useState(false);
+
+  // Notes
+  const [notes, setNotes] = useState([]);
+  const [notesAllTags, setNotesAllTags] = useState([]);
+  const [notesTagFilter, setNotesTagFilter] = useState('');
+  const [notesSearch, setNotesSearch] = useState('');
+  const [activeNote, setActiveNote] = useState(null); // {id,title,content,tags,backlinks}
+  const [noteEditing, setNoteEditing] = useState(false);
+  const [noteDraft, setNoteDraft] = useState({ title: '', content: '' });
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteView, setNoteView] = useState('list'); // 'list' | 'editor' | 'graph'
+  const [noteAutocomplete, setNoteAutocomplete] = useState([]); // [[title suggestions
+  const [graphData, setGraphData] = useState(null);
   const [tryoutConfigs, setTryoutConfigs] = useState([]);
   const [tryoutNewName, setTryoutNewName] = useState('');
   const [tryoutExpandedId, setTryoutExpandedId] = useState(null);
@@ -230,7 +243,69 @@ export default function Page() {
     } else if (section === 'leaderboard') {
       const lRes = await fetch(`${apiBase}/participant/leaderboard`, { credentials: 'include' });
       if (lRes.ok) setLeaderboard((await lRes.json()).items || []);
+    } else if (section === 'catatan') {
+      await refreshNotes();
     }
+  }
+
+  async function refreshNotes(tag = notesTagFilter, q = notesSearch) {
+    let url = `${apiBase}/participant/notes`;
+    const params = [];
+    if (tag) params.push(`tag=${encodeURIComponent(tag)}`);
+    if (q) params.push(`q=${encodeURIComponent(q)}`);
+    if (params.length) url += '?' + params.join('&');
+    const res = await fetch(url, { credentials: 'include' });
+    if (res.ok) {
+      const data = await res.json();
+      setNotes(data.notes || []);
+      setNotesAllTags(data.all_tags || []);
+    }
+  }
+
+  async function loadNoteDetail(id) {
+    const res = await fetch(`${apiBase}/participant/notes?id=${id}`, { credentials: 'include' });
+    if (res.ok) {
+      const data = await res.json();
+      setActiveNote(data);
+      setNoteDraft({ title: data.title, content: data.content });
+      setNoteEditing(false);
+      setNoteView('editor');
+    }
+  }
+
+  async function saveNote() {
+    setNoteSaving(true);
+    const isNew = !activeNote?.id;
+    const body = { action: isNew ? 'create' : 'update', title: noteDraft.title, content: noteDraft.content };
+    if (!isNew) body.id = activeNote.id;
+    const res = await fetch(`${apiBase}/participant/notes`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    setNoteSaving(false);
+    if (data.ok) {
+      const noteId = isNew ? data.id : activeNote.id;
+      await refreshNotes();
+      await loadNoteDetail(noteId);
+    }
+  }
+
+  async function deleteNote(id) {
+    if (!confirm('Hapus catatan ini?')) return;
+    await fetch(`${apiBase}/participant/notes`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', id })
+    });
+    setActiveNote(null); setNoteView('list');
+    await refreshNotes();
+  }
+
+  async function loadGraph() {
+    const res = await fetch(`${apiBase}/participant/notes/graph`, { credentials: 'include' });
+    if (res.ok) { setGraphData(await res.json()); setNoteView('graph'); }
   }
 
   async function loadAdmin() {
@@ -911,6 +986,7 @@ export default function Page() {
                 ['refleksi',  '📔', 'Refleksi'],
                 ['badges',    '🎖️', 'Badges'],
                 ['leaderboard','🏆','Leaderboard'],
+                ['catatan',   '📝','Catatan'],
               ].map(([key, icon, label]) => (
                 <button key={key} onClick={() => { setParticipantSection(key); loadSection(key); }} style={{
                   display: 'flex', alignItems: 'center', gap: 10,
@@ -1230,6 +1306,167 @@ export default function Page() {
             </Section>
 
             </>)}
+
+            {/* ── Catatan Pribadi ── */}
+            {participantSection === 'catatan' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {/* Toolbar */}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <button onClick={() => { setActiveNote(null); setNoteDraft({ title: '', content: '' }); setNoteEditing(true); setNoteView('editor'); }}
+                    style={{ padding: '7px 14px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
+                    ✏️ Catatan Baru
+                  </button>
+                  <button onClick={() => setNoteView('list')}
+                    style={{ padding: '7px 12px', background: noteView === 'list' ? '#1e3a5f' : 'transparent', color: noteView === 'list' ? '#93c5fd' : '#64748b', border: '1px solid #1e2d45', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>
+                    📋 Daftar
+                  </button>
+                  <button onClick={loadGraph}
+                    style={{ padding: '7px 12px', background: noteView === 'graph' ? '#1e3a5f' : 'transparent', color: noteView === 'graph' ? '#93c5fd' : '#64748b', border: '1px solid #1e2d45', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>
+                    🕸️ Graph
+                  </button>
+                  <input value={notesSearch} onChange={e => { setNotesSearch(e.target.value); refreshNotes(notesTagFilter, e.target.value); }}
+                    placeholder="🔍 Cari catatan..." className="nk-input-sm" style={{ flex: 1, minWidth: 140 }} />
+                </div>
+
+                {/* Tag filter */}
+                {notesAllTags.length > 0 && (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                    <button onClick={() => { setNotesTagFilter(''); refreshNotes(''); }}
+                      style={{ padding: '3px 10px', borderRadius: 20, border: '1px solid', borderColor: !notesTagFilter ? '#3b82f6' : '#1e2d45', background: !notesTagFilter ? '#1e3a5f' : 'transparent', color: !notesTagFilter ? '#93c5fd' : '#64748b', fontSize: 12, cursor: 'pointer' }}>
+                      Semua
+                    </button>
+                    {notesAllTags.map(t => (
+                      <button key={t} onClick={() => { setNotesTagFilter(t); refreshNotes(t); }}
+                        style={{ padding: '3px 10px', borderRadius: 20, border: '1px solid', borderColor: notesTagFilter === t ? '#a78bfa' : '#1e2d45', background: notesTagFilter === t ? 'rgba(167,139,250,0.15)' : 'transparent', color: notesTagFilter === t ? '#a78bfa' : '#64748b', fontSize: 12, cursor: 'pointer' }}>
+                        #{t}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* LIST VIEW */}
+                {noteView === 'list' && (
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {notes.length === 0 && <div className="nk-empty">📝 Belum ada catatan. Buat yang pertama!</div>}
+                    {notes.map(n => (
+                      <div key={n.id} onClick={() => loadNoteDetail(n.id)}
+                        style={{ background: '#0f172a', border: `1px solid ${activeNote?.id === n.id ? '#3b82f6' : '#1e2d45'}`, borderRadius: 10, padding: '12px 14px', cursor: 'pointer', transition: 'border-color 0.15s' }}>
+                        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{n.title}</div>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                          {n.tags.map(t => <span key={t} style={{ fontSize: 11, color: '#a78bfa', background: 'rgba(167,139,250,0.1)', padding: '1px 7px', borderRadius: 10 }}>#{t}</span>)}
+                          <span style={{ fontSize: 11, color: '#475569', marginLeft: 'auto' }}>{new Date(n.updated_at).toLocaleDateString('id-ID')}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* EDITOR VIEW */}
+                {noteView === 'editor' && (
+                  <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, overflow: 'hidden' }}>
+                    {/* Header editor */}
+                    <div style={{ display: 'flex', gap: 8, padding: '10px 12px', borderBottom: '1px solid #1e2d45', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <button onClick={() => setNoteView('list')} style={{ color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, padding: 0 }}>←</button>
+                      <input value={noteDraft.title} onChange={e => { setNoteDraft(d => ({ ...d, title: e.target.value })); setNoteEditing(true); }}
+                        placeholder="Judul catatan..." style={{ flex: 1, background: 'transparent', border: 'none', color: '#fff', fontWeight: 700, fontSize: 16, outline: 'none', minWidth: 100 }} />
+                      {noteEditing && (
+                        <button onClick={saveNote} disabled={noteSaving}
+                          style={{ padding: '5px 14px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
+                          {noteSaving ? 'Menyimpan...' : '💾 Simpan'}
+                        </button>
+                      )}
+                      {activeNote?.id && !noteEditing && (
+                        <>
+                          <button onClick={() => setNoteEditing(true)}
+                            style={{ padding: '5px 12px', background: 'transparent', color: '#94a3b8', border: '1px solid #1e2d45', borderRadius: 7, cursor: 'pointer', fontSize: 12 }}>✏️ Edit</button>
+                          <button onClick={() => deleteNote(activeNote.id)}
+                            style={{ padding: '5px 12px', background: 'transparent', color: '#ef4444', border: '1px solid #3f1f1f', borderRadius: 7, cursor: 'pointer', fontSize: 12 }}>🗑</button>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Konten editor / preview */}
+                    {noteEditing ? (
+                      <div style={{ position: 'relative' }}>
+                        <textarea value={noteDraft.content}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setNoteDraft(d => ({ ...d, content: val }));
+                            // Autocomplete [[
+                            const cur = e.target.selectionStart;
+                            const before = val.slice(0, cur);
+                            const m = before.match(/\[\[([^\]]{0,40})$/);
+                            if (m) {
+                              const q2 = m[1].toLowerCase();
+                              setNoteAutocomplete(notes.filter(n2 => n2.id !== activeNote?.id && n2.title.toLowerCase().includes(q2)).slice(0, 5));
+                            } else {
+                              setNoteAutocomplete([]);
+                            }
+                          }}
+                          placeholder={'Tulis catatan dalam Markdown...\n\nBacklink: [[Judul Catatan Lain]]\nTag: #topik #belajar'}
+                          style={{ width: '100%', minHeight: 320, padding: '14px 16px', background: '#080d18', border: 'none', color: '#e2e8f0', fontSize: 14, fontFamily: 'monospace', resize: 'vertical', outline: 'none', lineHeight: 1.7, boxSizing: 'border-box' }} />
+                        {/* Autocomplete dropdown */}
+                        {noteAutocomplete.length > 0 && (
+                          <div style={{ position: 'absolute', bottom: '100%', left: 16, background: '#1e293b', border: '1px solid #334155', borderRadius: 8, overflow: 'hidden', zIndex: 100, minWidth: 200 }}>
+                            {noteAutocomplete.map(sug => (
+                              <div key={sug.id} onClick={() => {
+                                const cur2 = noteDraft.content.lastIndexOf('[[');
+                                const newContent = noteDraft.content.slice(0, cur2) + '[[' + sug.title + ']]' + noteDraft.content.slice(cur2 + 2 + noteDraft.content.slice(cur2+2).indexOf(noteDraft.content.slice(cur2+2).match(/^([^\]]*)/)[0]) + noteDraft.content.slice(cur2+2).match(/^([^\]]*)/)[0].length + 2);
+                                setNoteDraft(d => ({ ...d, content: noteDraft.content.slice(0, noteDraft.content.lastIndexOf('[[')) + '[[' + sug.title + ']] ' + noteDraft.content.slice(noteDraft.content.lastIndexOf('[[')+2).replace(/^[^\]]*(\]\])?/, '') }));
+                                setNoteAutocomplete([]);
+                              }}
+                                style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, color: '#e2e8f0', borderBottom: '1px solid #1e2d45' }}
+                                onMouseEnter={e => e.target.style.background = '#2d3f5a'}
+                                onMouseLeave={e => e.target.style.background = 'transparent'}>
+                                📝 {sug.title}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ padding: '14px 16px', minHeight: 200 }}>
+                        <div style={{ lineHeight: 1.8, fontSize: 14, color: '#e2e8f0' }}
+                          dangerouslySetInnerHTML={{ __html: renderMD(activeNote?.content || '') }} />
+                        {/* Backlinks */}
+                        {activeNote?.backlinks?.length > 0 && (
+                          <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid #1e2d45' }}>
+                            <p style={{ fontSize: 11, color: '#475569', fontWeight: 600, marginBottom: 8, textTransform: 'uppercase' }}>🔗 Ditautkan dari:</p>
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                              {activeNote.backlinks.map(bl => (
+                                <span key={bl.id} onClick={() => loadNoteDetail(bl.id)}
+                                  style={{ fontSize: 12, color: '#60a5fa', background: 'rgba(96,165,250,0.1)', padding: '3px 10px', borderRadius: 10, cursor: 'pointer', border: '1px solid rgba(96,165,250,0.2)' }}>
+                                  📝 {bl.title}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {/* Tags */}
+                        {activeNote?.tags?.length > 0 && (
+                          <div style={{ marginTop: 12, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                            {activeNote.tags.map(t => (
+                              <span key={t} style={{ fontSize: 12, color: '#a78bfa', background: 'rgba(167,139,250,0.1)', padding: '2px 9px', borderRadius: 10 }}>#{t}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* GRAPH VIEW */}
+                {noteView === 'graph' && graphData && (
+                  <NoteGraph nodes={graphData.nodes} edges={graphData.edges} onNodeClick={loadNoteDetail} />
+                )}
+                {noteView === 'graph' && !graphData && (
+                  <div className="nk-empty">Memuat graph...</div>
+                )}
+                {noteView === 'graph' && graphData?.nodes?.length === 0 && (
+                  <div className="nk-empty">🕸️ Belum ada catatan untuk ditampilkan di graph.</div>
+                )}
+              </div>
+            )}
 
             {/* ── Quiz & Tryout ── */}
             {participantSection === 'quiz' && (<>
@@ -3005,6 +3242,74 @@ export default function Page() {
 }
 
 // ── Reusable Components ──────────────────────────────────────
+
+function NoteGraph({ nodes, edges, onNodeClick }) {
+  const svgRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!nodes?.length) return;
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js';
+    script.onload = () => renderGraph();
+    if (window.d3) { renderGraph(); return; }
+    document.head.appendChild(script);
+
+    function renderGraph() {
+      const d3 = window.d3;
+      const el = svgRef.current;
+      if (!el) return;
+      d3.select(el).selectAll('*').remove();
+      const W = el.clientWidth || 500, H = 420;
+      el.setAttribute('height', H);
+      const svg = d3.select(el);
+      // Zoom
+      const g = svg.append('g');
+      svg.call(d3.zoom().scaleExtent([0.3, 3]).on('zoom', e => g.attr('transform', e.transform)));
+      // Color by tag
+      const tagColors = ['#3b82f6','#a78bfa','#34d399','#fb923c','#f472b6','#facc15'];
+      const tagMap = {};
+      nodes.forEach(n => { if (n.tags?.[0] && !tagMap[n.tags[0]]) tagMap[n.tags[0]] = tagColors[Object.keys(tagMap).length % tagColors.length]; });
+      const nodeColor = n => n.tags?.[0] ? (tagMap[n.tags[0]] || '#3b82f6') : '#3b82f6';
+      // Simulation
+      const sim = d3.forceSimulation(nodes)
+        .force('link', d3.forceLink(edges).id(d => d.id).distance(100))
+        .force('charge', d3.forceManyBody().strength(-180))
+        .force('center', d3.forceCenter(W/2, H/2))
+        .force('collision', d3.forceCollide(30));
+      // Edges
+      const link = g.append('g').selectAll('line').data(edges).join('line')
+        .attr('stroke', '#1e3a5f').attr('stroke-width', 2).attr('stroke-opacity', 0.7);
+      // Nodes
+      const node = g.append('g').selectAll('g').data(nodes).join('g')
+        .style('cursor', 'pointer')
+        .on('click', (_, d) => onNodeClick(d.id))
+        .call(d3.drag()
+          .on('start', (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+          .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+          .on('end', (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+      node.append('circle').attr('r', 18).attr('fill', d => nodeColor(d) + '33').attr('stroke', d => nodeColor(d)).attr('stroke-width', 2);
+      node.append('text').text(d => d.title.length > 12 ? d.title.slice(0,12)+'…' : d.title)
+        .attr('text-anchor', 'middle').attr('dy', '0.35em').attr('fill', '#e2e8f0').attr('font-size', 10).attr('pointer-events', 'none');
+      // Tag label
+      node.append('text').text(d => d.tags?.[0] ? '#'+d.tags[0] : '')
+        .attr('text-anchor', 'middle').attr('dy', '2.2em').attr('fill', d => nodeColor(d)).attr('font-size', 9).attr('pointer-events', 'none');
+      sim.on('tick', () => {
+        link.attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+        node.attr('transform', d => `translate(${d.x},${d.y})`);
+      });
+    }
+  }, [nodes, edges]);
+
+  return (
+    <div style={{ background: '#080d18', border: '1px solid #1e2d45', borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ padding: '10px 14px', borderBottom: '1px solid #1e2d45', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontWeight: 700, fontSize: 13, color: '#93c5fd' }}>🕸️ Network Graph</span>
+        <span style={{ fontSize: 12, color: '#475569' }}>{nodes.length} catatan · {edges.length} koneksi</span>
+        <span style={{ fontSize: 11, color: '#334155', marginLeft: 'auto' }}>Klik node untuk buka · Drag untuk pindah · Scroll untuk zoom</span>
+      </div>
+      <svg ref={svgRef} width="100%" style={{ display: 'block', minHeight: 420 }} />
+    </div>
+  );
+}
 
 function Section({ title, children }) {
   return (
