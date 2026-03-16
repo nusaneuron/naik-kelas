@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || 'NaikKelasBot';
 
 export default function Page() {
   const [me, setMe] = useState(null);
@@ -822,7 +823,11 @@ export default function Page() {
             </button>
 
             <p style={{ color: '#475569', fontSize: 12, textAlign: 'center', margin: '16px 0 0' }}>
-              Belum punya akun? Daftar via bot Telegram <b style={{ color: '#94a3b8' }}>Nala</b>
+              Belum punya akun? Daftar via bot Telegram{' '}
+              <a href={`https://t.me/${botUsername}`} target="_blank" rel="noopener noreferrer"
+                style={{ color: '#fff', fontWeight: 700, textDecoration: 'none', borderBottom: '1px solid rgba(255,255,255,0.3)' }}>
+                Nala
+              </a>
             </p>
           </form>
         </div>
