@@ -6106,10 +6106,10 @@ func (a *app) handleAdminLearningSummary(w http.ResponseWriter, r *http.Request)
 	_ = a.db.QueryRowContext(ctx, `
 		SELECT COUNT(DISTINCT web_uid) FROM (
 			SELECT tl.user_id as web_uid FROM quiz_attempts qa
-			JOIN telegram_links tl ON tl.telegram_user_id = qa.user_id AND tl.is_active = TRUE
+			JOIN telegram_links tl ON tl.telegram_user_id = qa.user_id
 			WHERE qa.created_at >= CURRENT_DATE
 			UNION SELECT tl.user_id FROM tryout_results tr
-			JOIN telegram_links tl ON tl.telegram_user_id = tr.user_id AND tl.is_active = TRUE
+			JOIN telegram_links tl ON tl.telegram_user_id = tr.user_id
 			WHERE tr.created_at >= CURRENT_DATE
 			UNION SELECT user_id FROM material_progress WHERE completed_at >= CURRENT_DATE
 		) x
@@ -6117,10 +6117,10 @@ func (a *app) handleAdminLearningSummary(w http.ResponseWriter, r *http.Request)
 	_ = a.db.QueryRowContext(ctx, `
 		SELECT COUNT(DISTINCT web_uid) FROM (
 			SELECT tl.user_id as web_uid FROM quiz_attempts qa
-			JOIN telegram_links tl ON tl.telegram_user_id = qa.user_id AND tl.is_active = TRUE
+			JOIN telegram_links tl ON tl.telegram_user_id = qa.user_id
 			WHERE qa.created_at >= CURRENT_DATE - INTERVAL '7 days'
 			UNION SELECT tl.user_id FROM tryout_results tr
-			JOIN telegram_links tl ON tl.telegram_user_id = tr.user_id AND tl.is_active = TRUE
+			JOIN telegram_links tl ON tl.telegram_user_id = tr.user_id
 			WHERE tr.created_at >= CURRENT_DATE - INTERVAL '7 days'
 			UNION SELECT user_id FROM material_progress WHERE completed_at >= CURRENT_DATE - INTERVAL '7 days'
 		) x
@@ -6149,13 +6149,13 @@ func (a *app) handleAdminLearningSummary(w http.ResponseWriter, r *http.Request)
 		LEFT JOIN (
 			SELECT tl.user_id as web_uid, COUNT(*) as cnt, MAX(qa.created_at) as last_at
 			FROM quiz_attempts qa
-			JOIN telegram_links tl ON tl.telegram_user_id = qa.user_id AND tl.is_active = TRUE
+			JOIN telegram_links tl ON tl.telegram_user_id = qa.user_id
 			GROUP BY tl.user_id
 		) qz ON qz.web_uid = pp.user_id
 		LEFT JOIN (
 			SELECT tl.user_id as web_uid, COUNT(*) as cnt, MAX(tr.created_at) as last_at
 			FROM tryout_results tr
-			JOIN telegram_links tl ON tl.telegram_user_id = tr.user_id AND tl.is_active = TRUE
+			JOIN telegram_links tl ON tl.telegram_user_id = tr.user_id
 			GROUP BY tl.user_id
 		) to2 ON to2.web_uid = pp.user_id
 		ORDER BY last_active DESC, pp.name ASC
