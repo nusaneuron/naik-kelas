@@ -1396,18 +1396,31 @@ func (a *app) handleAdminPointsAdjust(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleAdminPointsHistory(w http.ResponseWriter, r *http.Request) {
-	_, err := a.requireRole(r.Context(), r, "admin")
+	admin, err := a.requireRole(r.Context(), r, "admin")
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
-	rows, err := a.db.QueryContext(r.Context(), `
-		SELECT l.id, l.user_id, COALESCE(p.name,''), COALESCE(u.phone,''), l.delta, l.type, l.reason, l.created_by_admin, l.created_at
-		FROM point_ledger l
-		LEFT JOIN users u ON u.id = l.user_id
-		LEFT JOIN participant_profiles p ON p.user_id = l.user_id
-		ORDER BY l.created_at DESC LIMIT 300
-	`)
+	adminGID := a.getAdminGroupIDFromUser(r.Context(), admin)
+	var rows *sql.Rows
+	if adminGID > 0 {
+		rows, err = a.db.QueryContext(r.Context(), `
+			SELECT l.id, l.user_id, COALESCE(p.name,''), COALESCE(u.phone,''), l.delta, l.type, l.reason, l.created_by_admin, l.created_at
+			FROM point_ledger l
+			LEFT JOIN users u ON u.id = l.user_id
+			LEFT JOIN participant_profiles p ON p.user_id = l.user_id
+			WHERE p.group_id = $1
+			ORDER BY l.created_at DESC LIMIT 300
+		`, adminGID)
+	} else {
+		rows, err = a.db.QueryContext(r.Context(), `
+			SELECT l.id, l.user_id, COALESCE(p.name,''), COALESCE(u.phone,''), l.delta, l.type, l.reason, l.created_by_admin, l.created_at
+			FROM point_ledger l
+			LEFT JOIN users u ON u.id = l.user_id
+			LEFT JOIN participant_profiles p ON p.user_id = l.user_id
+			ORDER BY l.created_at DESC LIMIT 300
+		`)
+	}
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed point history"})
 		return
@@ -1593,18 +1606,31 @@ func (a *app) handleAdminExpRules(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleAdminExpHistory(w http.ResponseWriter, r *http.Request) {
-	_, err := a.requireRole(r.Context(), r, "admin")
+	admin, err := a.requireRole(r.Context(), r, "admin")
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
-	rows, err := a.db.QueryContext(r.Context(), `
-		SELECT e.id, e.user_id, COALESCE(p.name,''), COALESCE(u.phone,''), e.delta, e.type, e.reason, e.source_ref, e.created_at
-		FROM exp_ledger e
-		LEFT JOIN users u ON u.id = e.user_id
-		LEFT JOIN participant_profiles p ON p.user_id = e.user_id
-		ORDER BY e.created_at DESC LIMIT 300
-	`)
+	adminGID := a.getAdminGroupIDFromUser(r.Context(), admin)
+	var rows *sql.Rows
+	if adminGID > 0 {
+		rows, err = a.db.QueryContext(r.Context(), `
+			SELECT e.id, e.user_id, COALESCE(p.name,''), COALESCE(u.phone,''), e.delta, e.type, e.reason, e.source_ref, e.created_at
+			FROM exp_ledger e
+			LEFT JOIN users u ON u.id = e.user_id
+			LEFT JOIN participant_profiles p ON p.user_id = e.user_id
+			WHERE p.group_id = $1
+			ORDER BY e.created_at DESC LIMIT 300
+		`, adminGID)
+	} else {
+		rows, err = a.db.QueryContext(r.Context(), `
+			SELECT e.id, e.user_id, COALESCE(p.name,''), COALESCE(u.phone,''), e.delta, e.type, e.reason, e.source_ref, e.created_at
+			FROM exp_ledger e
+			LEFT JOIN users u ON u.id = e.user_id
+			LEFT JOIN participant_profiles p ON p.user_id = e.user_id
+			ORDER BY e.created_at DESC LIMIT 300
+		`)
+	}
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed load exp history"})
 		return
@@ -1628,20 +1654,34 @@ func (a *app) handleAdminExpHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleAdminExpStatus(w http.ResponseWriter, r *http.Request) {
-	_, err := a.requireRole(r.Context(), r, "admin")
+	admin, err := a.requireRole(r.Context(), r, "admin")
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
+	adminGID := a.getAdminGroupIDFromUser(r.Context(), admin)
 	levelStep := a.getExpRuleValue(r.Context(), "level_step", 100)
-	rows, err := a.db.QueryContext(r.Context(), `
-		SELECT u.id, COALESCE(p.name,''), COALESCE(u.phone,''), COALESCE(w.total_exp,0)
-		FROM users u
-		LEFT JOIN participant_profiles p ON p.user_id = u.id
-		LEFT JOIN exp_wallets w ON w.user_id = u.id
-		ORDER BY COALESCE(w.total_exp,0) DESC, u.created_at ASC
-		LIMIT 500
-	`)
+	var rows *sql.Rows
+	if adminGID > 0 {
+		rows, err = a.db.QueryContext(r.Context(), `
+			SELECT u.id, COALESCE(p.name,''), COALESCE(u.phone,''), COALESCE(w.total_exp,0)
+			FROM users u
+			LEFT JOIN participant_profiles p ON p.user_id = u.id
+			LEFT JOIN exp_wallets w ON w.user_id = u.id
+			WHERE p.group_id = $1
+			ORDER BY COALESCE(w.total_exp,0) DESC, u.created_at ASC
+			LIMIT 500
+		`, adminGID)
+	} else {
+		rows, err = a.db.QueryContext(r.Context(), `
+			SELECT u.id, COALESCE(p.name,''), COALESCE(u.phone,''), COALESCE(w.total_exp,0)
+			FROM users u
+			LEFT JOIN participant_profiles p ON p.user_id = u.id
+			LEFT JOIN exp_wallets w ON w.user_id = u.id
+			ORDER BY COALESCE(w.total_exp,0) DESC, u.created_at ASC
+			LIMIT 500
+		`)
+	}
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed load exp status"})
 		return
@@ -1736,19 +1776,33 @@ func (a *app) handleAdminExpReportSend(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleAdminPointBalances(w http.ResponseWriter, r *http.Request) {
-	_, err := a.requireRole(r.Context(), r, "admin")
+	admin, err := a.requireRole(r.Context(), r, "admin")
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
-	rows, err := a.db.QueryContext(r.Context(), `
-		SELECT u.id, COALESCE(p.name,''), COALESCE(u.phone,''), COALESCE(w.balance,0)
-		FROM users u
-		LEFT JOIN participant_profiles p ON p.user_id = u.id
-		LEFT JOIN point_wallets w ON w.user_id = u.id
-		ORDER BY COALESCE(w.balance,0) DESC, u.created_at ASC
-		LIMIT 500
-	`)
+	adminGID := a.getAdminGroupIDFromUser(r.Context(), admin)
+	var rows *sql.Rows
+	if adminGID > 0 {
+		rows, err = a.db.QueryContext(r.Context(), `
+			SELECT u.id, COALESCE(p.name,''), COALESCE(u.phone,''), COALESCE(w.balance,0)
+			FROM users u
+			LEFT JOIN participant_profiles p ON p.user_id = u.id
+			LEFT JOIN point_wallets w ON w.user_id = u.id
+			WHERE p.group_id = $1
+			ORDER BY COALESCE(w.balance,0) DESC, u.created_at ASC
+			LIMIT 500
+		`, adminGID)
+	} else {
+		rows, err = a.db.QueryContext(r.Context(), `
+			SELECT u.id, COALESCE(p.name,''), COALESCE(u.phone,''), COALESCE(w.balance,0)
+			FROM users u
+			LEFT JOIN participant_profiles p ON p.user_id = u.id
+			LEFT JOIN point_wallets w ON w.user_id = u.id
+			ORDER BY COALESCE(w.balance,0) DESC, u.created_at ASC
+			LIMIT 500
+		`)
+	}
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed load balances"})
 		return
@@ -1999,13 +2053,19 @@ func (a *app) handleAdminPing(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleAdminParticipants(w http.ResponseWriter, r *http.Request) {
-	_, err := a.requireRole(r.Context(), r, "admin")
+	admin, err := a.requireRole(r.Context(), r, "admin")
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
-	// Filter opsional per group_id
+	// Filter group: super_admin bisa pilih group_id dari query param, admin biasa wajib pakai group sendiri
+	adminGroupID := a.getAdminGroupIDFromUser(r.Context(), admin)
 	groupFilter := r.URL.Query().Get("group_id")
+	effectiveGroupID := adminGroupID
+	if isSuperAdmin(admin) && groupFilter != "" {
+		effectiveGroupID, _ = strconv.ParseInt(groupFilter, 10, 64)
+	}
+
 	query := `
 		SELECT u.id, u.phone, u.role, u.is_active, u.must_change_password,
 		       COALESCE(p.name,''), COALESCE(p.email,''),
@@ -2014,9 +2074,9 @@ func (a *app) handleAdminParticipants(w http.ResponseWriter, r *http.Request) {
 		LEFT JOIN participant_profiles p ON p.user_id = u.id
 		LEFT JOIN groups g ON g.id = p.group_id`
 	args := []any{}
-	if groupFilter != "" {
+	if effectiveGroupID > 0 {
 		query += ` WHERE p.group_id = $1`
-		args = append(args, groupFilter)
+		args = append(args, effectiveGroupID)
 	}
 	query += ` ORDER BY u.created_at DESC LIMIT 500`
 
@@ -2429,6 +2489,17 @@ func isAdmin(u authUser) bool {
 // isSuperAdmin — true hanya untuk super_admin
 func isSuperAdmin(u authUser) bool {
 	return u.Role == "super_admin"
+}
+
+// getAdminGroupID — kembalikan group_id admin (0 = super_admin/semua kelompok)
+// Admin biasa hanya bisa lihat data kelompoknya sendiri
+func (a *app) getAdminGroupIDFromUser(ctx context.Context, u authUser) int64 {
+	if isSuperAdmin(u) {
+		return 0 // super_admin lihat semua
+	}
+	var gid int64
+	_ = a.db.QueryRowContext(ctx, `SELECT COALESCE(group_id,0) FROM participant_profiles WHERE user_id=$1`, u.ID).Scan(&gid)
+	return gid
 }
 
 // guardGlobalContent — admin biasa WAJIB set group_id; hanya super_admin boleh global (group_id=nil)
@@ -5942,24 +6013,35 @@ func (a *app) handleParticipantReflections(w http.ResponseWriter, r *http.Reques
 // ── Refleksi: Agregat Admin ─────────────────────────────────────────────────
 
 func (a *app) handleAdminReflectionStats(w http.ResponseWriter, r *http.Request) {
-	_, err := a.requireRole(r.Context(), r, "admin")
+	admin, err := a.requireRole(r.Context(), r, "admin")
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
 	ctx := r.Context()
+	adminGID := a.getAdminGroupIDFromUser(ctx, admin)
+
+	// Build group filter suffix for reflection queries
+	groupJoin := ""
+	groupWhere := ""
+	groupArgs := []any{}
+	if adminGID > 0 {
+		groupJoin = " JOIN participant_profiles pp ON pp.user_id = reflections.user_id"
+		groupWhere = " AND pp.group_id = $1"
+		groupArgs = []any{adminGID}
+	}
 
 	// Total refleksi hari ini
 	var todayCount int
-	_ = a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM reflections WHERE reflected_date=CURRENT_DATE`).Scan(&todayCount)
+	_ = a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM reflections`+groupJoin+` WHERE reflected_date=CURRENT_DATE`+groupWhere, groupArgs...).Scan(&todayCount)
 
 	// Total refleksi 7 hari terakhir
 	var weekCount int
-	_ = a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM reflections WHERE reflected_date >= CURRENT_DATE - INTERVAL '7 days'`).Scan(&weekCount)
+	_ = a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM reflections`+groupJoin+` WHERE reflected_date >= CURRENT_DATE - INTERVAL '7 days'`+groupWhere, groupArgs...).Scan(&weekCount)
 
 	// Jumlah peserta unik yang pernah refleksi
 	var uniqueUsers int
-	_ = a.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT user_id) FROM reflections`).Scan(&uniqueUsers)
+	_ = a.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT reflections.user_id) FROM reflections`+groupJoin+` WHERE 1=1`+groupWhere, groupArgs...).Scan(&uniqueUsers)
 
 	// Tren 7 hari (per tanggal)
 	rows, err := a.db.QueryContext(ctx, `
@@ -6143,16 +6225,23 @@ func (a *app) sendReflectionReminderRows(ctx context.Context, rows *sql.Rows) {
 // ── Admin: Learning Summary per Peserta ────────────────────────────────────
 
 func (a *app) handleAdminLearningSummary(w http.ResponseWriter, r *http.Request) {
-	_, err := a.requireRole(r.Context(), r, "admin")
+	admin, err := a.requireRole(r.Context(), r, "admin")
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
 	ctx := r.Context()
+	adminGID := a.getAdminGroupIDFromUser(ctx, admin)
+	groupCond := ""
+	groupArgs := []any{}
+	if adminGID > 0 {
+		groupCond = " AND p.group_id = $1"
+		groupArgs = []any{adminGID}
+	}
 
 	// Statistik agregat
 	var totalParticipants, activeToday, activeWeek int
-	_ = a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE role='participant' AND is_active=TRUE`).Scan(&totalParticipants)
+	_ = a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users u LEFT JOIN participant_profiles p ON p.user_id = u.id WHERE u.role='participant' AND u.is_active=TRUE`+groupCond, groupArgs...).Scan(&totalParticipants)
 	_ = a.db.QueryRowContext(ctx, `
 		SELECT COUNT(DISTINCT web_uid) FROM (
 			SELECT tl.user_id as web_uid FROM quiz_attempts qa
@@ -6208,8 +6297,9 @@ func (a *app) handleAdminLearningSummary(w http.ResponseWriter, r *http.Request)
 			JOIN telegram_links tl ON tl.telegram_user_id = tr.user_id
 			GROUP BY tl.user_id
 		) to2 ON to2.web_uid = pp.user_id
+		WHERE 1=1`+groupCond+`
 		ORDER BY last_active DESC, pp.name ASC
-	`)
+	`, groupArgs...)
 	participants := []map[string]any{}
 	if err == nil {
 		defer rows.Close()
