@@ -4520,9 +4520,8 @@ func (a *app) getTryoutLeaderboardByGroup(ctx context.Context, limit int, groupI
 			LEFT JOIN bot_profiles bp ON bp.user_id = tr.user_id
 			JOIN telegram_links tl ON tl.telegram_user_id = tr.user_id
 			JOIN participant_profiles pp ON pp.user_id = tl.user_id AND pp.group_id = $2
-			WHERE tr.all_correct = TRUE
 			GROUP BY tr.user_id, name, tg
-			ORDER BY best_seconds ASC, perfect_count DESC, name ASC
+			ORDER BY perfect_count DESC, best_seconds ASC, name ASC
 			LIMIT $1`
 		args = []any{limit, groupID}
 	} else {
@@ -4534,9 +4533,8 @@ func (a *app) getTryoutLeaderboardByGroup(ctx context.Context, limit int, groupI
 			       COUNT(*) FILTER (WHERE tr.all_correct) as perfect_count
 			FROM tryout_results tr
 			LEFT JOIN bot_profiles bp ON bp.user_id = tr.user_id
-			WHERE tr.all_correct = TRUE
 			GROUP BY tr.user_id, name, tg
-			ORDER BY best_seconds ASC, perfect_count DESC, name ASC
+			ORDER BY perfect_count DESC, best_seconds ASC, name ASC
 			LIMIT $1`
 		args = []any{limit}
 	}
@@ -4585,9 +4583,8 @@ func (a *app) getTryoutLeaderboard(ctx context.Context, limit int) (string, erro
 		       COUNT(*) FILTER (WHERE tr.all_correct) as perfect_count
 		FROM tryout_results tr
 		LEFT JOIN bot_profiles bp ON bp.user_id = tr.user_id
-		WHERE tr.all_correct = TRUE
 		GROUP BY tr.user_id, name, tg
-		ORDER BY best_seconds ASC, perfect_count DESC, name ASC
+		ORDER BY perfect_count DESC, best_seconds ASC, name ASC
 		LIMIT $1
 	`, limit)
 	if err != nil {
@@ -4596,7 +4593,7 @@ func (a *app) getTryoutLeaderboard(ctx context.Context, limit int) (string, erro
 	defer rows.Close()
 
 	medals := []string{"🥇", "🥈", "🥉"}
-	lines := []string{"🏆 *Leaderbot Tryout — Perfect Score*", ""}
+	lines := []string{"🏆 *Leaderbot Tryout*", ""}
 	rank := 1
 	for rows.Next() {
 		var userID, name, tg string
