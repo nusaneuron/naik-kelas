@@ -58,6 +58,8 @@ export default function Page() {
   const [myReflections, setMyReflections] = useState([]);
   const [adminReflectionStats, setAdminReflectionStats] = useState(null);
   const [adminLearningSummary, setAdminLearningSummary] = useState(null);
+  const [reminderMsg, setReminderMsg] = useState('');
+  const [reminderLoading, setReminderLoading] = useState(false);
   // Render Markdown → HTML untuk web display
   function renderMD(md) {
     if (!md) return '';
@@ -2207,38 +2209,32 @@ export default function Page() {
                           </div>
                         ) : <p style={{ color: '#475569', fontSize: 13 }}>Belum ada peserta terdaftar.</p>}
                       </div>
-                      {(() => {
-                        const [reminderMsg, setReminderMsg] = React.useState('');
-                        const [reminderLoading, setReminderLoading] = React.useState(false);
-                        return (
-                          <div style={{ marginTop: 16, padding: 16, background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12 }}>
-                            <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: 14 }}>📣 Kirim Reminder Refleksi</p>
-                            <p style={{ margin: '0 0 12px', fontSize: 13, color: '#94a3b8' }}>Kirim pengingat refleksi sekarang ke semua peserta yang belum refleksi hari ini (tanpa menunggu jadwal).</p>
-                            <button
-                              disabled={reminderLoading}
-                              onClick={async () => {
-                                setReminderLoading(true);
-                                setReminderMsg('⏳ Mengirim...');
-                                try {
-                                  const res = await fetch(`${apiBase}/admin/reflection/send-now`, { method: 'POST', credentials: 'include' });
-                                  const d = await res.json().catch(() => ({}));
-                                  setReminderMsg(d.message || (res.ok ? '✅ Reminder dikirim!' : '❌ Gagal kirim reminder.'));
-                                } catch(e) {
-                                  setReminderMsg('❌ Error: ' + e.message);
-                                } finally {
-                                  setReminderLoading(false);
-                                }
-                              }}
-                              style={{ background: reminderLoading ? '#334155' : 'linear-gradient(135deg,#7c3aed,#4f46e5)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: reminderLoading ? 'not-allowed' : 'pointer' }}
-                            >
-                              {reminderLoading ? '⏳ Mengirim...' : '📣 Kirim Reminder Sekarang'}
-                            </button>
-                            {reminderMsg && (
-                              <p style={{ margin: '12px 0 0', fontSize: 13, color: reminderMsg.startsWith('✅') ? '#34d399' : reminderMsg.startsWith('⏳') ? '#fbbf24' : '#f87171', fontWeight: 600 }}>{reminderMsg}</p>
-                            )}
-                          </div>
-                        );
-                      })()}
+                      <div style={{ marginTop: 16, padding: 16, background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12 }}>
+                        <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: 14 }}>📣 Kirim Reminder Refleksi</p>
+                        <p style={{ margin: '0 0 12px', fontSize: 13, color: '#94a3b8' }}>Kirim pengingat refleksi sekarang ke semua peserta yang belum refleksi hari ini (tanpa menunggu jadwal).</p>
+                        <button
+                          disabled={reminderLoading}
+                          onClick={async () => {
+                            setReminderLoading(true);
+                            setReminderMsg('⏳ Mengirim...');
+                            try {
+                              const res = await fetch(`${apiBase}/admin/reflection/send-now`, { method: 'POST', credentials: 'include' });
+                              const d = await res.json().catch(() => ({}));
+                              setReminderMsg(d.message || (res.ok ? '✅ Reminder dikirim!' : '❌ Gagal kirim reminder.'));
+                            } catch(e) {
+                              setReminderMsg('❌ Error: ' + e.message);
+                            } finally {
+                              setReminderLoading(false);
+                            }
+                          }}
+                          style={{ background: reminderLoading ? '#334155' : 'linear-gradient(135deg,#7c3aed,#4f46e5)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: reminderLoading ? 'not-allowed' : 'pointer' }}
+                        >
+                          {reminderLoading ? '⏳ Mengirim...' : '📣 Kirim Reminder Sekarang'}
+                        </button>
+                        {reminderMsg && (
+                          <p style={{ margin: '12px 0 0', fontSize: 13, color: reminderMsg.startsWith('✅') ? '#34d399' : reminderMsg.startsWith('⏳') ? '#fbbf24' : '#f87171', fontWeight: 600 }}>{reminderMsg}</p>
+                        )}
+                      </div>
                       <p style={{ fontSize: 12, color: '#475569', marginTop: 12, fontStyle: 'italic' }}>
                         💡 Isi refleksi bersifat privat — hanya peserta yang bisa membaca tulisannya sendiri.
                       </p>
