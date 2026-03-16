@@ -2361,18 +2361,28 @@ export default function Page() {
                       {/* AI Generate Button */}
                       {materiType === 'text' && (
                         <div style={{ marginBottom: 12, background: '#0a1e3a', border: '1px dashed #2563eb', borderRadius: 10, padding: '10px 14px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: aiShowDesc ? 8 : 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                             <span style={{ fontSize: 13, color: '#93c5fd', fontWeight: 600 }}>✨ Generate dengan AI</span>
                             <button type="button" onClick={() => setAiShowDesc(v => !v)}
                               style={{ fontSize: 11, color: '#64748b', background: 'none', border: '1px solid #1e3a5f', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}>
-                              {aiShowDesc ? 'Sembunyikan' : '+ Konteks Kelompok'}
+                              {aiShowDesc ? '▲ Sembunyikan Konteks' : '▼ + Konteks Kelompok'}
                             </button>
                           </div>
-                          {aiShowDesc && (
-                            <textarea value={aiGroupDesc} onChange={e => setAiGroupDesc(e.target.value)}
-                              placeholder="Deskripsi kelompok/perusahaan (opsional, misal: perusahaan manufaktur baja, fokus K3 dan SOP produksi...)"
+                          <div style={{ marginBottom: 8 }}>
+                            <label style={{ ...fieldLbl, fontSize: 11 }}>Deskripsi Materi <span style={{ color: '#64748b' }}>(poin-poin yang ingin dibahas)</span></label>
+                            <textarea id="aiMateriDesc"
+                              placeholder="Contoh: bahas definisi K3, kenapa penting, contoh kecelakaan kerja, dan langkah pencegahannya..."
                               className="nk-input-sm" rows={2}
-                              style={{ width: '100%', marginBottom: 8, fontSize: 12, resize: 'vertical' }} />
+                              style={{ width: '100%', fontSize: 12, resize: 'vertical' }} />
+                          </div>
+                          {aiShowDesc && (
+                            <div style={{ marginBottom: 8 }}>
+                              <label style={{ ...fieldLbl, fontSize: 11 }}>Konteks Kelompok/Perusahaan <span style={{ color: '#64748b' }}>(opsional)</span></label>
+                              <textarea value={aiGroupDesc} onChange={e => setAiGroupDesc(e.target.value)}
+                                placeholder="Misal: perusahaan manufaktur baja, fokus K3 dan SOP produksi, peserta adalah operator lantai pabrik..."
+                                className="nk-input-sm" rows={2}
+                                style={{ width: '100%', fontSize: 12, resize: 'vertical' }} />
+                            </div>
                           )}
                           <div style={{ display: 'flex', gap: 8 }}>
                             {[3,4,5].map(n => (
@@ -2384,7 +2394,7 @@ export default function Page() {
                                     const res = await fetch(`${apiBase}/admin/materials/generate`, {
                                       method: 'POST', credentials: 'include',
                                       headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ topic: materiTitle, group_description: aiGroupDesc, bubble_count: n })
+                                      body: JSON.stringify({ topic: materiTitle, materi_description: document.getElementById('aiMateriDesc')?.value || '', group_description: aiGroupDesc, bubble_count: n })
                                     });
                                     const data = await res.json();
                                     if (data.bubbles?.length > 0) {

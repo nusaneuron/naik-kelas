@@ -5530,9 +5530,10 @@ func (a *app) handleAdminGenerateMaterial(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var req struct {
-		Topic            string `json:"topic"`
-		GroupDescription string `json:"group_description"`
-		BubbleCount      int    `json:"bubble_count"`
+		Topic              string `json:"topic"`
+		MateriDescription  string `json:"materi_description"`
+		GroupDescription   string `json:"group_description"`
+		BubbleCount        int    `json:"bubble_count"`
 	}
 	if json.NewDecoder(r.Body).Decode(&req) != nil || strings.TrimSpace(req.Topic) == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "topic wajib diisi"})
@@ -5551,6 +5552,9 @@ Jangan tambahkan penjelasan di luar JSON. Langsung output JSON saja.
 Contoh format: ["bubble 1 content", "bubble 2 content", "bubble 3 content"]`
 
 	userPrompt := fmt.Sprintf(`Buat materi pembelajaran tentang: "%s"`, req.Topic)
+	if req.MateriDescription != "" {
+		userPrompt += fmt.Sprintf("\n\nPoin-poin yang harus dibahas:\n%s", req.MateriDescription)
+	}
 	if req.GroupDescription != "" {
 		userPrompt += fmt.Sprintf("\n\nKonteks kelompok/perusahaan: %s", req.GroupDescription)
 	}
