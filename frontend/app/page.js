@@ -3290,32 +3290,35 @@ function NoteGraph({ nodes, edges, onNodeClick }) {
       .force('center', d3.forceCenter(W / 2, H / 2))
       .force('collision', d3.forceCollide(36));
 
+    // Garis tipis ala Obsidian
     const link = g.append('g').selectAll('line').data(edgesCopy).join('line')
-      .attr('stroke', '#2563eb').attr('stroke-width', 1.5).attr('stroke-opacity', 0.5);
+      .attr('stroke', '#4a4a5a').attr('stroke-width', 1).attr('stroke-opacity', 0.6);
 
     const node = g.append('g').selectAll('g').data(nodesCopy).join('g')
       .style('cursor', 'pointer')
       .on('click', (_, d) => onNodeClick(Number(d.id)))
+      .on('mouseover', function() { d3.select(this).select('circle').attr('r', 8); })
+      .on('mouseout', function() { d3.select(this).select('circle').attr('r', 5); })
       .call(d3.drag()
         .on('start', (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
         .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
         .on('end', (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
 
+    // Titik kecil ala Obsidian
     node.append('circle')
-      .attr('r', 22)
-      .attr('fill', d => nodeColor(d) + '22')
-      .attr('stroke', d => nodeColor(d))
-      .attr('stroke-width', 2);
+      .attr('r', 5)
+      .attr('fill', d => nodeColor(d))
+      .attr('stroke', 'none');
 
+    // Label di luar titik
     node.append('text')
-      .text(d => d.title.length > 14 ? d.title.slice(0, 14) + '…' : d.title)
-      .attr('text-anchor', 'middle').attr('dy', '0.35em')
-      .attr('fill', '#e2e8f0').attr('font-size', 10).attr('pointer-events', 'none');
-
-    node.append('text')
-      .text(d => d.tags?.[0] ? '#' + d.tags[0] : '')
-      .attr('text-anchor', 'middle').attr('dy', '2.4em')
-      .attr('fill', d => nodeColor(d)).attr('font-size', 9).attr('pointer-events', 'none');
+      .text(d => d.title)
+      .attr('text-anchor', 'middle')
+      .attr('dy', '-0.9em')
+      .attr('fill', '#9a9ab0')
+      .attr('font-size', 11)
+      .attr('font-family', 'sans-serif')
+      .attr('pointer-events', 'none');
 
     sim.on('tick', () => {
       link
@@ -3326,14 +3329,14 @@ function NoteGraph({ nodes, edges, onNodeClick }) {
   }, [d3Ready, nodes, edges]);
 
   return (
-    <div style={{ background: '#080d18', border: '1px solid #1e2d45', borderRadius: 12, overflow: 'hidden' }}>
-      <div style={{ padding: '10px 14px', borderBottom: '1px solid #1e2d45', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <span style={{ fontWeight: 700, fontSize: 13, color: '#93c5fd' }}>🕸️ Network Graph</span>
-        <span style={{ fontSize: 12, color: '#475569' }}>{nodes.length} catatan · {edges.length} koneksi</span>
-        {!d3Ready && <span style={{ fontSize: 11, color: '#f59e0b' }}>⏳ Memuat D3...</span>}
-        <span style={{ fontSize: 11, color: '#334155', marginLeft: 'auto' }}>Klik · Drag · Scroll zoom</span>
+    <div style={{ background: '#1a1a2e', border: '1px solid #2a2a3e', borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ padding: '8px 14px', borderBottom: '1px solid #2a2a3e', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background: '#16162a' }}>
+        <span style={{ fontWeight: 600, fontSize: 12, color: '#7c7c9a' }}>🕸️ Graph View</span>
+        <span style={{ fontSize: 11, color: '#4a4a6a' }}>{nodes.length} catatan · {edges.length} koneksi</span>
+        {!d3Ready && <span style={{ fontSize: 11, color: '#f59e0b' }}>⏳ Memuat...</span>}
+        <span style={{ fontSize: 10, color: '#3a3a5a', marginLeft: 'auto' }}>Klik · Drag · Scroll</span>
       </div>
-      <svg ref={svgRef} style={{ display: 'block', width: '100%', minHeight: 420 }} />
+      <svg ref={svgRef} style={{ display: 'block', width: '100%', minHeight: 460, background: '#1a1a2e' }} />
     </div>
   );
 }
