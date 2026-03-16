@@ -238,6 +238,7 @@ func main() {
 	// Learning Materials
 	mux.HandleFunc("/admin/materials", a.handleAdminMaterials)
 	mux.HandleFunc("/admin/materials/generate", a.handleAdminGenerateMaterial)
+	mux.HandleFunc("/admin/tryout-configs", a.handleAdminTryoutConfigs)
 	mux.HandleFunc("/participant/materials", a.handleParticipantMaterials)
 	mux.HandleFunc("/participant/materials/complete", a.handleParticipantMaterialComplete)
 	mux.HandleFunc("/participant/reflections", a.handleParticipantReflections)
@@ -418,6 +419,24 @@ func (a *app) initDB(ctx context.Context) error {
 			state TEXT NOT NULL DEFAULT 'idle',
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)
+	`)
+	if err != nil {
+		return err
+	}
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS tryout_configs (
+			id BIGSERIAL PRIMARY KEY,
+			name TEXT NOT NULL,
+			group_id BIGINT REFERENCES groups(id) ON DELETE SET NULL,
+			is_active BOOLEAN NOT NULL DEFAULT TRUE,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE TABLE IF NOT EXISTS tryout_config_items (
+			id BIGSERIAL PRIMARY KEY,
+			config_id BIGINT NOT NULL REFERENCES tryout_configs(id) ON DELETE CASCADE,
+			category_id BIGINT NOT NULL REFERENCES question_categories(id) ON DELETE CASCADE,
+			question_count INT NOT NULL DEFAULT 10
+		);
 	`)
 	if err != nil {
 		return err
@@ -3388,7 +3407,20 @@ handleCommands:
 		if !registered {
 			return "Sebelum ikut tryout, kamu perlu daftar dulu ya ✨\nKetik /daftar untuk registrasi dulu.", "idle"
 		}
-		qs, err := a.shuffledTryoutQuestionsDB(ctx)
+		// Coba pakai config tryout dari admin kelompok
+		var webUIDForConfig int64
+		_ = a.db.QueryRowContext(ctx, `SELECT user_id FROM telegram_links WHERE telegram_user_id=$1 LIMIT 1`, uid).Scan(&webUIDForConfig)
+		var groupIDForConfig int64
+		if webUIDForConfig > 0 {
+			_ = a.db.QueryRowContext(ctx, `SELECT COALESCE(group_id,0) FROM participant_profiles WHERE user_id=$1`, webUIDForConfig).Scan(&groupIDForConfig)
+		}
+		var qs []quizQuestion
+		if groupIDForConfig > 0 {
+			qs, err = a.shuffledTryoutQuestionsFromConfig(ctx, groupIDForConfig)
+		}
+		if err != nil || len(qs) == 0 {
+			qs, err = a.shuffledTryoutQuestionsDB(ctx)
+		}
 		if err != nil || len(qs) == 0 {
 			qs = shuffledTryoutQuestions()
 		}
@@ -5732,6 +5764,190 @@ Output langsung JSON array saja.`
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"questions": questions, "count": len(questions)})
+}
+
+func (a *app) handleAdminTryoutConfigs(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	ctx := r.Context()
+	adminGID := a.getAdminGroupIDFromUser(ctx, admin)
+
+	switch r.Method {
+	case http.MethodGet:
+		q := `SELECT tc.id, tc.name, COALESCE(tc.group_id,0), COALESCE(g.name,''), tc.is_active
+			FROM tryout_configs tc LEFT JOIN groups g ON g.id = tc.group_id`
+		var args []any
+		if adminGID > 0 {
+			q += ` WHERE tc.group_id = $1`
+			args = append(args, adminGID)
+		}
+		q += ` ORDER BY tc.id DESC`
+		rows, err := a.db.QueryContext(ctx, q, args...)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		defer rows.Close()
+		type configOut struct {
+			ID        int64  `json:"id"`
+			Name      string `json:"name"`
+			GroupID   int64  `json:"group_id"`
+			GroupName string `json:"group_name"`
+			IsActive  bool   `json:"is_active"`
+			Items     []map[string]any `json:"items"`
+		}
+		configs := []configOut{}
+		for rows.Next() {
+			var c configOut
+			if rows.Scan(&c.ID, &c.Name, &c.GroupID, &c.GroupName, &c.IsActive) == nil {
+				configs = append(configs, c)
+			}
+		}
+		rows.Close()
+		// Load items per config
+		for i, c := range configs {
+			iRows, _ := a.db.QueryContext(ctx, `
+				SELECT tci.id, tci.category_id, qc.name, tci.question_count
+				FROM tryout_config_items tci
+				JOIN question_categories qc ON qc.id = tci.category_id
+				WHERE tci.config_id = $1 ORDER BY tci.id`, c.ID)
+			if iRows != nil {
+				for iRows.Next() {
+					var iid, catID int64; var catName string; var qCount int
+					if iRows.Scan(&iid, &catID, &catName, &qCount) == nil {
+						configs[i].Items = append(configs[i].Items, map[string]any{"id": iid, "category_id": catID, "category_name": catName, "question_count": qCount})
+					}
+				}
+				iRows.Close()
+			}
+			if configs[i].Items == nil {
+				configs[i].Items = []map[string]any{}
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"configs": configs})
+
+	case http.MethodPost:
+		var req struct {
+			Action        string `json:"action"`
+			ID            int64  `json:"id"`
+			Name          string `json:"name"`
+			GroupID       *int64 `json:"group_id"`
+			IsActive      *bool  `json:"is_active"`
+			// Untuk add/remove item
+			ConfigID      int64  `json:"config_id"`
+			CategoryID    int64  `json:"category_id"`
+			QuestionCount int    `json:"question_count"`
+			ItemID        int64  `json:"item_id"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			return
+		}
+		switch req.Action {
+		case "create":
+			if req.Name == "" {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "nama wajib diisi"})
+				return
+			}
+			gid := req.GroupID
+			if adminGID > 0 {
+				gid = &adminGID
+			}
+			var id int64
+			err := a.db.QueryRowContext(ctx, `INSERT INTO tryout_configs(name, group_id, is_active) VALUES($1,$2,TRUE) RETURNING id`, req.Name, gid).Scan(&id)
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id})
+		case "update":
+			if req.ID == 0 { writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id required"}); return }
+			if req.IsActive != nil {
+				_, err = a.db.ExecContext(ctx, `UPDATE tryout_configs SET is_active=$1 WHERE id=$2`, *req.IsActive, req.ID)
+			} else {
+				_, err = a.db.ExecContext(ctx, `UPDATE tryout_configs SET name=$1 WHERE id=$2`, req.Name, req.ID)
+			}
+			if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()}); return }
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+		case "delete":
+			if req.ID == 0 { writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id required"}); return }
+			_, _ = a.db.ExecContext(ctx, `DELETE FROM tryout_configs WHERE id=$1`, req.ID)
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+		case "add_item":
+			if req.ConfigID == 0 || req.CategoryID == 0 { writeJSON(w, http.StatusBadRequest, map[string]string{"error": "config_id & category_id required"}); return }
+			if req.QuestionCount <= 0 { req.QuestionCount = 10 }
+			// Cek jumlah soal tersedia di kategori
+			var available int
+			_ = a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM questions WHERE category_id=$1 AND is_active=TRUE`, req.CategoryID).Scan(&available)
+			if req.QuestionCount > available { req.QuestionCount = available }
+			var iid int64
+			err := a.db.QueryRowContext(ctx, `INSERT INTO tryout_config_items(config_id, category_id, question_count) VALUES($1,$2,$3) RETURNING id`, req.ConfigID, req.CategoryID, req.QuestionCount).Scan(&iid)
+			if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()}); return }
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": iid, "available": available})
+		case "update_item":
+			if req.ItemID == 0 { writeJSON(w, http.StatusBadRequest, map[string]string{"error": "item_id required"}); return }
+			if req.QuestionCount <= 0 { req.QuestionCount = 10 }
+			_, err = a.db.ExecContext(ctx, `UPDATE tryout_config_items SET question_count=$1 WHERE id=$2`, req.QuestionCount, req.ItemID)
+			if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()}); return }
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+		case "remove_item":
+			if req.ItemID == 0 { writeJSON(w, http.StatusBadRequest, map[string]string{"error": "item_id required"}); return }
+			_, _ = a.db.ExecContext(ctx, `DELETE FROM tryout_config_items WHERE id=$1`, req.ItemID)
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+		default:
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown action"})
+		}
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+// Helper: load soal tryout dari config aktif untuk group_id tertentu
+func (a *app) shuffledTryoutQuestionsFromConfig(ctx context.Context, groupID int64) ([]quizQuestion, error) {
+	// Cari config aktif untuk group ini
+	var configID int64
+	err := a.db.QueryRowContext(ctx, `SELECT id FROM tryout_configs WHERE group_id=$1 AND is_active=TRUE ORDER BY id DESC LIMIT 1`, groupID).Scan(&configID)
+	if err != nil || configID == 0 {
+		return nil, nil // tidak ada config → fallback ke default
+	}
+	// Load items
+	iRows, err := a.db.QueryContext(ctx, `SELECT category_id, question_count FROM tryout_config_items WHERE config_id=$1`, configID)
+	if err != nil { return nil, err }
+	defer iRows.Close()
+	type item struct{ catID int64; count int }
+	var items []item
+	for iRows.Next() {
+		var it item
+		if iRows.Scan(&it.catID, &it.count) == nil { items = append(items, it) }
+	}
+	iRows.Close()
+	if len(items) == 0 { return nil, nil }
+
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	var all []quizQuestion
+	n := 1
+	for _, it := range items {
+		qRows, err := a.db.QueryContext(ctx, `
+			SELECT question_text, option_a, option_b, option_c, option_d, correct_option
+			FROM questions WHERE category_id=$1 AND is_active=TRUE ORDER BY RANDOM() LIMIT $2`, it.catID, it.count)
+		if err != nil { continue }
+		var catQs []quizQuestion
+		for qRows.Next() {
+			var qt, a1, b1, c1, d1, ans string
+			if qRows.Scan(&qt, &a1, &b1, &c1, &d1, &ans) == nil {
+				catQs = append(catQs, quizQuestion{Question: qt, Options: []string{"A. " + a1, "B. " + b1, "C. " + c1, "D. " + d1}, Answer: strings.ToUpper(strings.TrimSpace(ans))})
+			}
+		}
+		qRows.Close()
+		all = append(all, catQs...)
+	}
+	// Acak urutan soal gabungan + nomor ulang
+	r.Shuffle(len(all), func(i, j int) { all[i], all[j] = all[j], all[i] })
+	for i := range all { all[i].Question = fmt.Sprintf("%d) %s", n, all[i].Question); n++ }
+	return all, nil
 }
 
 func (a *app) handleAdminGenerateMaterial(w http.ResponseWriter, r *http.Request) {

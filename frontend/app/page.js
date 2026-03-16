@@ -130,6 +130,11 @@ export default function Page() {
   const [qAiGenerated, setQAiGenerated] = useState([]);
   const [qAiChecked, setQAiChecked] = useState([]);
   const [qAiSaving, setQAiSaving] = useState(false);
+  const [tryoutConfigs, setTryoutConfigs] = useState([]);
+  const [tryoutNewName, setTryoutNewName] = useState('');
+  const [tryoutExpandedId, setTryoutExpandedId] = useState(null);
+  const [tryoutAddCatId, setTryoutAddCatId] = useState('');
+  const [tryoutAddQCount, setTryoutAddQCount] = useState('10');
   const [materiExp, setMateriExp] = useState('10');
   const [materiOrder, setMateriOrder] = useState('0');
   const [materiActive, setMateriActive] = useState(true);
@@ -299,7 +304,15 @@ export default function Page() {
       ]);
       if (remRes.ok) setAdminReminders((await remRes.json()).items || []);
       if (lsRes.ok) setAdminLearningSummary(await lsRes.json());
+    } else if (section === 'tryout') {
+      const res = await fetch(`${apiBase}/admin/tryout-configs`, { credentials: 'include' });
+      if (res.ok) setTryoutConfigs((await res.json()).configs || []);
     }
+  }
+
+  async function refreshTryoutConfigs() {
+    const res = await fetch(`${apiBase}/admin/tryout-configs`, { credentials: 'include' });
+    if (res.ok) setTryoutConfigs((await res.json()).configs || []);
   }
 
   async function loadPortal(role) {
@@ -1474,6 +1487,7 @@ export default function Page() {
                   ...(me?.is_super_admin ? [['kelompok', '🏢', 'Kelompok']] : []),
                   ['peserta', '👥', 'Peserta'],
                   ['bank', '📚', 'Bank Soal'],
+                  ['tryout', '🎯', 'Tryout'],
                   ['materi', '📖', 'Materi'],
                   ['redeem', '🎁', 'Redeem'],
                   ['refleksi', '📔', 'Refleksi'],
@@ -1855,6 +1869,102 @@ export default function Page() {
                     </div>
                   </AdminSection>
                 </>
+              )}
+
+              {/* Admin — Tryout Config */}
+              {adminSection === 'tryout' && (
+                <AdminSection title="🎯 Manajemen Tryout">
+                  <p style={{ margin: '0 0 14px', fontSize: 13, color: '#94a3b8' }}>
+                    Atur soal yang akan digunakan dalam tryout bot per kelompok. Admin hanya bisa mengelola config kelompoknya sendiri.
+                  </p>
+                  {/* Buat Config Baru */}
+                  <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 14, marginBottom: 16 }}>
+                    <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600 }}>➕ Buat Config Tryout Baru</p>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input className="nk-input-sm" style={{ flex: 1 }} placeholder="Nama config (misal: Tryout Bulan Maret)" value={tryoutNewName} onChange={e => setTryoutNewName(e.target.value)} />
+                      <BtnSm disabled={busy || !tryoutNewName.trim()} onClick={async () => {
+                        setBusy(true);
+                        const res = await fetch(`${apiBase}/admin/tryout-configs`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create', name: tryoutNewName }) });
+                        setBusy(false);
+                        if (res.ok) { setTryoutNewName(''); await refreshTryoutConfigs(); }
+                        else alert('Gagal membuat config');
+                      }}>+ Buat</BtnSm>
+                    </div>
+                  </div>
+
+                  {/* List Config */}
+                  {tryoutConfigs.length === 0 && <div className="nk-empty">Belum ada config tryout.</div>}
+                  {tryoutConfigs.map(cfg => (
+                    <div key={cfg.id} style={{ background: '#0f172a', border: `1px solid ${cfg.is_active ? '#1d4ed8' : '#1e2d45'}`, borderRadius: 12, marginBottom: 12, overflow: 'hidden' }}>
+                      {/* Header */}
+                      <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }} onClick={() => setTryoutExpandedId(tryoutExpandedId === cfg.id ? null : cfg.id)}>
+                        <span style={{ flex: 1, fontWeight: 700, fontSize: 14 }}>{cfg.name}</span>
+                        {cfg.group_name && <span className="nk-badge nk-badge-purple" style={{ fontSize: 11 }}>🏢 {cfg.group_name}</span>}
+                        <span className={`nk-badge ${cfg.is_active ? 'nk-badge-green' : ''}`} style={{ fontSize: 11, background: cfg.is_active ? '' : '#1e293b', color: cfg.is_active ? '' : '#64748b' }}>{cfg.is_active ? '✅ Aktif' : '⏸ Nonaktif'}</span>
+                        <span style={{ fontSize: 12, color: '#94a3b8' }}>{cfg.items.length} kategori · {cfg.items.reduce((s,i) => s+i.question_count, 0)} soal total</span>
+                        <span style={{ color: '#64748b' }}>{tryoutExpandedId === cfg.id ? '▲' : '▼'}</span>
+                      </div>
+                      {/* Detail */}
+                      {tryoutExpandedId === cfg.id && (
+                        <div style={{ borderTop: '1px solid #1e2d45', padding: '12px 14px' }}>
+                          {/* Aksi config */}
+                          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                            <BtnSm onClick={async () => {
+                              const active = !cfg.is_active;
+                              await fetch(`${apiBase}/admin/tryout-configs`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'update', id: cfg.id, is_active: active }) });
+                              await refreshTryoutConfigs();
+                            }}>{cfg.is_active ? '⏸ Nonaktifkan' : '✅ Aktifkan'}</BtnSm>
+                            <BtnSm danger onClick={async () => {
+                              if (!confirm('Hapus config ini?')) return;
+                              await fetch(`${apiBase}/admin/tryout-configs`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', id: cfg.id }) });
+                              await refreshTryoutConfigs(); setTryoutExpandedId(null);
+                            }}>🗑 Hapus Config</BtnSm>
+                          </div>
+
+                          {/* Daftar kategori soal */}
+                          <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 600, color: '#94a3b8' }}>Kategori Soal dalam Tryout ini:</p>
+                          {cfg.items.length === 0 && <p style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>Belum ada kategori. Tambahkan di bawah.</p>}
+                          {cfg.items.map(item => (
+                            <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid #1a2535' }}>
+                              <span style={{ flex: 1, fontSize: 13 }}>📚 {item.category_name}</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <input type="number" min="1" defaultValue={item.question_count} style={{ width: 52, padding: '3px 6px', background: '#0a1628', border: '1px solid #1e2d45', borderRadius: 6, color: '#fff', fontSize: 12 }}
+                                  onBlur={async e => {
+                                    const n = parseInt(e.target.value);
+                                    if (!n || n === item.question_count) return;
+                                    await fetch(`${apiBase}/admin/tryout-configs`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'update_item', item_id: item.id, question_count: n }) });
+                                    await refreshTryoutConfigs();
+                                  }} />
+                                <span style={{ fontSize: 11, color: '#64748b' }}>soal</span>
+                                <BtnSm danger onClick={async () => {
+                                  await fetch(`${apiBase}/admin/tryout-configs`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'remove_item', item_id: item.id }) });
+                                  await refreshTryoutConfigs();
+                                }}>✕</BtnSm>
+                              </div>
+                            </div>
+                          ))}
+
+                          {/* Tambah kategori */}
+                          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                            <select className="nk-input-sm" style={{ flex: 1, minWidth: 150 }} value={tryoutAddCatId} onChange={e => setTryoutAddCatId(e.target.value)}>
+                              <option value="">-- Pilih Kategori --</option>
+                              {categories.filter(c => !cfg.items.find(i => i.category_id === c.id)).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                            <input type="number" min="1" placeholder="Jml soal" value={tryoutAddQCount} onChange={e => setTryoutAddQCount(e.target.value)}
+                              className="nk-input-sm" style={{ width: 80 }} />
+                            <BtnSm disabled={!tryoutAddCatId} onClick={async () => {
+                              if (!tryoutAddCatId) return;
+                              const res = await fetch(`${apiBase}/admin/tryout-configs`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'add_item', config_id: cfg.id, category_id: Number(tryoutAddCatId), question_count: Number(tryoutAddQCount) || 10 }) });
+                              const data = await res.json();
+                              if (data.ok) { setTryoutAddCatId(''); setTryoutAddQCount('10'); await refreshTryoutConfigs(); }
+                              else alert(data.error || 'Gagal menambah kategori');
+                            }}>+ Tambah</BtnSm>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </AdminSection>
               )}
 
               {/* Admin — Jadwal */}
