@@ -2283,13 +2283,21 @@ func (a *app) handleAdminCategories(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
+	adminGID := a.getAdminGroupIDFromUser(r.Context(), admin)
 	switch r.Method {
 	case http.MethodGet:
-		rows, err := a.db.QueryContext(r.Context(), `
-			SELECT qc.id, qc.code, qc.name, qc.is_active, COALESCE(qc.group_id,0), COALESCE(g.name,'')
-			FROM question_categories qc
-			LEFT JOIN groups g ON g.id = qc.group_id
-			ORDER BY qc.id DESC`)
+		var catQuery string
+		var catArgs []any
+		if adminGID > 0 {
+			catQuery = `SELECT qc.id, qc.code, qc.name, qc.is_active, COALESCE(qc.group_id,0), COALESCE(g.name,'')
+				FROM question_categories qc LEFT JOIN groups g ON g.id = qc.group_id
+				WHERE qc.group_id = $1 ORDER BY qc.id DESC`
+			catArgs = []any{adminGID}
+		} else {
+			catQuery = `SELECT qc.id, qc.code, qc.name, qc.is_active, COALESCE(qc.group_id,0), COALESCE(g.name,'')
+				FROM question_categories qc LEFT JOIN groups g ON g.id = qc.group_id ORDER BY qc.id DESC`
+		}
+		rows, err := a.db.QueryContext(r.Context(), catQuery, catArgs...)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed categories"})
 			return
@@ -2361,12 +2369,23 @@ func (a *app) handleAdminQuestions(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
+	adminGIDQ := a.getAdminGroupIDFromUser(r.Context(), admin)
 	switch r.Method {
 	case http.MethodGet:
-		rows, err := a.db.QueryContext(r.Context(), `
-			SELECT q.id,q.category_id,COALESCE(c.name,''),q.question_text,q.option_a,q.option_b,q.option_c,q.option_d,q.correct_option,q.is_active
-			FROM questions q LEFT JOIN question_categories c ON c.id=q.category_id ORDER BY q.id DESC LIMIT 300
-		`)
+		var qRows *sql.Rows
+		if adminGIDQ > 0 {
+			qRows, err = a.db.QueryContext(r.Context(), `
+				SELECT q.id,q.category_id,COALESCE(c.name,''),q.question_text,q.option_a,q.option_b,q.option_c,q.option_d,q.correct_option,q.is_active
+				FROM questions q LEFT JOIN question_categories c ON c.id=q.category_id
+				WHERE c.group_id = $1 ORDER BY q.id DESC LIMIT 300
+			`, adminGIDQ)
+		} else {
+			qRows, err = a.db.QueryContext(r.Context(), `
+				SELECT q.id,q.category_id,COALESCE(c.name,''),q.question_text,q.option_a,q.option_b,q.option_c,q.option_d,q.correct_option,q.is_active
+				FROM questions q LEFT JOIN question_categories c ON c.id=q.category_id ORDER BY q.id DESC LIMIT 300
+			`)
+		}
+		rows := qRows
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed questions"})
 			return
@@ -5515,9 +5534,15 @@ func (a *app) handleAdminMaterials(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	adminGIDM := a.getAdminGroupIDFromUser(ctx, adminUserM)
+
 	if r.Method == http.MethodGet {
 		catID := r.URL.Query().Get("category_id")
 		groupFilter := r.URL.Query().Get("group_id")
+		// Admin biasa: paksa filter ke group sendiri
+		if adminGIDM > 0 {
+			groupFilter = fmt.Sprintf("%d", adminGIDM)
+		}
 		query := `
 			SELECT lm.id, lm.category_id, lm.title, lm.type, lm.content, lm.exp_reward, lm.order_no, lm.is_active,
 			       qc.name, COALESCE(qc.group_id, 0), COALESCE(g.name, '')
@@ -6046,11 +6071,11 @@ func (a *app) handleAdminReflectionStats(w http.ResponseWriter, r *http.Request)
 	// Tren 7 hari (per tanggal)
 	rows, err := a.db.QueryContext(ctx, `
 		SELECT reflected_date::text, COUNT(*) as cnt
-		FROM reflections
-		WHERE reflected_date >= CURRENT_DATE - INTERVAL '6 days'
+		FROM reflections`+groupJoin+`
+		WHERE reflected_date >= CURRENT_DATE - INTERVAL '6 days'`+groupWhere+`
 		GROUP BY reflected_date
 		ORDER BY reflected_date ASC
-	`)
+	`, groupArgs...)
 	trend := []map[string]any{}
 	if err == nil {
 		defer rows.Close()
@@ -6068,11 +6093,11 @@ func (a *app) handleAdminReflectionStats(w http.ResponseWriter, r *http.Request)
 		SELECT pp.name, COUNT(*) as cnt
 		FROM reflections r
 		JOIN participant_profiles pp ON pp.user_id = r.user_id
-		WHERE r.reflected_date >= CURRENT_DATE - INTERVAL '30 days'
+		WHERE r.reflected_date >= CURRENT_DATE - INTERVAL '30 days'`+groupWhere+`
 		GROUP BY pp.name
 		ORDER BY cnt DESC
 		LIMIT 5
-	`)
+	`, groupArgs...)
 	topUsers := []map[string]any{}
 	if topRows != nil {
 		defer topRows.Close()
