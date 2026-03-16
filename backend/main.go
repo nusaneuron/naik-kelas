@@ -3120,6 +3120,13 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 	}
 
 	if s.State == "wait_reflection" {
+		// Jika user kirim command, batalkan mode refleksi dulu
+		if strings.HasPrefix(lower, "/") {
+			a.resetSession(uid)
+			a.saveBotSessionState(ctx, uid, "idle")
+			// Lanjutkan proses command seperti biasa (jangan return di sini)
+			goto handleCommands
+		}
 		if len(strings.TrimSpace(text)) < 10 {
 			return "Hmm, ceritakan sedikit lebih banyak ya 🙏\nNala ingin tahu lebih banyak tentang harimu hari ini 😊", "wait_reflection"
 		}
@@ -3214,6 +3221,7 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		return fmt.Sprintf("✅ *Feedback diterima\\!*\n\nPenilaian: %s\n\n%s", stars, thankMsg[hashIdx%len(thankMsg)]), "idle"
 	}
 
+handleCommands:
 	if lower == "/batal" {
 		a.resetSession(uid)
 		a.saveBotSessionState(ctx, uid, "idle")
