@@ -6111,7 +6111,7 @@ func (a *app) handleAdminReflectionStats(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Tabel semua peserta: status refleksi hari ini + jadwal reminder
-	participantRows, _ := a.db.QueryContext(ctx, `
+	pRowQuery := `
 		SELECT
 			pp.name,
 			COALESCE(g.name, '-') as group_name,
@@ -6122,10 +6122,14 @@ func (a *app) handleAdminReflectionStats(w http.ResponseWriter, r *http.Request)
 		JOIN users u ON u.id = pp.user_id AND u.role = 'participant' AND u.is_active = TRUE
 		LEFT JOIN groups g ON g.id = pp.group_id
 		LEFT JOIN reflections r ON r.user_id = pp.user_id AND r.reflected_date = CURRENT_DATE
-		LEFT JOIN reflections r2 ON r2.user_id = pp.user_id
-		GROUP BY pp.name, g.name, pp.reflection_reminder_time, r.id
-		ORDER BY reflected_today DESC, month_count DESC, pp.name ASC
-	`)
+		LEFT JOIN reflections r2 ON r2.user_id = pp.user_id`
+	pRowArgs := []any{}
+	if adminGID > 0 {
+		pRowQuery += ` WHERE pp.group_id = $1`
+		pRowArgs = []any{adminGID}
+	}
+	pRowQuery += ` GROUP BY pp.name, g.name, pp.reflection_reminder_time, r.id ORDER BY reflected_today DESC, month_count DESC, pp.name ASC`
+	participantRows, _ := a.db.QueryContext(ctx, pRowQuery, pRowArgs...)
 	participants := []map[string]any{}
 	if participantRows != nil {
 		defer participantRows.Close()
