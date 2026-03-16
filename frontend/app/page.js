@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
-const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || 'NaikKelasBot';
+const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || 'NalaNaikKelas_bot';
 
 export default function Page() {
   const [me, setMe] = useState(null);
