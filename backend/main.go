@@ -4561,11 +4561,11 @@ func (a *app) getTryoutLeaderboardByGroup(ctx context.Context, limit int, groupI
 			return "", err
 		}
 		tg = cleanTelegramHandle(tg)
-		medal := fmt.Sprintf("%d\\.", rank)
+		medal := fmt.Sprintf("%d.", rank)
 		if rank-1 < len(medals) {
 			medal = medals[rank-1]
 		}
-		lines = append(lines, fmt.Sprintf("%s *%s* (%s)\n    ⏱ %ds • 🎯 %dx perfect", medal, name, tg, bestSec, perfectCount))
+		lines = append(lines, fmt.Sprintf("%s *%s* (%s)\n    ⏱ %ds • 🎯 %dx perfect", medal, escapeMD(name), escapeMD(tg), bestSec, perfectCount))
 		rank++
 	}
 	if rank == 1 {
@@ -4602,11 +4602,11 @@ func (a *app) getTryoutLeaderboard(ctx context.Context, limit int) (string, erro
 			return "", err
 		}
 		tg = cleanTelegramHandle(tg)
-		medal := fmt.Sprintf("%d\\.", rank)
+		medal := fmt.Sprintf("%d.", rank)
 		if rank-1 < len(medals) {
 			medal = medals[rank-1]
 		}
-		lines = append(lines, fmt.Sprintf("%s *%s* (%s)\n    ⏱ %ds • 🎯 %dx perfect", medal, name, tg, bestSec, perfectCount))
+		lines = append(lines, fmt.Sprintf("%s *%s* (%s)\n    ⏱ %ds • 🎯 %dx perfect", medal, escapeMD(name), escapeMD(tg), bestSec, perfectCount))
 		rank++
 	}
 	if err := rows.Err(); err != nil {
@@ -4847,6 +4847,17 @@ func normalizeQuizAnswer(v string) string {
 	default:
 		return ""
 	}
+}
+
+// escapeMD escapes special characters for Telegram Markdown v1
+func escapeMD(s string) string {
+	replacer := strings.NewReplacer(
+		"_", "\\_",
+		"*", "\\*",
+		"`", "\\`",
+		"[", "\\[",
+	)
+	return replacer.Replace(s)
 }
 
 func cleanTelegramHandle(v string) string {
