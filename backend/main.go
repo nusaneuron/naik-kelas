@@ -5851,8 +5851,14 @@ type group struct {
 // POST /admin/groups        → create | update | delete
 func (a *app) handleAdminGroups(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	if _, err := a.requireRole(ctx, r, "admin"); err != nil {
+	u, err := a.requireRole(ctx, r, "admin")
+	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	// Hanya super_admin yang boleh akses manajemen kelompok
+	if !isSuperAdmin(u) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "hanya super_admin yang bisa mengelola kelompok"})
 		return
 	}
 

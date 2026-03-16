@@ -1461,7 +1461,7 @@ export default function Page() {
               </p>
               <nav style={{ display: 'grid', gap: 4 }}>
                 {[
-                  ['kelompok', '🏢', 'Kelompok'],
+                  ...(me?.is_super_admin ? [['kelompok', '🏢', 'Kelompok']] : []),
                   ['peserta', '👥', 'Peserta'],
                   ['bank', '📚', 'Bank Soal'],
                   ['materi', '📖', 'Materi'],
