@@ -54,6 +54,7 @@ type botSession struct {
 	Phone             string
 	QuizCategory      string
 	QuizIndex         int
+	QuizCount         int
 	QuizAnswers       []string
 	TryoutQuestions   []quizQuestion
 	TryoutAnswers     []string
@@ -3705,14 +3706,60 @@ handleCommands:
 			}
 			return "Kategori belum dikenali 🙏\nSilakan pilih salah satu kategori berikut:\n\n" + catsText, "quiz_choose_category"
 		}
+		totalSoal := len(cat.Items)
+		if totalSoal < 5 {
+			// Langsung mulai tanpa tanya jumlah kalau soal < 5
+			a.mu.Lock()
+			s.QuizCategory = cat.Code
+			s.QuizCount = totalSoal
+			s.State = "quiz_answering"
+			s.QuizIndex = 0
+			s.QuizAnswers = []string{}
+			s.UpdatedAt = time.Now()
+			a.mu.Unlock()
+			return "Kategori: *" + escapeMD(cat.Name) + "* ✅\nJawab semua " + fmt.Sprint(totalSoal) + " soal ya. Nanti Nala cek di akhir\\.\n\n" + formatQuizQuestion(cat, 0), "quiz_answering"
+		}
 		a.mu.Lock()
 		s.QuizCategory = cat.Code
+		s.QuizCount = 0
+		s.State = "quiz_choose_count"
+		s.UpdatedAt = time.Now()
+		a.mu.Unlock()
+		return fmt.Sprintf("Kategori: *%s* ✅\n\nBerapa soal yang ingin kamu kerjakan\\?\n\n📝 Minimal *5 soal*, maksimal *%d soal* \\(semua soal tersedia\\)\\.\n\nKetik angkanya:", escapeMD(cat.Name), totalSoal), "quiz_choose_count"
+
+	case "quiz_choose_count":
+		cat, ok, err := a.findQuizCategoryDB(ctx, s.QuizCategory)
+		if err != nil || !ok {
+			a.resetSession(uid)
+			return "Kategori tidak ditemukan\\. Ketik /quiz untuk mulai lagi\\.", "idle"
+		}
+		totalSoal := len(cat.Items)
+		n, parseErr := strconv.Atoi(strings.TrimSpace(text))
+		if parseErr != nil || n < 5 {
+			return fmt.Sprintf("Masukkan angka yang valid\\. Minimal *5 soal* ya\\! \\(tersedia %d soal\\)", totalSoal), "quiz_choose_count"
+		}
+		if n > totalSoal {
+			return fmt.Sprintf("Maksimal *%d soal* \\(sesuai jumlah soal di kategori ini\\)\\. Coba lagi:", totalSoal), "quiz_choose_count"
+		}
+		// Acak soal dan ambil n soal, simpan ke session
+		shuffled := make([]quizQuestion, len(cat.Items))
+		copy(shuffled, cat.Items)
+		randSrc := rand.New(rand.NewSource(time.Now().UnixNano()))
+		randSrc.Shuffle(len(shuffled), func(i, j int) { shuffled[i], shuffled[j] = shuffled[j], shuffled[i] })
+		selectedItems := shuffled[:n]
+		// Simpan ke TryoutQuestions (reuse slot) sebagai soal quiz terpilih
+		savedQ := make([]quizQuestion, n)
+		copy(savedQ, selectedItems)
+		cat.Items = selectedItems
+		a.mu.Lock()
+		s.QuizCount = n
+		s.TryoutQuestions = savedQ // simpan soal terpilih
 		s.State = "quiz_answering"
 		s.QuizIndex = 0
 		s.QuizAnswers = []string{}
 		s.UpdatedAt = time.Now()
 		a.mu.Unlock()
-		return "Kategori dipilih: " + cat.Name + " ✅\nJawab semua soal dulu ya. Nanti Nala cek di akhir.\n\n" + formatQuizQuestion(cat, 0), "quiz_answering"
+		return fmt.Sprintf("Oke\\! Quiz *%s* dengan *%d soal* dimulai\\! 🎯\nJawab semua soal ya\\. Nanti Nala cek di akhir\\.\n\n", escapeMD(cat.Name), n) + formatQuizQuestion(cat, 0), "quiz_answering"
 
 	case "quiz_answering":
 		ans := normalizeQuizAnswer(text)
@@ -3728,7 +3775,11 @@ handleCommands:
 			a.resetSession(uid)
 			return "Kategori quiz tidak ditemukan. Ketik /quiz untuk mulai lagi ya.", "idle"
 		}
+		// Jika user memilih jumlah soal custom, pakai soal yang disimpan di session
 		a.mu.Lock()
+		if s.QuizCount > 0 && len(s.TryoutQuestions) == s.QuizCount {
+			cat.Items = append([]quizQuestion(nil), s.TryoutQuestions...)
+		}
 		s.QuizAnswers = append(s.QuizAnswers, ans)
 		s.QuizIndex++
 		s.UpdatedAt = time.Now()
