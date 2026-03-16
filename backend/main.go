@@ -244,6 +244,7 @@ func main() {
 	mux.HandleFunc("/admin/badges/award", a.handleAdminBadgeAward)
 	mux.HandleFunc("/admin/badges/revoke", a.handleAdminBadgeRevoke)
 	mux.HandleFunc("/admin/feedback/schedule", a.handleAdminFeedbackSchedule)
+	mux.HandleFunc("/admin/reflection/send-now", a.handleAdminSendReflectionNow)
 	mux.HandleFunc("/admin/feedback/list", a.handleAdminFeedbackList)
 	mux.HandleFunc("/admin/feedback/stats", a.handleAdminFeedbackStats)
 	mux.HandleFunc("/admin/reflections/stats", a.handleAdminReflectionStats)
@@ -6066,9 +6067,9 @@ func (a *app) sendReflectionReminders(ctx context.Context) {
 
 func (a *app) sendReflectionReminderRows(ctx context.Context, rows *sql.Rows) {
 	reminderMsgs := []string{
-		"Hai *%s*\\! 🌙\n\nSaatnya luangkan sejenak untuk diri sendiri\\.\n\nYuk tulis refleksimu sekarang dengan /refleksi 📔\n_Hanya butuh 2 menit\\!_",
-		"Hei *%s*\\! 📔\n\nIni pengingat refleksi harianmu\\.\n\nApa yang berkesan dari harimu hari ini? Ceritakan ke Nala lewat /refleksi 🌸",
-		"*%s*, waktunya refleksi\\! 🌙\n\nMenulis perasaan dan pikiranmu bisa membantumu tumbuh lebih baik\\.\n\nKetik /refleksi dan ceritakan harimu ke Nala 💙",
+		"Hai *%s*! 🌙\n\nSaatnya luangkan sejenak untuk diri sendiri.\n\nYuk tulis refleksimu sekarang dengan /refleksi 📔\n_Hanya butuh 2 menit!_",
+		"Hei *%s*! 📔\n\nIni pengingat refleksi harianmu.\n\nApa yang berkesan dari harimu hari ini? Ceritakan ke Nala lewat /refleksi 🌸",
+		"*%s*, waktunya refleksi! 🌙\n\nMenulis perasaan dan pikiranmu bisa membantumu tumbuh lebih baik.\n\nKetik /refleksi dan ceritakan harimu ke Nala 💙",
 	}
 	idx := 0
 	for rows.Next() {
@@ -6080,9 +6081,14 @@ func (a *app) sendReflectionReminderRows(ctx context.Context, rows *sql.Rows) {
 		if firstName == "" {
 			firstName = "kamu"
 		}
-		msg := fmt.Sprintf(reminderMsgs[idx%len(reminderMsgs)], firstName)
+		// Escape Markdown chars in name agar tidak break formatting
+		safeName := escapeMD(firstName)
+		msg := fmt.Sprintf(reminderMsgs[idx%len(reminderMsgs)], safeName)
 		idx++
-		chatID, _ := strconv.ParseInt(tgUID, 10, 64)
+		chatID, err := strconv.ParseInt(strings.TrimSpace(tgUID), 10, 64)
+		if err != nil || chatID == 0 {
+			continue
+		}
 		go func(cid int64, m string) {
 			_ = a.sendTelegramMessage(context.Background(), cid, m, "idle")
 		}(chatID, msg)
@@ -6264,6 +6270,21 @@ func (a *app) broadcastFeedbackRequest(ctx context.Context) {
 }
 
 // ── Feedback: Admin Handlers ─────────────────────────────────────────────────
+
+func (a *app) handleAdminSendReflectionNow(w http.ResponseWriter, r *http.Request) {
+	_, err := a.requireRole(r.Context(), r, "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	// Kirim ke semua peserta aktif yang belum refleksi hari ini (tanpa filter waktu)
+	go a.sendReflectionReminders(context.Background())
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "message": "Reminder refleksi sedang dikirim ke semua peserta yang belum refleksi hari ini."})
+}
 
 func (a *app) handleAdminFeedbackSchedule(w http.ResponseWriter, r *http.Request) {
 	u, err := a.requireRole(r.Context(), r, "admin")

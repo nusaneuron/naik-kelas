@@ -2201,6 +2201,17 @@ export default function Page() {
                           </div>
                         ) : <p style={{ color: '#475569', fontSize: 13 }}>Belum ada peserta terdaftar.</p>}
                       </div>
+                      <div style={{ marginTop: 16, padding: 16, background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12 }}>
+                        <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: 14 }}>📣 Kirim Reminder Refleksi</p>
+                        <p style={{ margin: '0 0 12px', fontSize: 13, color: '#94a3b8' }}>Kirim pengingat refleksi sekarang ke semua peserta yang belum refleksi hari ini (tanpa menunggu jadwal).</p>
+                        <BtnSm disabled={busy} onClick={async () => {
+                          setBusy(true);
+                          const res = await fetch(`${apiBase}/admin/reflection/send-now`, { method: 'POST', credentials: 'include' });
+                          const d = await res.json().catch(() => ({}));
+                          setBusy(false);
+                          showMsg(d.message || (res.ok ? 'Reminder dikirim!' : 'Gagal kirim reminder.'), res.ok ? 'success' : 'error');
+                        }}>📣 Kirim Reminder Sekarang</BtnSm>
+                      </div>
                       <p style={{ fontSize: 12, color: '#475569', marginTop: 12, fontStyle: 'italic' }}>
                         💡 Isi refleksi bersifat privat — hanya peserta yang bisa membaca tulisannya sendiri.
                       </p>
