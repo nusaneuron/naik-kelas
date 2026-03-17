@@ -1087,32 +1087,7 @@ export default function Page() {
                   <div style={{ marginTop: 10, fontSize: 12, color: '#475569' }}>Belum tergabung dalam kelompok</div>
                 )}
 
-                {isAdmin && (
-                  <div style={{ marginTop: 14, display: 'flex', gap: 6 }}>
-                    <button
-                      onClick={() => setAdminViewMode('participant')}
-                      style={{
-                        flex: 1, border: '1px solid',
-                        borderColor: adminViewMode === 'participant' ? 'rgba(190,148,245,0.5)' : '#2d3f5a',
-                        background: adminViewMode === 'participant' ? 'rgba(190,148,245,0.15)' : 'transparent',
-                        color: adminViewMode === 'participant' ? '#be94f5' : '#94a3b8',
-                        borderRadius: 8, padding: '6px 0', cursor: 'pointer',
-                        fontSize: 12, fontWeight: 700, transition: 'all 160ms ease'
-                      }}
-                    >👤 Peserta</button>
-                    <button
-                      onClick={() => setAdminViewMode('admin')}
-                      style={{
-                        flex: 1, border: '1px solid',
-                        borderColor: adminViewMode === 'admin' ? 'rgba(255,87,52,0.5)' : '#2d3f5a',
-                        background: adminViewMode === 'admin' ? 'rgba(255,87,52,0.15)' : 'transparent',
-                        color: adminViewMode === 'admin' ? '#ff7a5c' : '#94a3b8',
-                        borderRadius: 8, padding: '6px 0', cursor: 'pointer',
-                        fontSize: 12, fontWeight: 700, transition: 'all 160ms ease'
-                      }}
-                    >⚙️ Admin</button>
-                  </div>
-                )}
+
               </div>
 
               <div className="nk-stat-card orange">
