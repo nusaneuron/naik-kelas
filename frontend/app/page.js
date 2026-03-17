@@ -421,23 +421,43 @@ export default function Page() {
   }
 
   useEffect(() => {
-    // Register Service Worker untuk PWA
+    // 1. Register Service Worker
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.register('/sw.js')
+        .then(reg => console.log('[PWA] SW registered', reg.scope))
+        .catch(err => console.log('[PWA] SW error', err));
     }
-    // Tangkap install prompt (Android/Chrome)
-    // JANGAN preventDefault - biarkan Chrome tampilkan native mini-infobar
+
+    // 2. Cek apakah sudah di-install (standalone mode)
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true;
+    if (isStandalone) return; // sudah diinstall, skip banner
+
+    // 3. Cek dismiss
+    if (localStorage.getItem('pwa-dismissed')) return;
+
+    // 4. Android/Chrome: tangkap beforeinstallprompt
     const handler = (e) => {
-      setInstallPrompt(e); // simpan untuk tombol install manual
+      e.preventDefault(); // cegah mini-bar Chrome, kita pakai custom banner
+      setInstallPrompt(e);
+      setShowInstallBanner(true); // tampilkan banner kita
     };
     window.addEventListener('beforeinstallprompt', handler);
-    // iOS: cek apakah belum di-install & pakai Safari
+
+    // 5. iOS Safari: tampilkan instruksi manual
     const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-    const iosDismissed = localStorage.getItem('pwa-dismissed');
-    if (isIOS && !isStandalone && !iosDismissed) {
-      setTimeout(() => setShowInstallBanner(true), 2000);
+    const isSafari = /safari/i.test(navigator.userAgent) && !/chrome/i.test(navigator.userAgent);
+    if (isIOS && isSafari) {
+      setTimeout(() => setShowInstallBanner(true), 3000);
     }
+
+    // 6. Sembunyikan banner saat berhasil diinstall
+    window.addEventListener('appinstalled', () => {
+      setShowInstallBanner(false);
+      setInstallPrompt(null);
+      localStorage.setItem('pwa-dismissed', '1');
+    });
+
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
@@ -3368,39 +3388,47 @@ export default function Page() {
 
       {/* PWA Install Banner */}
       {showInstallBanner && (
-        <div style={{
-          position: 'fixed', bottom: 80, left: 12, right: 12, zIndex: 999,
-          background: 'linear-gradient(135deg, #1e1b4b, #2e1065)',
-          border: '1px solid rgba(139,92,246,0.4)',
-          borderRadius: 16, padding: '14px 16px',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-          display: 'flex', alignItems: 'center', gap: 12
+        <div id="installBtn" style={{
+          position: 'fixed', bottom: 76, left: 10, right: 10, zIndex: 1000,
+          background: 'linear-gradient(135deg, #1e1b4b 0%, #2e1065 100%)',
+          border: '1px solid rgba(139,92,246,0.5)',
+          borderRadius: 18, padding: '12px 14px',
+          boxShadow: '0 -4px 40px rgba(124,58,237,0.3), 0 8px 32px rgba(0,0,0,0.6)',
+          display: 'flex', alignItems: 'center', gap: 10,
         }}>
-          <span style={{ fontSize: 32, flexShrink: 0 }}>📲</span>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: '#e2e8f0', marginBottom: 2 }}>Install Naik Kelas</div>
-            <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.4 }}>
-              {/iphone|ipad|ipod/i.test(typeof navigator !== 'undefined' ? navigator.userAgent : '')
-                ? '📋 Tap Share ↑ → "Add to Home Screen"'
-                : 'Tambahkan ke Home Screen untuk akses cepat!'}
+          {/* Icon */}
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
+            🎓
+          </div>
+          {/* Teks */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: '#f1f5f9' }}>Install Naik Kelas</div>
+            <div style={{ fontSize: 11, color: '#a78bfa', marginTop: 1 }}>
+              {installPrompt ? 'Tambahkan ke Home Screen' : 'Tap Share ↑ → Add to Home Screen'}
             </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+          {/* Tombol */}
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
             {installPrompt && (
               <button onClick={async () => {
-                installPrompt.prompt();
-                const { outcome } = await installPrompt.userChoice;
-                setShowInstallBanner(false);
-                if (outcome === 'accepted') localStorage.setItem('pwa-dismissed', '1');
+                try {
+                  installPrompt.prompt();
+                  const { outcome } = await installPrompt.userChoice;
+                  if (outcome === 'accepted') {
+                    setShowInstallBanner(false);
+                    localStorage.setItem('pwa-dismissed', '1');
+                  }
+                } catch(e) {}
               }} style={{
-                background: '#7c3aed', color: '#fff', border: 'none',
-                borderRadius: 8, padding: '6px 14px', fontSize: 12,
-                fontWeight: 700, cursor: 'pointer'
+                background: 'linear-gradient(135deg, #7c3aed, #9333ea)',
+                color: '#fff', border: 'none', borderRadius: 10,
+                padding: '8px 16px', fontSize: 13, fontWeight: 700,
+                cursor: 'pointer', boxShadow: '0 2px 8px rgba(124,58,237,0.5)'
               }}>Install</button>
             )}
             <button onClick={() => { setShowInstallBanner(false); localStorage.setItem('pwa-dismissed', '1'); }}
-              style={{ background: 'transparent', color: '#64748b', border: '1px solid #334155', borderRadius: 8, padding: '5px 14px', fontSize: 12, cursor: 'pointer' }}>
-              Nanti
+              style={{ background: 'rgba(255,255,255,0.07)', color: '#94a3b8', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '8px 12px', fontSize: 12, cursor: 'pointer' }}>
+              ✕
             </button>
           </div>
         </div>

@@ -3,24 +3,32 @@
   "short_name": "Naik Kelas",
   "description": "Platform belajar — quiz, tryout, catatan & leaderboard",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#060d1b",
   "theme_color": "#7c3aed",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "categories": ["education"],
-  "lang": "id"
+  "lang": "id-ID"
 }
