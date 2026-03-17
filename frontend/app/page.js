@@ -1282,7 +1282,7 @@ export default function Page() {
             <Section title="🏆 Leaderbot Tryout">
               {leaderboard.length ? (
                 <div className="nk-table-wrap" style={{ maxHeight: 280 }}>
-                  <table className="nk-table" style={{ minWidth: 500 }}>
+                  <table className="nk-table" >
                     <thead><tr><th>#</th><th>Nama</th><th>Badges</th><th>Telegram</th><th>Waktu Terbaik</th><th>Perfect</th></tr></thead>
                     <tbody>{leaderboard.map((it) => (
                       <tr key={it.rank}>
@@ -1536,7 +1536,7 @@ export default function Page() {
               <Section title="🧠 Riwayat Quiz">
                 {(history.quiz || []).length ? (
                   <div className="nk-table-wrap" style={{ maxHeight: 280 }}>
-                    <table className="nk-table" style={{ minWidth: 500 }}>
+                    <table className="nk-table" >
                       <thead><tr><th>Kategori</th><th>Attempt</th><th>Salah</th><th>Total</th><th>Status</th></tr></thead>
                       <tbody>{(history.quiz || []).map((q, i) => (
                         <tr key={i}>
@@ -1555,7 +1555,7 @@ export default function Page() {
               <Section title="🚀 Riwayat Tryout">
                 {(history.tryout || []).length ? (
                   <div className="nk-table-wrap" style={{ maxHeight: 280 }}>
-                    <table className="nk-table" style={{ minWidth: 520 }}>
+                    <table className="nk-table" >
                       <thead><tr><th>Benar</th><th>Total</th><th>Durasi</th><th>Kecepatan</th><th>Status</th></tr></thead>
                       <tbody>{(history.tryout || []).map((t, i) => (
                         <tr key={i}>
@@ -2400,7 +2400,7 @@ export default function Page() {
                   <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 10px', color: '#e5e7eb' }}>Saldo Per Peserta</h3>
                   {adminPointBalances.length ? (
                     <div className="nk-table-wrap" style={{ maxHeight: 240, marginBottom: 16 }}>
-                      <table className="nk-table" style={{ minWidth: 500 }}>
+                      <table className="nk-table" >
                         <thead><tr><th>Nama</th><th>No. HP</th><th>Saldo</th></tr></thead>
                         <tbody>{adminPointBalances.map((b) => (
                           <tr key={b.user_id}>

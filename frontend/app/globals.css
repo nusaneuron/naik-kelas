@@ -169,15 +169,23 @@ button:active { transform: translateY(0); }
 .nk-table tr:last-child td { border-bottom: none; }
 .nk-table tbody tr:hover { background: rgba(255,255,255,0.025); }
 .nk-table-wrap {
-  overflow-x: auto;
+  display: block;
+  width: 100%;
+  overflow-x: scroll;
   overflow-y: auto;
   border: 1px solid var(--nk-border);
   border-radius: var(--nk-radius-md);
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #1e2d45 transparent;
 }
 .nk-table {
   width: max-content;
   min-width: 100%;
+  table-layout: auto;
+}
+.nk-table th {
+  white-space: nowrap;
 }
 
 /* ─── Form ─────────────────────────────── */
