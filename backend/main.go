@@ -5983,13 +5983,43 @@ func (a *app) handleParticipantCanvas(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 
-	// Upsert default canvas untuk user
+	// Jika request list semua canvas
+	if r.Method == http.MethodGet && r.URL.Query().Get("list") == "1" {
+		rows, err := a.db.QueryContext(ctx, `SELECT id, name, updated_at FROM note_canvases WHERE user_id=$1 ORDER BY updated_at DESC`, u.ID)
+		if err != nil { writeJSON(w, 500, map[string]string{"error": err.Error()}); return }
+		defer rows.Close()
+		type cv struct {
+			ID   int64  `json:"id"`
+			Name string `json:"name"`
+			UpdatedAt string `json:"updated_at"`
+		}
+		list := []cv{}
+		for rows.Next() {
+			var c cv
+			if rows.Scan(&c.ID, &c.Name, &c.UpdatedAt) == nil { list = append(list, c) }
+		}
+		writeJSON(w, 200, map[string]any{"canvases": list})
+		return
+	}
+
+	// Resolve canvas ID — dari query param atau default
+	canvasIDStr := r.URL.Query().Get("canvas_id")
 	var canvasID int64
-	err = a.db.QueryRowContext(ctx, `
-		INSERT INTO note_canvases(user_id, name) VALUES($1,'Canvas')
-		ON CONFLICT(user_id, name) DO UPDATE SET updated_at=NOW()
-		RETURNING id`, u.ID).Scan(&canvasID)
-	if err != nil { writeJSON(w, 500, map[string]string{"error": err.Error()}); return }
+	if canvasIDStr != "" {
+		fmt.Sscan(canvasIDStr, &canvasID)
+		// Validasi ownership
+		var ownerID int64
+		if err := a.db.QueryRowContext(ctx, `SELECT user_id FROM note_canvases WHERE id=$1`, canvasID).Scan(&ownerID); err != nil || ownerID != u.ID {
+			writeJSON(w, 404, map[string]string{"error": "canvas not found"}); return
+		}
+	} else {
+		// Upsert default canvas
+		err = a.db.QueryRowContext(ctx, `
+			INSERT INTO note_canvases(user_id, name) VALUES($1,'Canvas')
+			ON CONFLICT(user_id, name) DO UPDATE SET updated_at=NOW()
+			RETURNING id`, u.ID).Scan(&canvasID)
+		if err != nil { writeJSON(w, 500, map[string]string{"error": err.Error()}); return }
+	}
 
 	switch r.Method {
 	case http.MethodGet:
@@ -6052,6 +6082,7 @@ func (a *app) handleParticipantCanvas(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Action  string  `json:"action"`
 			ID      int64   `json:"id"`
+			Name    string  `json:"name"`
 			Type    string  `json:"type"`
 			NoteID  *int64  `json:"note_id"`
 			Data    string  `json:"data"`
@@ -6060,7 +6091,6 @@ func (a *app) handleParticipantCanvas(w http.ResponseWriter, r *http.Request) {
 			Width   float64 `json:"width"`
 			Height  float64 `json:"height"`
 			ZIndex  int     `json:"z_index"`
-			// Edge fields
 			FromItem int64  `json:"from_item"`
 			ToItem   int64  `json:"to_item"`
 			Label    string `json:"label"`
@@ -6108,6 +6138,28 @@ func (a *app) handleParticipantCanvas(w http.ResponseWriter, r *http.Request) {
 
 		case "delete_edge":
 			_, _ = a.db.ExecContext(ctx, `DELETE FROM note_canvas_edges WHERE id=$1 AND canvas_id=$2`, req.ID, canvasID)
+			writeJSON(w, 200, map[string]any{"ok": true})
+
+		case "create_canvas":
+			name := strings.TrimSpace(req.Name)
+			if name == "" { name = "Canvas Baru" }
+			var newID int64
+			err := a.db.QueryRowContext(ctx, `INSERT INTO note_canvases(user_id, name) VALUES($1,$2) RETURNING id`, u.ID, name).Scan(&newID)
+			if err != nil { writeJSON(w, 500, map[string]string{"error": err.Error()}); return }
+			writeJSON(w, 200, map[string]any{"ok": true, "id": newID, "name": name})
+
+		case "rename_canvas":
+			name := strings.TrimSpace(req.Name)
+			if name == "" { writeJSON(w, 400, map[string]string{"error": "name required"}); return }
+			_, _ = a.db.ExecContext(ctx, `UPDATE note_canvases SET name=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3`, name, canvasID, u.ID)
+			writeJSON(w, 200, map[string]any{"ok": true})
+
+		case "delete_canvas":
+			// Jangan hapus kalau hanya 1 canvas
+			var count int
+			_ = a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM note_canvases WHERE user_id=$1`, u.ID).Scan(&count)
+			if count <= 1 { writeJSON(w, 400, map[string]string{"error": "minimal 1 canvas"}); return }
+			_, _ = a.db.ExecContext(ctx, `DELETE FROM note_canvases WHERE id=$1 AND user_id=$2`, canvasID, u.ID)
 			writeJSON(w, 200, map[string]any{"ok": true})
 
 		default:

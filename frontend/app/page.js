@@ -1586,11 +1586,9 @@ export default function Page() {
                 {/* CANVAS VIEW */}
                 {noteView === 'canvas' && (
                   <NoteCanvasRF
-                    data={canvasData}
                     notes={notes}
                     apiBase={apiBase}
-                    onUpdate={loadCanvas}
-                    onOpenNote={loadNoteDetail}
+                    onOpenNote={(id) => { loadNoteDetail(id); setNoteView('editor'); }}
                   />
                 )}
 
