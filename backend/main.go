@@ -2873,7 +2873,7 @@ func (a *app) syncTelegramBotCommands(ctx context.Context) error {
 		{"command": "exp", "description": "⭐ Detail EXP dan progress level"},
 		{"command": "poin", "description": "💰 Saldo & riwayat transaksi poin"},
 		{"command": "redeem", "description": "🎁 Tukar poin dengan hadiah"},
-		{"command": "catatan", "description": "📝 Simpan catatan sementara (contoh: /catatan isi catatan)"},
+		{"command": "catatan", "description": "📝 Simpan catatan sementara"},
 		{"command": "refleksi", "description": "📔 Tulis refleksi & jurnal harianmu"},
 		{"command": "jadwal_belajar", "description": "⏰ Atur pengingat belajar harian"},
 		{"command": "jadwal_refleksi", "description": "⏰ Atur pengingat refleksi harian"},
@@ -3214,10 +3214,18 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 	lower := strings.ToLower(strings.TrimSpace(text))
 
 	// ── Catatan Sementara via Bot ─────────────────────────────────────
-	if strings.HasPrefix(lower, "/catatan") {
-		noteText := strings.TrimSpace(text[len("/catatan"):])
+	if strings.HasPrefix(lower, "/catatan") || strings.HasPrefix(lower, "catat :") || strings.HasPrefix(lower, "catat:") {
+		var noteText string
+		switch {
+		case strings.HasPrefix(lower, "/catatan"):
+			noteText = strings.TrimSpace(text[len("/catatan"):])
+		case strings.HasPrefix(lower, "catat :"):
+			noteText = strings.TrimSpace(text[len("catat :"):])
+		default:
+			noteText = strings.TrimSpace(text[len("catat:"):])
+		}
 		if noteText == "" {
-			return "📝 Kirim catatan sementaramu!\n\nContoh:\n`/catatan Tadi belajar tentang K3, poin penting: selalu pakai APD sebelum masuk area produksi`\n\nCatatan akan tersimpan di menu *Catatan* di portal web\\.", "idle"
+			return "📝 Kirim catatan sementaramu\\!\n\nContoh:\n`Catat : abis belajar banyak hal tentang K3 hari ini`\n\nCatatan akan tersimpan di menu *Catatan* di portal web\\.", "idle"
 		}
 		// Resolve web user_id
 		var webUID int64
