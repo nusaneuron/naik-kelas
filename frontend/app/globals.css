@@ -350,8 +350,9 @@ button:active { transform: translateY(0); }
 .nk-main-content {
   flex: 1;
   min-width: 0;
+  max-width: 100%;
   padding: 20px;
-  overflow-x: hidden;
+  overflow-x: clip; /* clip tidak bikin scroll context baru, aman untuk child overflow */
 }
 
 /* ─── Admin Layout Responsive ─────────────────────────────── */
@@ -446,6 +447,10 @@ button:active { transform: translateY(0); }
   /* Konten utama: beri padding bawah agar tidak ketutupan bottom bar */
   .nk-main-content {
     padding: 14px 12px 80px !important;
+    min-width: 0 !important;
+    max-width: 100vw !important;
+    overflow-x: visible !important; /* biarkan nk-table-wrap yang handle scroll */
+    box-sizing: border-box !important;
   }
 
   /* Admin layout: stack vertikal */

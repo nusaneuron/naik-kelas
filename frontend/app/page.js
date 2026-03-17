@@ -3418,7 +3418,8 @@ function Section({ title, children }) {
   return (
     <section style={{
       border: '1px solid #1e2d45', borderRadius: 16,
-      padding: 18, background: '#0b1220', marginBottom: 14
+      padding: 18, background: '#0b1220', marginBottom: 14,
+      minWidth: 0, maxWidth: '100%', boxSizing: 'border-box'
     }}>
       <h2 style={{ fontFamily: 'Poppins, sans-serif', fontSize: 16, fontWeight: 700, margin: '0 0 14px', color: '#e5e7eb' }}>{title}</h2>
       {children}
