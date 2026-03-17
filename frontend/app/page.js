@@ -1101,17 +1101,6 @@ export default function Page() {
                 <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 6 }}>poin tersedia</div>
               </div>
 
-              {/* Link ke Bot Nala */}
-              <a href={`https://t.me/${process.env.NEXT_PUBLIC_BOT_USERNAME || 'NalaNaikKelas_bot'}`} target="_blank" rel="noopener noreferrer"
-                style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'linear-gradient(135deg, rgba(0,136,204,0.15), rgba(0,136,204,0.05))', border: '1px solid rgba(0,136,204,0.25)', borderRadius: 14, padding: '14px 18px', textDecoration: 'none', cursor: 'pointer' }}>
-                <span style={{ fontSize: 26 }}>✈️</span>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: '#38bdf8' }}>Buka Bot Nala di Telegram</div>
-                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Quiz, tryout, catatan sementara & pengingat belajar</div>
-                </div>
-                <span style={{ marginLeft: 'auto', color: '#38bdf8', fontSize: 18 }}>→</span>
-              </a>
-
               <div className="nk-stat-card yellow">
                 <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 10 }}>📅 Jadwal Belajar</div>
                 {myReminder?.active ? (
@@ -1146,6 +1135,19 @@ export default function Page() {
             </div>
 
             </>)}
+
+            {/* Link ke Bot */}
+            {participantSection === 'profil' && (
+              <a href={`https://t.me/${process.env.NEXT_PUBLIC_BOT_USERNAME || 'NalaNaikKelas_bot'}`} target="_blank" rel="noopener noreferrer"
+                style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'linear-gradient(135deg, rgba(0,136,204,0.15), rgba(0,136,204,0.05))', border: '1px solid rgba(0,136,204,0.25)', borderRadius: 14, padding: '14px 18px', marginBottom: 12, textDecoration: 'none', cursor: 'pointer' }}>
+                <span style={{ fontSize: 28 }}>✈️</span>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: '#38bdf8' }}>Buka Bot Nala di Telegram</div>
+                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Quiz, tryout, catatan sementara & pengingat belajar</div>
+                </div>
+                <span style={{ marginLeft: 'auto', color: '#38bdf8', fontSize: 18 }}>→</span>
+              </a>
+            )}
 
             {/* Ubah Password */}
             {participantSection === 'profil' && (
