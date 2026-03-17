@@ -986,6 +986,7 @@ export default function Page() {
               <p className="nk-sidebar-label" style={{ fontSize: 11, color: '#475569', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', margin: '0 0 12px 8px' }}>Menu</p>
               {[
                 ['profil',    '👤', 'Profil'],
+                ['catatan',   '📝', 'Catatan'],
                 ['materi',    '📚', 'Materi'],
                 ['quiz',      '🧠', 'Quiz & Tryout'],
                 ['redeem',    '🎁', 'Redeem'],
@@ -993,7 +994,6 @@ export default function Page() {
                 ['refleksi',  '📔', 'Refleksi'],
                 ['badges',    '🎖️', 'Badges'],
                 ['leaderboard','🏆','Leaderboard'],
-                ['catatan',   '📝','Catatan'],
               ].map(([key, icon, label]) => (
                 <button key={key} onClick={() => { setParticipantSection(key); loadSection(key); }} style={{
                   display: 'flex', alignItems: 'center', gap: 10,
