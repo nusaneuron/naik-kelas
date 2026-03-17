@@ -92,8 +92,8 @@ export default function Page() {
   }
   function inlineMD(s) {
     s = s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    // [[Backlink]] → bold berwarna + bisa diklik
-    s = s.replace(/\[\[(.+?)\]\]/g, '<strong style="color:#60a5fa;cursor:pointer;border-bottom:1px solid rgba(96,165,250,0.3);padding-bottom:1px" onclick="window.__noteBacklinkClick&&window.__noteBacklinkClick(\'$1\')">$1</strong>');
+    // [[Backlink]] → bold berwarna, klik via event delegation (data-backlink)
+    s = s.replace(/\[\[(.+?)\]\]/g, '<span class="nk-backlink" data-backlink="$1" style="color:#60a5fa;font-weight:700;cursor:pointer;border-bottom:1px solid rgba(96,165,250,0.4);padding-bottom:1px">$1</span>');
     // #tag → berwarna ungu
     s = s.replace(/(^|\s)#([\w\u00C0-\u024F]+)/g, '$1<span style="color:#a78bfa;font-weight:600">#$2</span>');
     s = s.replace(/\*\*(.+?)\*\*/g, '<strong style="color:#e2e8f0">$1</strong>');
@@ -1478,15 +1478,17 @@ export default function Page() {
                       </div>
                     ) : (
                       <div style={{ padding: '14px 16px', minHeight: 200 }}>
-                        {/* Daftarkan handler klik backlink */}
-                        {(() => { window.__noteBacklinkClick = async (title) => {
-                          const res = await fetch(`${apiBase}/participant/notes`, { credentials: 'include' });
-                          if (!res.ok) return;
-                          const data = await res.json();
-                          const found = (data.notes || []).find(n => n.title === title);
-                          if (found) loadNoteDetail(found.id);
-                        }; return null; })()}
                         <div style={{ lineHeight: 1.8, fontSize: 14, color: '#e2e8f0' }}
+                          onClick={async e => {
+                            const bl = e.target.closest('[data-backlink]');
+                            if (!bl) return;
+                            const title = bl.getAttribute('data-backlink');
+                            const res = await fetch(`${apiBase}/participant/notes`, { credentials: 'include' });
+                            if (!res.ok) return;
+                            const data = await res.json();
+                            const found = (data.notes || []).find(n => n.title === title);
+                            if (found) loadNoteDetail(found.id);
+                          }}
                           dangerouslySetInnerHTML={{ __html: renderMD(activeNote?.content || '') }} />
                         {/* Backlinks */}
                         {activeNote?.backlinks?.length > 0 && (
