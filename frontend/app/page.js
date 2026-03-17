@@ -3588,18 +3588,32 @@ function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote }) {
   return (
     <div style={{ position: 'relative', width: '100%', height: 520, border: '1px solid #1e2d45', borderRadius: 12, overflow: 'hidden', background: '#070c17' }}>
       {/* Toolbar */}
-      <div style={{ position: 'absolute', top: 10, left: 10, right: 10, zIndex: 20, display: 'flex', gap: 6, alignItems: 'center' }}>
+      <div style={{ position: 'absolute', top: 10, left: 10, right: 10, zIndex: 20, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
         <button onClick={() => setShowAddMenu(s => !s)}
           style={{ padding: '6px 12px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
-          + Tambah Kartu
+          + Kartu
         </button>
+        {/* Zoom controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 0, background: 'rgba(15,23,42,0.9)', border: '1px solid #1e2d45', borderRadius: 8, overflow: 'hidden' }}>
+          <button onClick={() => setViewport(v => {
+            const ns = clampScale(v.scale * 0.8);
+            const cx = (containerRef.current?.clientWidth || 400) / 2;
+            const cy = (containerRef.current?.clientHeight || 300) / 2;
+            return { scale: ns, x: cx - (cx - v.x) * (ns / v.scale), y: cy - (cy - v.y) * (ns / v.scale) };
+          })} style={{ padding: '6px 10px', background: 'none', color: '#94a3b8', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>−</button>
+          <span style={{ fontSize: 11, color: '#64748b', minWidth: 38, textAlign: 'center', userSelect: 'none' }}>{Math.round(viewport.scale * 100)}%</span>
+          <button onClick={() => setViewport(v => {
+            const ns = clampScale(v.scale * 1.25);
+            const cx = (containerRef.current?.clientWidth || 400) / 2;
+            const cy = (containerRef.current?.clientHeight || 300) / 2;
+            return { scale: ns, x: cx - (cx - v.x) * (ns / v.scale), y: cy - (cy - v.y) * (ns / v.scale) };
+          })} style={{ padding: '6px 10px', background: 'none', color: '#94a3b8', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>+</button>
+        </div>
         <button onClick={() => setViewport({ x: 0, y: 0, scale: 1 })}
-          style={{ padding: '6px 10px', background: 'rgba(255,255,255,0.07)', color: '#94a3b8', border: '1px solid #1e2d45', borderRadius: 8, cursor: 'pointer', fontSize: 11 }}>
-          ⌂ Reset
+          style={{ padding: '6px 8px', background: 'rgba(255,255,255,0.07)', color: '#94a3b8', border: '1px solid #1e2d45', borderRadius: 8, cursor: 'pointer', fontSize: 12 }}>
+          ⌂
         </button>
-        <span style={{ fontSize: 11, color: '#334155', marginLeft: 4 }}>{Math.round(viewport.scale * 100)}%</span>
-        {saving && <span style={{ fontSize: 11, color: '#64748b' }}>Menyimpan...</span>}
-        <span style={{ fontSize: 11, color: '#334155', marginLeft: 'auto' }}>Drag · Scroll zoom · Pinch</span>
+        {saving && <span style={{ fontSize: 11, color: '#64748b' }}>💾...</span>}
       </div>
 
       {/* Add menu dropdown */}
