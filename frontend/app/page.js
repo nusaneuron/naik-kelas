@@ -3475,6 +3475,9 @@ function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote }) {
   const [dragging, setDragging] = useState(null); // {itemId, startX, startY, origX, origY}
   const [resizing, setResizing] = useState(null); // {itemId, startX, startY, origW, origH}
   const [panning, setPanning] = useState(null);   // {startX, startY, origVX, origVY}
+  const [selectedId, setSelectedId] = useState(null); // kartu yang sedang dipilih
+  const dragRef = useRef(null);   // ref untuk dragging (avoid stale closure)
+  const resizeRef = useRef(null); // ref untuk resizing
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [saving, setSaving] = useState(false);
   const saveTimer = useRef(null);
@@ -3506,43 +3509,55 @@ function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote }) {
     }));
   };
 
+  // ── Global mouse handlers (supaya drag tetap jalan walau keluar kartu) ──
+  useEffect(() => {
+    const onMove = (e) => {
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      if (dragRef.current) {
+        const { itemId, startX, startY, origX, origY, scale } = dragRef.current;
+        const dx = (clientX - startX) / scale;
+        const dy = (clientY - startY) / scale;
+        setItems(its => its.map(it => it.id === itemId ? { ...it, x: origX + dx, y: origY + dy } : it));
+      }
+      if (resizeRef.current) {
+        const { itemId, startX, startY, origW, origH, scale } = resizeRef.current;
+        const dx = (clientX - startX) / scale;
+        const dy = (clientY - startY) / scale;
+        setItems(its => its.map(it => it.id === itemId ? {
+          ...it, width: Math.max(160, origW + dx), height: Math.max(100, origH + dy)
+        } : it));
+      }
+    };
+    const onUp = () => {
+      if (dragRef.current) {
+        setItems(its => { const item = its.find(it => it.id === dragRef.current.itemId); if (item) debounceSave(item); return its; });
+        dragRef.current = null; setDragging(null);
+      }
+      if (resizeRef.current) {
+        setItems(its => { const item = its.find(it => it.id === resizeRef.current.itemId); if (item) debounceSave(item); return its; });
+        resizeRef.current = null; setResizing(null);
+      }
+      setPanning(null);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, []);
+
   // ── Pan canvas (drag on background) ──
   const onBgMouseDown = (e) => {
-    if (e.target !== e.currentTarget && e.target.closest('.canvas-card')) return;
+    if (e.target.closest('.canvas-card')) return;
     setPanning({ startX: e.clientX, startY: e.clientY, origVX: viewport.x, origVY: viewport.y });
+    setSelectedId(null);
+    const onMove = (ev) => setViewport(v => ({ ...v, x: v.x + ev.movementX, y: v.y + ev.movementY }));
+    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); setPanning(null); };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
   };
-  const onMouseMove = (e) => {
-    if (panning) {
-      setViewport(v => ({ ...v, x: panning.origVX + e.clientX - panning.startX, y: panning.origVY + e.clientY - panning.startY }));
-    }
-    if (dragging) {
-      const dx = (e.clientX - dragging.startX) / viewport.scale;
-      const dy = (e.clientY - dragging.startY) / viewport.scale;
-      setItems(its => its.map(it => it.id === dragging.itemId ? { ...it, x: dragging.origX + dx, y: dragging.origY + dy } : it));
-    }
-    if (resizing) {
-      const dx = (e.clientX - resizing.startX) / viewport.scale;
-      const dy = (e.clientY - resizing.startY) / viewport.scale;
-      setItems(its => its.map(it => it.id === resizing.itemId ? {
-        ...it,
-        width: Math.max(160, resizing.origW + dx),
-        height: Math.max(100, resizing.origH + dy),
-      } : it));
-    }
-  };
-  const onMouseUp = () => {
-    if (dragging) {
-      const item = items.find(it => it.id === dragging.itemId);
-      if (item) debounceSave(item);
-    }
-    if (resizing) {
-      const item = items.find(it => it.id === resizing.itemId);
-      if (item) debounceSave(item);
-    }
-    setPanning(null);
-    setDragging(null);
-    setResizing(null);
-  };
+  // Dummy (tidak dipakai lagi — pakai global)
+  const onMouseMove = () => {};
+  const onMouseUp = () => {};
 
   // ── Touch support (pan + pinch zoom) ──
   const touchRef = useRef({});
@@ -3721,18 +3736,20 @@ function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote }) {
                 left: item.x, top: item.y,
                 width: item.width, height: item.height,
                 background: '#0f172a',
-                border: '1px solid #1e3a5f',
+                border: `2px solid ${selectedId === item.id ? '#3b82f6' : '#1e3a5f'}`,
                 borderRadius: 12,
-                boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-                cursor: dragging?.itemId === item.id ? 'grabbing' : 'grab',
+                boxShadow: selectedId === item.id ? '0 0 0 3px rgba(59,130,246,0.25), 0 4px 24px rgba(0,0,0,0.5)' : '0 4px 20px rgba(0,0,0,0.4)',
+                cursor: dragging === item.id ? 'grabbing' : 'grab',
                 display: 'flex', flexDirection: 'column',
                 overflow: 'hidden',
                 transition: dragging?.itemId === item.id ? 'none' : 'box-shadow 0.15s',
               }}
               onMouseDown={e => {
+                if (e.target.closest('[data-resize]')) return;
                 e.stopPropagation();
-                setDragging({ itemId: item.id, startX: e.clientX, startY: e.clientY, origX: item.x, origY: item.y });
-                // Bawa ke depan
+                setSelectedId(item.id);
+                dragRef.current = { itemId: item.id, startX: e.clientX, startY: e.clientY, origX: item.x, origY: item.y, scale: viewport.scale };
+                setDragging(item.id);
                 setItems(its => its.map(it => ({ ...it, z_index: it.id === item.id ? 99 : it.z_index })));
               }}>
 
@@ -3758,9 +3775,11 @@ function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote }) {
 
               {/* Resize handle — sudut kanan bawah */}
               <div
+                data-resize="1"
                 onMouseDown={e => {
                   e.stopPropagation();
-                  setResizing({ itemId: item.id, startX: e.clientX, startY: e.clientY, origW: item.width, origH: item.height });
+                  resizeRef.current = { itemId: item.id, startX: e.clientX, startY: e.clientY, origW: item.width, origH: item.height, scale: viewport.scale };
+                  setResizing(item.id);
                 }}
                 style={{
                   position: 'absolute', bottom: 0, right: 0,
