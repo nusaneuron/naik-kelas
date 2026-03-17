@@ -426,13 +426,9 @@ export default function Page() {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     // Tangkap install prompt (Android/Chrome)
+    // JANGAN preventDefault - biarkan Chrome tampilkan native mini-infobar
     const handler = (e) => {
-      e.preventDefault();
-      setInstallPrompt(e);
-      // Tampilkan banner hanya jika belum pernah dismiss
-      if (!localStorage.getItem('pwa-dismissed')) {
-        setShowInstallBanner(true);
-      }
+      setInstallPrompt(e); // simpan untuk tombol install manual
     };
     window.addEventListener('beforeinstallprompt', handler);
     // iOS: cek apakah belum di-install & pakai Safari
