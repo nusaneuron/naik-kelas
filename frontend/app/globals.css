@@ -144,7 +144,7 @@ button:active { transform: translateY(0); }
 .nk-badge-red    { background: rgba(220,38,38,0.15);  color: #f87171; border: 1px solid rgba(220,38,38,0.25); }
 
 /* ─── Tables ─────────────────────────────── */
-.nk-table { width: 100%; border-collapse: collapse; }
+.nk-table { border-collapse: collapse; }
 .nk-table th {
   text-align: left;
   padding: 10px 12px;
@@ -173,6 +173,11 @@ button:active { transform: translateY(0); }
   overflow-y: auto;
   border: 1px solid var(--nk-border);
   border-radius: var(--nk-radius-md);
+  -webkit-overflow-scrolling: touch;
+}
+.nk-table {
+  width: max-content;
+  min-width: 100%;
 }
 
 /* ─── Form ─────────────────────────────── */
