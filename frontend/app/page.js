@@ -954,8 +954,8 @@ export default function Page() {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {adminViewMode === 'admin' && (
               <button onClick={() => setAdminViewMode('participant')} style={{
-                border: '1px solid rgba(190,148,245,0.4)',
-                background: 'rgba(190,148,245,0.15)', color: '#be94f5',
+                border: '1px solid rgba(0,0,0,0.25)',
+                background: 'rgba(0,0,0,0.2)', color: 'white',
                 borderRadius: 10, padding: '7px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600
               }}>
                 👤 Peserta
@@ -963,16 +963,16 @@ export default function Page() {
             )}
             {adminViewMode === 'participant' && (
               <button onClick={() => setAdminViewMode('admin')} style={{
-                border: '1px solid rgba(190,148,245,0.4)',
-                background: 'rgba(190,148,245,0.15)', color: '#be94f5',
+                border: '1px solid rgba(0,0,0,0.25)',
+                background: 'rgba(0,0,0,0.2)', color: 'white',
                 borderRadius: 10, padding: '7px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600
               }}>
                 ⚙️ Admin
               </button>
             )}
             <button onClick={logout} style={{
-              border: '1px solid rgba(255,255,255,0.3)',
-              background: 'rgba(255,255,255,0.1)', color: 'white',
+              border: '1px solid rgba(0,0,0,0.25)',
+              background: 'rgba(0,0,0,0.2)', color: 'white',
               borderRadius: 10, padding: '7px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600
             }}>
               Keluar
