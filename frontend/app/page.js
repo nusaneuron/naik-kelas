@@ -3544,18 +3544,49 @@ function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote }) {
     setResizing(null);
   };
 
-  // ── Touch support ──
+  // ── Touch support (pan + pinch zoom) ──
   const touchRef = useRef({});
   const onTouchStart = (e) => {
     if (e.touches.length === 1) {
       const t = e.touches[0];
-      touchRef.current = { startX: t.clientX, startY: t.clientY, origVX: viewport.x, origVY: viewport.y, mode: 'pan' };
+      touchRef.current = { mode: 'pan', startX: t.clientX, startY: t.clientY, origVX: viewport.x, origVY: viewport.y };
+    } else if (e.touches.length === 2) {
+      const dx = e.touches[1].clientX - e.touches[0].clientX;
+      const dy = e.touches[1].clientY - e.touches[0].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      const rect = containerRef.current?.getBoundingClientRect();
+      touchRef.current = {
+        mode: 'pinch', initDist: dist,
+        origScale: viewport.scale,
+        origVX: viewport.x, origVY: viewport.y,
+        midX: midX - (rect?.left || 0),
+        midY: midY - (rect?.top || 0),
+      };
     }
   };
   const onTouchMove = (e) => {
+    e.preventDefault();
     if (e.touches.length === 1 && touchRef.current.mode === 'pan') {
       const t = e.touches[0];
-      setViewport(v => ({ ...v, x: touchRef.current.origVX + t.clientX - touchRef.current.startX, y: touchRef.current.origVY + t.clientY - touchRef.current.startY }));
+      setViewport(v => ({
+        ...v,
+        x: touchRef.current.origVX + t.clientX - touchRef.current.startX,
+        y: touchRef.current.origVY + t.clientY - touchRef.current.startY,
+      }));
+    } else if (e.touches.length === 2 && touchRef.current.mode === 'pinch') {
+      const dx = e.touches[1].clientX - e.touches[0].clientX;
+      const dy = e.touches[1].clientY - e.touches[0].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const ratio = dist / touchRef.current.initDist;
+      const ns = clampScale(touchRef.current.origScale * ratio);
+      const { midX, midY, origVX, origVY, origScale } = touchRef.current;
+      setViewport({
+        scale: ns,
+        x: midX - (midX - origVX) * (ns / origScale),
+        y: midY - (midY - origVY) * (ns / origScale),
+      });
     }
   };
 
@@ -3671,6 +3702,11 @@ function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote }) {
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={() => { touchRef.current = {}; }}
+        ref={el => {
+          if (el) {
+            el.addEventListener('touchmove', onTouchMove, { passive: false });
+          }
+        }}
         onClick={() => setShowAddMenu(false)}>
 
         {/* Transform group */}
