@@ -2039,7 +2039,7 @@ export default function Page() {
                     {/* AI Generate Soal */}
                     <div style={{ background: '#0a1e3a', border: '1px dashed #2563eb', borderRadius: 10, padding: '12px 14px', marginBottom: 16 }}>
                       <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, color: '#93c5fd' }}>✨ Generate Soal dengan AI</p>
-                      <div className="nk-grid-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                      <div className="nk-grid-2col" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8, marginBottom: 8 }}>
                         <div>
                           <label style={fieldLbl}>Kategori Soal</label>
                           <select className="nk-input-sm" style={{ width: '100%' }} value={qAiCatId}
@@ -2152,7 +2152,7 @@ export default function Page() {
                     </div>
 
                     <div style={{ display: 'grid', gap: 10, marginBottom: 16 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8 }}>
                         <div>
                           <label style={fieldLbl}>Kategori</label>
                           <select className="nk-input" value={qCategoryId} onChange={(e) => setQCategoryId(e.target.value)}>
@@ -2173,7 +2173,7 @@ export default function Page() {
                         <label style={fieldLbl}>Pertanyaan</label>
                         <input className="nk-input" placeholder="Teks pertanyaan" value={qText} onChange={(e) => setQText(e.target.value)} />
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8 }}>
                         {[['A', qA, setQA], ['B', qB, setQB], ['C', qC, setQC], ['D', qD, setQD]].map(([lbl, val, setter]) => (
                           <div key={lbl}>
                             <label style={fieldLbl}>Opsi {lbl}</label>
