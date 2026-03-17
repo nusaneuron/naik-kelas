@@ -1,6 +1,6 @@
 'use client';
 import { memo } from 'react';
-import { Handle, Position } from '@xyflow/react';
+import { Handle, Position, NodeResizer } from '@xyflow/react';
 
 // ── CustomNode: kartu catatan di canvas ──────────────────────────────────────
 const CustomNode = memo(({ data, selected }) => {
@@ -13,8 +13,10 @@ const CustomNode = memo(({ data, selected }) => {
         : 'linear-gradient(135deg, #0b1628, #0f172a)',
       border: `2px solid ${selected ? '#3b82f6' : '#1e3a5f'}`,
       borderRadius: 14,
-      minWidth: 220,
-      maxWidth: 320,
+      width: '100%',
+      height: '100%',
+      minWidth: 180,
+      minHeight: 100,
       boxShadow: selected
         ? '0 0 0 3px rgba(59,130,246,0.25), 0 8px 32px rgba(0,0,0,0.6)'
         : '0 4px 24px rgba(0,0,0,0.5)',
@@ -22,7 +24,17 @@ const CustomNode = memo(({ data, selected }) => {
       cursor: 'grab',
       userSelect: 'none',
       overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
     }}>
+      {/* NodeResizer — muncul saat kartu dipilih */}
+      <NodeResizer
+        minWidth={180}
+        minHeight={100}
+        isVisible={selected}
+        lineStyle={{ borderColor: '#3b82f6', borderWidth: 1 }}
+        handleStyle={{ background: '#3b82f6', border: '2px solid #1e3a5f', width: 10, height: 10, borderRadius: 3 }}
+      />
       {/* Connection handles — siap untuk fase 2 edges */}
       <Handle type="target" position={Position.Top} style={{ background: '#3b82f6', border: '2px solid #1e3a5f', width: 10, height: 10 }} />
       <Handle type="source" position={Position.Bottom} style={{ background: '#3b82f6', border: '2px solid #1e3a5f', width: 10, height: 10 }} />
@@ -49,8 +61,8 @@ const CustomNode = memo(({ data, selected }) => {
         >✕</button>
       </div>
 
-      {/* Content preview */}
-      <div style={{ padding: '9px 12px', fontSize: 11, color: '#64748b', lineHeight: 1.6, minHeight: 52, maxHeight: 120, overflow: 'hidden' }}>
+      {/* Content preview — flex grow agar isi kartu ikut ukuran */}
+      <div style={{ padding: '9px 12px', fontSize: 11, color: '#64748b', lineHeight: 1.6, flex: 1, overflow: 'auto' }}>
         {(content || '').slice(0, 200).replace(/[#*`\[\]]/g, '').trim()
           || <span style={{ color: '#334155', fontStyle: 'italic' }}>Kosong...</span>}
       </div>

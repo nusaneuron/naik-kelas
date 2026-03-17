@@ -33,7 +33,9 @@ export default function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote 
       id: String(item.id),
       type: 'noteCard',
       position: { x: item.x, y: item.y },
-      style: { width: item.width },
+      width: item.width || 260,
+      height: item.height || 140,
+      style: { width: item.width || 260, height: item.height || 140 },
       data: {
         title: item.note_title,
         content: item.note_content,
@@ -55,25 +57,34 @@ export default function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote 
     setEdges(rfEdges);
   }, [data]);
 
-  // ── Auto-save posisi saat node selesai di-drag ──
-  const onNodeDragStop = useCallback(async (_, node) => {
-    clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(async () => {
-      await fetch(`${apiBase}/participant/notes/canvas`, {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'update_item',
-          id: Number(node.id),
-          x: node.position.x,
-          y: node.position.y,
-          width: node.measured?.width || 260,
-          height: node.measured?.height || 140,
-          z_index: 0,
-        }),
-      });
-    }, 500);
+  // ── Simpan posisi & ukuran ke backend ──
+  const saveNode = useCallback(async (node) => {
+    await fetch(`${apiBase}/participant/notes/canvas`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'update_item',
+        id: Number(node.id),
+        x: node.position.x,
+        y: node.position.y,
+        width: node.width || node.measured?.width || 260,
+        height: node.height || node.measured?.height || 140,
+        z_index: 0,
+      }),
+    });
   }, [apiBase]);
+
+  // Auto-save saat drag selesai
+  const onNodeDragStop = useCallback((_, node) => {
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => saveNode(node), 500);
+  }, [saveNode]);
+
+  // Auto-save saat resize selesai
+  const onNodeResizeEnd = useCallback((_, node) => {
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => saveNode(node), 500);
+  }, [saveNode]);
 
   // ── Tambah koneksi antar node (fase 2) ──
   const onConnect = useCallback(async (params) => {
@@ -126,6 +137,7 @@ export default function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote 
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeDragStop={onNodeDragStop}
+        onNodeResizeEnd={onNodeResizeEnd}
         nodeTypes={nodeTypes}
         fitView
         fitViewOptions={{ padding: 0.2 }}
