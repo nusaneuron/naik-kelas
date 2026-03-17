@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
+import dynamic from 'next/dynamic';
+const NoteCanvasRF = dynamic(() => import('./canvas/NoteCanvas'), { ssr: false });
 
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || 'NalaNaikKelas_bot';
@@ -1583,7 +1585,7 @@ export default function Page() {
 
                 {/* CANVAS VIEW */}
                 {noteView === 'canvas' && (
-                  <NoteCanvas
+                  <NoteCanvasRF
                     data={canvasData}
                     notes={notes}
                     apiBase={apiBase}
