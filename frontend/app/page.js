@@ -3659,7 +3659,7 @@ function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote }) {
         onClick={() => setShowAddMenu(false)}>
 
         {/* Transform group */}
-        <div style={{ position: 'absolute', transform: `translate(${viewport.x}px,${viewport.y}px) scale(${viewport.scale})`, transformOrigin: '0 0' }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, width: 0, height: 0, transform: `translate(${viewport.x}px,${viewport.y}px) scale(${viewport.scale})`, transformOrigin: '0 0' }}>
           {/* Fase 2: render edges di sini (SVG arrows) */}
 
           {/* Render items */}
