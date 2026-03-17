@@ -1,3 +1,8 @@
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
 :root {
   /* Naik Kelas Design Tokens */
   --nk-bg-main: #be94f5;

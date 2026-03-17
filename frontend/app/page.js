@@ -151,6 +151,8 @@ export default function Page() {
   const [noteView, setNoteView] = useState('list'); // 'list' | 'editor' | 'graph'
   const [noteAutocomplete, setNoteAutocomplete] = useState([]); // [[title suggestions
   const [graphData, setGraphData] = useState(null);
+  const [installPrompt, setInstallPrompt] = useState(null); // PWA install
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [tryoutConfigs, setTryoutConfigs] = useState([]);
   const [tryoutNewName, setTryoutNewName] = useState('');
   const [tryoutExpandedId, setTryoutExpandedId] = useState(null);
@@ -423,6 +425,24 @@ export default function Page() {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
+    // Tangkap install prompt (Android/Chrome)
+    const handler = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+      // Tampilkan banner hanya jika belum pernah dismiss
+      if (!localStorage.getItem('pwa-dismissed')) {
+        setShowInstallBanner(true);
+      }
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    // iOS: cek apakah belum di-install & pakai Safari
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+    const iosDismissed = localStorage.getItem('pwa-dismissed');
+    if (isIOS && !isStandalone && !iosDismissed) {
+      setTimeout(() => setShowInstallBanner(true), 2000);
+    }
+    return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
   useEffect(() => {
@@ -3302,6 +3322,54 @@ export default function Page() {
           </div>
         </div>
       )}
+      {/* PWA Install Banner */}
+      {showInstallBanner && (
+        <div style={{
+          position: 'fixed', bottom: 80, left: 12, right: 12, zIndex: 999,
+          background: 'linear-gradient(135deg, #1e1b4b, #312e81)',
+          border: '1px solid rgba(139,92,246,0.5)',
+          borderRadius: 16, padding: '14px 16px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', gap: 12,
+          animation: 'slideUp 0.3s ease'
+        }}>
+          <span style={{ fontSize: 32, flexShrink: 0 }}>📲</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#e2e8f0', marginBottom: 2 }}>
+              Install Naik Kelas
+            </div>
+            <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.4 }}>
+              {/iphone|ipad|ipod/i.test(typeof navigator !== 'undefined' ? navigator.userAgent : '')
+                ? 'Tap Share ↑ lalu "Add to Home Screen"'
+                : 'Pasang di HP untuk akses lebih cepat tanpa buka browser'}
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+            {installPrompt && (
+              <button onClick={async () => {
+                installPrompt.prompt();
+                const { outcome } = await installPrompt.userChoice;
+                if (outcome === 'accepted') {
+                  setShowInstallBanner(false);
+                  localStorage.setItem('pwa-dismissed', '1');
+                }
+              }} style={{
+                background: '#7c3aed', color: '#fff', border: 'none',
+                borderRadius: 8, padding: '6px 14px', cursor: 'pointer',
+                fontSize: 12, fontWeight: 700
+              }}>Install</button>
+            )}
+            <button onClick={() => {
+              setShowInstallBanner(false);
+              localStorage.setItem('pwa-dismissed', '1');
+            }} style={{
+              background: 'transparent', color: '#64748b', border: '1px solid #334155',
+              borderRadius: 8, padding: '5px 10px', cursor: 'pointer', fontSize: 11
+            }}>Nanti</button>
+          </div>
+        </div>
+      )}
+
     </main>
   );
 }
