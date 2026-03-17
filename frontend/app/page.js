@@ -148,7 +148,8 @@ export default function Page() {
   const [noteEditing, setNoteEditing] = useState(false);
   const [noteDraft, setNoteDraft] = useState({ title: '', content: '' });
   const [noteSaving, setNoteSaving] = useState(false);
-  const [noteView, setNoteView] = useState('list'); // 'list' | 'editor' | 'graph'
+  const [noteView, setNoteView] = useState('list'); // 'list' | 'editor' | 'graph' | 'canvas'
+  const [canvasData, setCanvasData] = useState(null); // { canvas_id, items, edges }
   const [noteAutocomplete, setNoteAutocomplete] = useState([]); // [[title suggestions
   const [graphData, setGraphData] = useState(null);
   const [installPrompt, setInstallPrompt] = useState(null); // PWA install
@@ -310,6 +311,14 @@ export default function Page() {
     });
     setActiveNote(null); setNoteView('list');
     await refreshNotes();
+  }
+
+  async function loadCanvas() {
+    setNoteView('canvas');
+    const res = await fetch(`${apiBase}/participant/notes/canvas`, { credentials: 'include' });
+    if (!res.ok) return;
+    const data = await res.json();
+    setCanvasData(data);
   }
 
   async function loadGraph() {
@@ -1382,6 +1391,10 @@ export default function Page() {
                     style={{ padding: '7px 12px', background: noteView === 'graph' ? '#1e3a5f' : 'transparent', color: noteView === 'graph' ? '#93c5fd' : '#64748b', border: '1px solid #1e2d45', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>
                     🕸️ Graph
                   </button>
+                  <button onClick={loadCanvas}
+                    style={{ padding: '7px 12px', background: noteView === 'canvas' ? '#1e3a5f' : 'transparent', color: noteView === 'canvas' ? '#93c5fd' : '#64748b', border: '1px solid #1e2d45', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>
+                    🖼️ Canvas
+                  </button>
                   <input value={notesSearch} onChange={e => { setNotesSearch(e.target.value); refreshNotes(notesTagFilter, e.target.value); }}
                     placeholder="🔍 Cari catatan..." className="nk-input-sm" style={{ flex: 1, minWidth: 140 }} />
                 </div>
@@ -1566,6 +1579,17 @@ export default function Page() {
                       </div>
                     )}
                   </div>
+                )}
+
+                {/* CANVAS VIEW */}
+                {noteView === 'canvas' && (
+                  <NoteCanvas
+                    data={canvasData}
+                    notes={notes}
+                    apiBase={apiBase}
+                    onUpdate={loadCanvas}
+                    onOpenNote={loadNoteDetail}
+                  />
                 )}
 
                 {/* GRAPH VIEW */}
@@ -3439,6 +3463,247 @@ export default function Page() {
 }
 
 // ── Reusable Components ──────────────────────────────────────
+
+// ── NoteCanvas Component ──────────────────────────────────────────────────────
+// Fondasi infinite canvas: pan, zoom, drag kartu, add/delete
+// Fase 2: koneksi antar kartu (edges sudah siap di backend)
+function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote }) {
+  const containerRef = useRef(null);
+  const [viewport, setViewport] = useState({ x: 0, y: 0, scale: 1 });
+  const [items, setItems] = useState([]);
+  const [edges] = useState([]); // fase 2
+  const [dragging, setDragging] = useState(null); // {itemId, startX, startY, origX, origY}
+  const [panning, setPanning] = useState(null);   // {startX, startY, origVX, origVY}
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const saveTimer = useRef(null);
+
+  useEffect(() => {
+    if (data?.items) setItems(data.items);
+  }, [data]);
+
+  // ── Viewport helpers ──
+  const screenToCanvas = (sx, sy) => ({
+    x: (sx - viewport.x) / viewport.scale,
+    y: (sy - viewport.y) / viewport.scale,
+  });
+
+  const clampScale = s => Math.min(3, Math.max(0.2, s));
+
+  // ── Zoom dengan wheel ──
+  const onWheel = (e) => {
+    e.preventDefault();
+    const rect = containerRef.current.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const delta = e.deltaY < 0 ? 1.1 : 0.9;
+    const ns = clampScale(viewport.scale * delta);
+    setViewport(v => ({
+      scale: ns,
+      x: mx - (mx - v.x) * (ns / v.scale),
+      y: my - (my - v.y) * (ns / v.scale),
+    }));
+  };
+
+  // ── Pan canvas (drag on background) ──
+  const onBgMouseDown = (e) => {
+    if (e.target !== e.currentTarget && e.target.closest('.canvas-card')) return;
+    setPanning({ startX: e.clientX, startY: e.clientY, origVX: viewport.x, origVY: viewport.y });
+  };
+  const onMouseMove = (e) => {
+    if (panning) {
+      setViewport(v => ({ ...v, x: panning.origVX + e.clientX - panning.startX, y: panning.origVY + e.clientY - panning.startY }));
+    }
+    if (dragging) {
+      const dx = (e.clientX - dragging.startX) / viewport.scale;
+      const dy = (e.clientY - dragging.startY) / viewport.scale;
+      setItems(its => its.map(it => it.id === dragging.itemId ? { ...it, x: dragging.origX + dx, y: dragging.origY + dy } : it));
+    }
+  };
+  const onMouseUp = () => {
+    if (dragging) {
+      const item = items.find(it => it.id === dragging.itemId);
+      if (item) debounceSave(item);
+    }
+    setPanning(null);
+    setDragging(null);
+  };
+
+  // ── Touch support ──
+  const touchRef = useRef({});
+  const onTouchStart = (e) => {
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      touchRef.current = { startX: t.clientX, startY: t.clientY, origVX: viewport.x, origVY: viewport.y, mode: 'pan' };
+    }
+  };
+  const onTouchMove = (e) => {
+    if (e.touches.length === 1 && touchRef.current.mode === 'pan') {
+      const t = e.touches[0];
+      setViewport(v => ({ ...v, x: touchRef.current.origVX + t.clientX - touchRef.current.startX, y: touchRef.current.origVY + t.clientY - touchRef.current.startY }));
+    }
+  };
+
+  // ── Save item position (debounced) ──
+  const debounceSave = (item) => {
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      await fetch(`${apiBase}/participant/notes/canvas`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update_item', id: item.id, x: item.x, y: item.y, width: item.width, height: item.height, z_index: item.z_index })
+      });
+    }, 600);
+  };
+
+  // ── Tambah kartu note ──
+  const addNoteCard = async (noteId) => {
+    if (!data?.canvas_id) return;
+    setSaving(true);
+    const center = screenToCanvas(
+      (containerRef.current?.clientWidth || 400) / 2,
+      (containerRef.current?.clientHeight || 300) / 2
+    );
+    const res = await fetch(`${apiBase}/participant/notes/canvas`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'add_item', type: 'note', note_id: noteId, x: center.x - 130, y: center.y - 70, width: 260, height: 140 })
+    });
+    setSaving(false);
+    setShowAddMenu(false);
+    if ((await res.json()).ok) onUpdate();
+  };
+
+  // ── Hapus kartu ──
+  const deleteItem = async (itemId) => {
+    await fetch(`${apiBase}/participant/notes/canvas`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete_item', id: itemId })
+    });
+    setItems(its => its.filter(it => it.id !== itemId));
+  };
+
+  // ── Render ──
+  return (
+    <div style={{ position: 'relative', width: '100%', height: 520, border: '1px solid #1e2d45', borderRadius: 12, overflow: 'hidden', background: '#070c17' }}>
+      {/* Toolbar */}
+      <div style={{ position: 'absolute', top: 10, left: 10, right: 10, zIndex: 20, display: 'flex', gap: 6, alignItems: 'center' }}>
+        <button onClick={() => setShowAddMenu(s => !s)}
+          style={{ padding: '6px 12px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+          + Tambah Kartu
+        </button>
+        <button onClick={() => setViewport({ x: 0, y: 0, scale: 1 })}
+          style={{ padding: '6px 10px', background: 'rgba(255,255,255,0.07)', color: '#94a3b8', border: '1px solid #1e2d45', borderRadius: 8, cursor: 'pointer', fontSize: 11 }}>
+          ⌂ Reset
+        </button>
+        <span style={{ fontSize: 11, color: '#334155', marginLeft: 4 }}>{Math.round(viewport.scale * 100)}%</span>
+        {saving && <span style={{ fontSize: 11, color: '#64748b' }}>Menyimpan...</span>}
+        <span style={{ fontSize: 11, color: '#334155', marginLeft: 'auto' }}>Drag · Scroll zoom · Pinch</span>
+      </div>
+
+      {/* Add menu dropdown */}
+      {showAddMenu && (
+        <div style={{ position: 'absolute', top: 46, left: 10, zIndex: 30, background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 10, padding: 8, minWidth: 220, maxHeight: 280, overflowY: 'auto' }}>
+          <p style={{ fontSize: 11, color: '#475569', margin: '0 0 6px 4px', fontWeight: 600, textTransform: 'uppercase' }}>Pilih catatan:</p>
+          {notes.filter(n => n.note_type !== 'fleeting').map(n => (
+            <div key={n.id} onClick={() => addNoteCard(n.id)}
+              style={{ padding: '7px 10px', cursor: 'pointer', borderRadius: 7, fontSize: 13, color: '#e2e8f0' }}
+              onMouseEnter={e => e.target.style.background = '#1e293b'}
+              onMouseLeave={e => e.target.style.background = 'transparent'}>
+              📝 {n.title}
+            </div>
+          ))}
+          {notes.filter(n => n.note_type !== 'fleeting').length === 0 && (
+            <p style={{ fontSize: 12, color: '#475569', padding: '6px 8px' }}>Belum ada catatan permanen.</p>
+          )}
+        </div>
+      )}
+
+      {/* Dot grid background */}
+      <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+        <defs>
+          <pattern id="dotgrid" x={viewport.x % (20 * viewport.scale)} y={viewport.y % (20 * viewport.scale)}
+            width={20 * viewport.scale} height={20 * viewport.scale} patternUnits="userSpaceOnUse">
+            <circle cx={1} cy={1} r={0.8} fill="#1e2d45" />
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#dotgrid)" />
+      </svg>
+
+      {/* Canvas area */}
+      <div ref={containerRef}
+        style={{ position: 'absolute', inset: 0, cursor: panning ? 'grabbing' : 'grab', userSelect: 'none' }}
+        onMouseDown={onBgMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseUp}
+        onWheel={onWheel}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={() => { touchRef.current = {}; }}
+        onClick={() => setShowAddMenu(false)}>
+
+        {/* Transform group */}
+        <div style={{ position: 'absolute', transform: `translate(${viewport.x}px,${viewport.y}px) scale(${viewport.scale})`, transformOrigin: '0 0' }}>
+          {/* Fase 2: render edges di sini (SVG arrows) */}
+
+          {/* Render items */}
+          {items.map(item => (
+            <div key={item.id} className="canvas-card"
+              style={{
+                position: 'absolute',
+                left: item.x, top: item.y,
+                width: item.width, height: item.height,
+                background: '#0f172a',
+                border: '1px solid #1e3a5f',
+                borderRadius: 12,
+                boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+                cursor: dragging?.itemId === item.id ? 'grabbing' : 'grab',
+                display: 'flex', flexDirection: 'column',
+                overflow: 'hidden',
+                transition: dragging?.itemId === item.id ? 'none' : 'box-shadow 0.15s',
+              }}
+              onMouseDown={e => {
+                e.stopPropagation();
+                setDragging({ itemId: item.id, startX: e.clientX, startY: e.clientY, origX: item.x, origY: item.y });
+                // Bawa ke depan
+                setItems(its => its.map(it => ({ ...it, z_index: it.id === item.id ? 99 : it.z_index })));
+              }}>
+
+              {/* Card header */}
+              <div style={{ padding: '8px 10px 6px', borderBottom: '1px solid #1e2d45', display: 'flex', alignItems: 'center', gap: 6, background: '#080d18' }}>
+                <span style={{ fontSize: 11, flex: 1, fontWeight: 700, color: '#93c5fd', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {item.note_title || 'Untitled'}
+                </span>
+                <button onClick={e => { e.stopPropagation(); onOpenNote(item.note_id); }}
+                  style={{ padding: '1px 6px', background: 'rgba(59,130,246,0.2)', color: '#60a5fa', border: 'none', borderRadius: 4, fontSize: 10, cursor: 'pointer' }}>
+                  Buka
+                </button>
+                <button onClick={e => { e.stopPropagation(); deleteItem(item.id); }}
+                  style={{ padding: '1px 6px', background: 'transparent', color: '#475569', border: 'none', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>
+                  ✕
+                </button>
+              </div>
+
+              {/* Card body — preview konten */}
+              <div style={{ flex: 1, padding: '8px 10px', fontSize: 11, color: '#64748b', lineHeight: 1.5, overflow: 'hidden' }}>
+                {(item.note_content || '').slice(0, 180).replace(/[#*`\[\]]/g, '') || <span style={{ color: '#334155', fontStyle: 'italic' }}>kosong</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {items.length === 0 && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+          <span style={{ fontSize: 40, marginBottom: 10 }}>🖼️</span>
+          <p style={{ color: '#334155', fontSize: 13 }}>Canvas kosong — tap "+ Tambah Kartu" untuk mulai</p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function NoteGraph({ nodes, edges, onNodeClick }) {
   const svgRef = useRef(null);

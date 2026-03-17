@@ -202,6 +202,7 @@ func main() {
 	mux.HandleFunc("/participant/reminder", a.handleParticipantReminder)
 	mux.HandleFunc("/participant/notes", a.handleParticipantNotes)
 	mux.HandleFunc("/participant/notes/graph", a.handleParticipantNotesGraph)
+	mux.HandleFunc("/participant/notes/canvas", a.handleParticipantCanvas)
 	mux.HandleFunc("/participant/points", a.handleParticipantPoints)
 	mux.HandleFunc("/participant/points/history", a.handleParticipantPointsHistory)
 	mux.HandleFunc("/admin/ping", a.handleAdminPing)
@@ -443,6 +444,38 @@ func (a *app) initDB(ctx context.Context) error {
 			note_id BIGINT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
 			tag     TEXT NOT NULL,
 			PRIMARY KEY (note_id, tag)
+		);
+		-- Canvas: infinite whiteboard
+		CREATE TABLE IF NOT EXISTS note_canvases (
+			id         BIGSERIAL PRIMARY KEY,
+			user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			name       TEXT NOT NULL DEFAULT 'Canvas',
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE(user_id, name)
+		);
+		CREATE TABLE IF NOT EXISTS note_canvas_items (
+			id         BIGSERIAL PRIMARY KEY,
+			canvas_id  BIGINT NOT NULL REFERENCES note_canvases(id) ON DELETE CASCADE,
+			item_type  TEXT NOT NULL DEFAULT 'note',  -- 'note' | 'text' | 'image' (future)
+			note_id    BIGINT REFERENCES notes(id) ON DELETE SET NULL,
+			data       JSONB NOT NULL DEFAULT '{}',   -- {text, url, ...} untuk type lain
+			x          FLOAT NOT NULL DEFAULT 0,
+			y          FLOAT NOT NULL DEFAULT 0,
+			width      FLOAT NOT NULL DEFAULT 260,
+			height     FLOAT NOT NULL DEFAULT 140,
+			z_index    INT NOT NULL DEFAULT 0,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		-- Edges: koneksi antar item (siap untuk fase 2)
+		CREATE TABLE IF NOT EXISTS note_canvas_edges (
+			id         BIGSERIAL PRIMARY KEY,
+			canvas_id  BIGINT NOT NULL REFERENCES note_canvases(id) ON DELETE CASCADE,
+			from_item  BIGINT NOT NULL REFERENCES note_canvas_items(id) ON DELETE CASCADE,
+			to_item    BIGINT NOT NULL REFERENCES note_canvas_items(id) ON DELETE CASCADE,
+			label      TEXT NOT NULL DEFAULT '',
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
 	`)
 	if err != nil {
@@ -5928,6 +5961,150 @@ func (a *app) handleParticipantNotes(w http.ResponseWriter, r *http.Request) {
 
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+// ── Canvas Handler ────────────────────────────────────────────────────────────
+// GET  /participant/notes/canvas          → load canvas + items + edges
+// POST /participant/notes/canvas {action} → add_item | update_item | delete_item | add_edge | delete_edge
+func (a *app) handleParticipantCanvas(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	u, err := a.requireParticipantAuth(ctx, w, r)
+	if err != nil { return }
+	setCORSHeaders(w, r)
+
+	// Upsert default canvas untuk user
+	var canvasID int64
+	err = a.db.QueryRowContext(ctx, `
+		INSERT INTO note_canvases(user_id, name) VALUES($1,'Canvas')
+		ON CONFLICT(user_id, name) DO UPDATE SET updated_at=NOW()
+		RETURNING id`, u.ID).Scan(&canvasID)
+	if err != nil { writeJSON(w, 500, map[string]string{"error": err.Error()}); return }
+
+	switch r.Method {
+	case http.MethodGet:
+		// Load items
+		rows, err := a.db.QueryContext(ctx, `
+			SELECT i.id, i.item_type, i.note_id, i.data, i.x, i.y, i.width, i.height, i.z_index,
+			       COALESCE(n.title,'') as note_title, COALESCE(n.content,'') as note_content
+			FROM note_canvas_items i
+			LEFT JOIN notes n ON n.id = i.note_id
+			WHERE i.canvas_id=$1
+			ORDER BY i.z_index ASC, i.id ASC`, canvasID)
+		if err != nil { writeJSON(w, 500, map[string]string{"error": err.Error()}); return }
+		defer rows.Close()
+
+		type canvasItem struct {
+			ID          int64   `json:"id"`
+			Type        string  `json:"type"`
+			NoteID      *int64  `json:"note_id,omitempty"`
+			Data        string  `json:"data"`
+			X           float64 `json:"x"`
+			Y           float64 `json:"y"`
+			Width       float64 `json:"width"`
+			Height      float64 `json:"height"`
+			ZIndex      int     `json:"z_index"`
+			NoteTitle   string  `json:"note_title,omitempty"`
+			NoteContent string  `json:"note_content,omitempty"`
+		}
+		items := []canvasItem{}
+		for rows.Next() {
+			var it canvasItem
+			var noteID *int64
+			if rows.Scan(&it.ID, &it.Type, &noteID, &it.Data, &it.X, &it.Y, &it.Width, &it.Height, &it.ZIndex, &it.NoteTitle, &it.NoteContent) == nil {
+				it.NoteID = noteID
+				items = append(items, it)
+			}
+		}
+
+		// Load edges (siap untuk fase 2)
+		erows, _ := a.db.QueryContext(ctx, `
+			SELECT id, from_item, to_item, label FROM note_canvas_edges WHERE canvas_id=$1`, canvasID)
+		type canvasEdge struct {
+			ID       int64  `json:"id"`
+			FromItem int64  `json:"from_item"`
+			ToItem   int64  `json:"to_item"`
+			Label    string `json:"label"`
+		}
+		edges := []canvasEdge{}
+		if erows != nil {
+			defer erows.Close()
+			for erows.Next() {
+				var e canvasEdge
+				if erows.Scan(&e.ID, &e.FromItem, &e.ToItem, &e.Label) == nil {
+					edges = append(edges, e)
+				}
+			}
+		}
+		writeJSON(w, 200, map[string]any{"canvas_id": canvasID, "items": items, "edges": edges})
+
+	case http.MethodPost:
+		var req struct {
+			Action  string  `json:"action"`
+			ID      int64   `json:"id"`
+			Type    string  `json:"type"`
+			NoteID  *int64  `json:"note_id"`
+			Data    string  `json:"data"`
+			X       float64 `json:"x"`
+			Y       float64 `json:"y"`
+			Width   float64 `json:"width"`
+			Height  float64 `json:"height"`
+			ZIndex  int     `json:"z_index"`
+			// Edge fields
+			FromItem int64  `json:"from_item"`
+			ToItem   int64  `json:"to_item"`
+			Label    string `json:"label"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, 400, map[string]string{"error": "invalid json"}); return
+		}
+		switch req.Action {
+		case "add_item":
+			itemType := req.Type; if itemType == "" { itemType = "note" }
+			w2 := req.Width; if w2 == 0 { w2 = 260 }
+			h2 := req.Height; if h2 == 0 { h2 = 140 }
+			var id int64
+			err := a.db.QueryRowContext(ctx, `
+				INSERT INTO note_canvas_items(canvas_id,item_type,note_id,data,x,y,width,height,z_index)
+				VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+				canvasID, itemType, req.NoteID, func() string { if req.Data == "" { return "{}" }; return req.Data }(),
+				req.X, req.Y, w2, h2, req.ZIndex).Scan(&id)
+			if err != nil { writeJSON(w, 500, map[string]string{"error": err.Error()}); return }
+			writeJSON(w, 200, map[string]any{"ok": true, "id": id})
+
+		case "update_item":
+			if req.ID == 0 { writeJSON(w, 400, map[string]string{"error": "id required"}); return }
+			_, err := a.db.ExecContext(ctx, `
+				UPDATE note_canvas_items SET x=$1,y=$2,width=$3,height=$4,z_index=$5,updated_at=NOW()
+				WHERE id=$6 AND canvas_id=$7`,
+				req.X, req.Y, req.Width, req.Height, req.ZIndex, req.ID, canvasID)
+			if err != nil { writeJSON(w, 500, map[string]string{"error": err.Error()}); return }
+			writeJSON(w, 200, map[string]any{"ok": true})
+
+		case "delete_item":
+			if req.ID == 0 { writeJSON(w, 400, map[string]string{"error": "id required"}); return }
+			_, _ = a.db.ExecContext(ctx, `DELETE FROM note_canvas_items WHERE id=$1 AND canvas_id=$2`, req.ID, canvasID)
+			writeJSON(w, 200, map[string]any{"ok": true})
+
+		case "add_edge":
+			// Fase 2: koneksi antar kartu
+			var id int64
+			err := a.db.QueryRowContext(ctx, `
+				INSERT INTO note_canvas_edges(canvas_id,from_item,to_item,label)
+				VALUES($1,$2,$3,$4) RETURNING id`,
+				canvasID, req.FromItem, req.ToItem, req.Label).Scan(&id)
+			if err != nil { writeJSON(w, 500, map[string]string{"error": err.Error()}); return }
+			writeJSON(w, 200, map[string]any{"ok": true, "id": id})
+
+		case "delete_edge":
+			_, _ = a.db.ExecContext(ctx, `DELETE FROM note_canvas_edges WHERE id=$1 AND canvas_id=$2`, req.ID, canvasID)
+			writeJSON(w, 200, map[string]any{"ok": true})
+
+		default:
+			writeJSON(w, 400, map[string]string{"error": "unknown action"})
+		}
+	default:
+		writeJSON(w, 405, map[string]string{"error": "method not allowed"})
 	}
 }
 
