@@ -3370,6 +3370,46 @@ export default function Page() {
         </div>
       )}
 
+      {/* PWA Install Banner */}
+      {showInstallBanner && (
+        <div style={{
+          position: 'fixed', bottom: 80, left: 12, right: 12, zIndex: 999,
+          background: 'linear-gradient(135deg, #1e1b4b, #2e1065)',
+          border: '1px solid rgba(139,92,246,0.4)',
+          borderRadius: 16, padding: '14px 16px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', gap: 12
+        }}>
+          <span style={{ fontSize: 32, flexShrink: 0 }}>📲</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#e2e8f0', marginBottom: 2 }}>Install Naik Kelas</div>
+            <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.4 }}>
+              {/iphone|ipad|ipod/i.test(typeof navigator !== 'undefined' ? navigator.userAgent : '')
+                ? '📋 Tap Share ↑ → "Add to Home Screen"'
+                : 'Tambahkan ke Home Screen untuk akses cepat!'}
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+            {installPrompt && (
+              <button onClick={async () => {
+                installPrompt.prompt();
+                const { outcome } = await installPrompt.userChoice;
+                setShowInstallBanner(false);
+                if (outcome === 'accepted') localStorage.setItem('pwa-dismissed', '1');
+              }} style={{
+                background: '#7c3aed', color: '#fff', border: 'none',
+                borderRadius: 8, padding: '6px 14px', fontSize: 12,
+                fontWeight: 700, cursor: 'pointer'
+              }}>Install</button>
+            )}
+            <button onClick={() => { setShowInstallBanner(false); localStorage.setItem('pwa-dismissed', '1'); }}
+              style={{ background: 'transparent', color: '#64748b', border: '1px solid #334155', borderRadius: 8, padding: '5px 14px', fontSize: 12, cursor: 'pointer' }}>
+              Nanti
+            </button>
+          </div>
+        </div>
+      )}
+
     </main>
   );
 }
