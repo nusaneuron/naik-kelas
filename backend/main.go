@@ -5812,10 +5812,10 @@ func (a *app) handleParticipantNotes(w http.ResponseWriter, r *http.Request) {
 
 		if noteID != "" {
 			// Single note
-			var id int64; var title, content, createdAt, updatedAt string
+			var id int64; var title, content, createdAt, updatedAt, noteType string
 			err := a.db.QueryRowContext(ctx, `
-				SELECT id, title, content, created_at, updated_at
-				FROM notes WHERE id=$1 AND user_id=$2`, noteID, u.ID).Scan(&id, &title, &content, &createdAt, &updatedAt)
+				SELECT id, title, content, created_at, updated_at, COALESCE(note_type,'permanent')
+				FROM notes WHERE id=$1 AND user_id=$2`, noteID, u.ID).Scan(&id, &title, &content, &createdAt, &updatedAt, &noteType)
 			if err != nil {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "note not found"})
 				return
@@ -5837,6 +5837,7 @@ func (a *app) handleParticipantNotes(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, map[string]any{
 				"id": id, "title": title, "content": content,
 				"created_at": createdAt, "updated_at": updatedAt,
+				"note_type": noteType,
 				"tags": tags, "backlinks": backlinks,
 			})
 			return
@@ -5875,16 +5876,23 @@ func (a *app) handleParticipantNotes(w http.ResponseWriter, r *http.Request) {
 		for rows.Next() {
 			var it noteItem
 			var tagsArr []byte
-			if rows.Scan(&it.ID, &it.Title, &it.UpdatedAt, &it.NoteType, &tagsArr) == nil {
-				// Parse postgres array
-				tagStr := strings.Trim(string(tagsArr), "{}")
-				if tagStr != "" {
-					it.Tags = strings.Split(tagStr, ",")
-				} else {
-					it.Tags = []string{}
-				}
-				items = append(items, it)
+			scanErr := rows.Scan(&it.ID, &it.Title, &it.UpdatedAt, &it.NoteType, &tagsArr)
+			if scanErr != nil {
+				log.Printf("notes scan error: %v", scanErr)
+				continue
 			}
+			// Parse postgres array
+			tagStr := strings.Trim(string(tagsArr), "{}")
+			if tagStr != "" {
+				it.Tags = strings.Split(tagStr, ",")
+			} else {
+				it.Tags = []string{}
+			}
+			if it.NoteType == "" { it.NoteType = "permanent" }
+			items = append(items, it)
+		}
+		if rowsErr := rows.Err(); rowsErr != nil {
+			log.Printf("notes rows error: %v", rowsErr)
 		}
 		// Ambil semua tag unik user
 		allTagRows, _ := a.db.QueryContext(ctx, `
