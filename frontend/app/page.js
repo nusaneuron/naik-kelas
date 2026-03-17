@@ -3473,6 +3473,7 @@ function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote }) {
   const [items, setItems] = useState([]);
   const [edges] = useState([]); // fase 2
   const [dragging, setDragging] = useState(null); // {itemId, startX, startY, origX, origY}
+  const [resizing, setResizing] = useState(null); // {itemId, startX, startY, origW, origH}
   const [panning, setPanning] = useState(null);   // {startX, startY, origVX, origVY}
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -3519,14 +3520,28 @@ function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote }) {
       const dy = (e.clientY - dragging.startY) / viewport.scale;
       setItems(its => its.map(it => it.id === dragging.itemId ? { ...it, x: dragging.origX + dx, y: dragging.origY + dy } : it));
     }
+    if (resizing) {
+      const dx = (e.clientX - resizing.startX) / viewport.scale;
+      const dy = (e.clientY - resizing.startY) / viewport.scale;
+      setItems(its => its.map(it => it.id === resizing.itemId ? {
+        ...it,
+        width: Math.max(160, resizing.origW + dx),
+        height: Math.max(100, resizing.origH + dy),
+      } : it));
+    }
   };
   const onMouseUp = () => {
     if (dragging) {
       const item = items.find(it => it.id === dragging.itemId);
       if (item) debounceSave(item);
     }
+    if (resizing) {
+      const item = items.find(it => it.id === resizing.itemId);
+      if (item) debounceSave(item);
+    }
     setPanning(null);
     setDragging(null);
+    setResizing(null);
   };
 
   // ── Touch support ──
@@ -3703,6 +3718,23 @@ function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote }) {
               {/* Card body — preview konten */}
               <div style={{ flex: 1, padding: '8px 10px', fontSize: 11, color: '#64748b', lineHeight: 1.5, overflow: 'hidden' }}>
                 {(item.note_content || '').slice(0, 180).replace(/[#*`\[\]]/g, '') || <span style={{ color: '#334155', fontStyle: 'italic' }}>kosong</span>}
+              </div>
+
+              {/* Resize handle — sudut kanan bawah */}
+              <div
+                onMouseDown={e => {
+                  e.stopPropagation();
+                  setResizing({ itemId: item.id, startX: e.clientX, startY: e.clientY, origW: item.width, origH: item.height });
+                }}
+                style={{
+                  position: 'absolute', bottom: 0, right: 0,
+                  width: 18, height: 18, cursor: 'nwse-resize',
+                  display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end',
+                  padding: '3px',
+                }}>
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <path d="M9 1L1 9M9 5L5 9M9 9" stroke="#334155" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
               </div>
             </div>
           ))}
