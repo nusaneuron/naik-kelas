@@ -5968,10 +5968,12 @@ func (a *app) handleParticipantNotes(w http.ResponseWriter, r *http.Request) {
 // GET  /participant/notes/canvas          → load canvas + items + edges
 // POST /participant/notes/canvas {action} → add_item | update_item | delete_item | add_edge | delete_edge
 func (a *app) handleParticipantCanvas(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant", "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
 	ctx := r.Context()
-	u, err := a.requireParticipantAuth(ctx, w, r)
-	if err != nil { return }
-	setCORSHeaders(w, r)
 
 	// Upsert default canvas untuk user
 	var canvasID int64
