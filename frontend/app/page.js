@@ -1112,20 +1112,20 @@ export default function Page() {
                 )}
               </div>
 
-              <div className="nk-stat-card" style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1))', border: '1px solid rgba(99,102,241,0.3)' }}>
+              <div className="nk-stat-card purple">
                 <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 10 }}>📔 Jadwal Refleksi</div>
                 {reflectionReminderTime ? (
                   <>
-                    <div style={{ fontWeight: 700, fontSize: 16, color: '#a78bfa' }}>Jam {reflectionReminderTime}</div>
-                    <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 4 }}>WIB</div>
-                    <span className="nk-badge" style={{ marginTop: 10, background: 'rgba(99,102,241,0.2)', color: '#a78bfa' }}>● Aktif</span>
+                    <div style={{ fontWeight: 700, fontSize: 16 }}>Jam {reflectionReminderTime}</div>
+                    <div style={{ fontSize: 13, color: '#94a3b8' }}>WIB</div>
+                    <span className="nk-badge nk-badge-green" style={{ marginTop: 10 }}>● Aktif</span>
                   </>
                 ) : (
                   <>
                     <div style={{ fontSize: 14, color: '#94a3b8', marginBottom: 8 }}>Belum diatur</div>
+                    <div style={{ fontSize: 13, color: '#94a3b8' }}>Atur via bot: <b style={{ color: '#a78bfa' }}>/jadwal_refleksi</b></div>
                   </>
                 )}
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 10 }}>Atur via bot: <b style={{ color: '#a78bfa' }}>/jadwal_refleksi</b></div>
               </div>
             </div>
 
