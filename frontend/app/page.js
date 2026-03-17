@@ -1258,7 +1258,7 @@ export default function Page() {
             {participantSection === 'poin' && (<>
             <Section title="💰 Riwayat Poin">
               {myPointHistory.length ? (
-                <div className="nk-table-wrap" style={{ maxHeight: 280 }}>
+                <div className="nk-table-wrap" style={{ maxHeight: 280, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
                   <table className="nk-table" style={{ minWidth: 700 }}>
                     <thead><tr><th>Delta</th><th>Keterangan</th><th>Tipe</th><th>Waktu</th></tr></thead>
                     <tbody>{myPointHistory.slice(0, 50).map((p, i) => (
@@ -1281,7 +1281,7 @@ export default function Page() {
             {participantSection === 'leaderboard' && (<>
             <Section title="🏆 Leaderbot Tryout">
               {leaderboard.length ? (
-                <div className="nk-table-wrap" style={{ maxHeight: 280 }}>
+                <div className="nk-table-wrap" style={{ maxHeight: 280, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
                   <table className="nk-table" >
                     <thead><tr><th>#</th><th>Nama</th><th>Badges</th><th>Telegram</th><th>Waktu Terbaik</th><th>Perfect</th></tr></thead>
                     <tbody>{leaderboard.map((it) => (
@@ -1535,9 +1535,9 @@ export default function Page() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 14 }}>
               <Section title="🧠 Riwayat Quiz">
                 {(history.quiz || []).length ? (
-                  <div className="nk-table-wrap" style={{ maxHeight: 280 }}>
+                  <div className="nk-table-wrap" style={{ maxHeight: 280, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
                     <table className="nk-table" >
-                      <thead><tr><th>Kategori</th><th>Attempt</th><th>Salah</th><th>Total</th><th>Status</th></tr></thead>
+                      <thead><tr style={{ whiteSpace: 'nowrap' }}><th>Kategori</th><th>Attempt</th><th>Salah</th><th>Total</th><th>Status</th></tr></thead>
                       <tbody>{(history.quiz || []).map((q, i) => (
                         <tr key={i}>
                           <td style={{ fontWeight: 600 }}>{q.category}</td>
@@ -1554,9 +1554,9 @@ export default function Page() {
 
               <Section title="🚀 Riwayat Tryout">
                 {(history.tryout || []).length ? (
-                  <div className="nk-table-wrap" style={{ maxHeight: 280 }}>
+                  <div className="nk-table-wrap" style={{ maxHeight: 280, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
                     <table className="nk-table" >
-                      <thead><tr><th>Benar</th><th>Total</th><th>Durasi</th><th>Kecepatan</th><th>Status</th></tr></thead>
+                      <thead><tr style={{ whiteSpace: 'nowrap' }}><th>Benar</th><th>Total</th><th>Durasi</th><th>Kecepatan</th><th>Status</th></tr></thead>
                       <tbody>{(history.tryout || []).map((t, i) => (
                         <tr key={i}>
                           <td style={{ fontWeight: 600 }}>{t.correct_count}</td>
@@ -1737,7 +1737,7 @@ export default function Page() {
             {/* Riwayat Klaim */}
             <Section title="📋 Riwayat Klaim Redeem">
               {redeemClaims.length ? (
-                <div className="nk-table-wrap" style={{ maxHeight: 280 }}>
+                <div className="nk-table-wrap" style={{ maxHeight: 280, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
                   <table className="nk-table" style={{ minWidth: 600 }}>
                     <thead><tr><th>Hadiah</th><th>Poin</th><th>Status</th><th>Catatan Admin</th><th>Waktu</th></tr></thead>
                     <tbody>{redeemClaims.map((c) => (
@@ -1923,7 +1923,7 @@ export default function Page() {
               {adminSection === 'peserta' && (
                 <AdminSection title="👥 Peserta">
                   {participants.length ? (
-                    <div className="nk-table-wrap" style={{ maxHeight: 520 }}>
+                    <div className="nk-table-wrap" style={{ maxHeight: 520, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
                       <table className="nk-table" style={{ minWidth: 1100 }}>
                         <thead><tr><th>Nama</th><th>No. HP</th><th>Kelompok</th><th>Role</th><th>Status</th><th>Aksi</th></tr></thead>
                         <tbody>{participants.map((p) => (
@@ -2325,7 +2325,7 @@ export default function Page() {
                     <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 16 }}>
                       <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>📊 Detail Per Peserta</p>
                       {adminLearningSummary.participants?.length > 0 ? (
-                        <div className="nk-table-wrap" style={{ maxHeight: 380 }}>
+                        <div className="nk-table-wrap" style={{ maxHeight: 380, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
                           <table className="nk-table">
                             <thead><tr><th>Nama</th><th>Kelompok</th><th>📚 Materi</th><th>🧠 Quiz</th><th>🚀 Tryout</th><th>Terakhir Aktif</th></tr></thead>
                             <tbody>{adminLearningSummary.participants.map((p, i) => (
@@ -2351,7 +2351,7 @@ export default function Page() {
                     <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16 }}>
                       <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>⏰ Jadwal Pengingat Belajar</p>
                       {adminReminders.length ? (
-                        <div className="nk-table-wrap" style={{ maxHeight: 240 }}>
+                        <div className="nk-table-wrap" style={{ maxHeight: 240, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
                           <table className="nk-table">
                             <thead><tr><th>Nama</th><th>Jam</th><th>Timezone</th><th>Status</th></tr></thead>
                             <tbody>{adminReminders.map((r, i) => (
@@ -2415,7 +2415,7 @@ export default function Page() {
 
                   <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 10px', color: '#e5e7eb' }}>Riwayat Transaksi</h3>
                   {adminPointHistory.length ? (
-                    <div className="nk-table-wrap" style={{ maxHeight: 380 }}>
+                    <div className="nk-table-wrap" style={{ maxHeight: 380, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
                       <table className="nk-table" style={{ minWidth: 900 }}>
                         <thead><tr><th>Nama</th><th>No. HP</th><th>Delta</th><th>Keterangan</th><th>Tipe</th><th>Waktu</th><th>Aksi</th></tr></thead>
                         <tbody>{adminPointHistory.slice(0, 100).map((p) => (
@@ -2580,7 +2580,7 @@ export default function Page() {
                   <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16 }}>
                     <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>📜 Riwayat Pemberian Badge</p>
                     {adminBadgeAwards.length > 0 ? (
-                      <div className="nk-table-wrap" style={{ maxHeight: 360 }}>
+                      <div className="nk-table-wrap" style={{ maxHeight: 360, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
                         <table className="nk-table">
                           <thead><tr><th>Peserta</th><th>Kelompok</th><th>Badge</th><th>Catatan</th><th>Diberikan</th><th></th></tr></thead>
                           <tbody>{adminBadgeAwards.map((aw, i) => {
@@ -2688,7 +2688,7 @@ export default function Page() {
                   <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16 }}>
                     <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>📋 Rekapan Feedback{!isSuperAdmin ? ' (Kelompokmu)' : ''}</p>
                     {adminFeedbackList.length > 0 ? (
-                      <div className="nk-table-wrap" style={{ maxHeight: 400 }}>
+                      <div className="nk-table-wrap" style={{ maxHeight: 400, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
                         <table className="nk-table">
                           <thead><tr><th>Nama</th>{isSuperAdmin && <th>Kelompok</th>}<th>Rating</th><th>Pesan</th><th>Waktu</th></tr></thead>
                           <tbody>{adminFeedbackList.map((f, i) => (
@@ -2759,7 +2759,7 @@ export default function Page() {
                       <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginTop: 16 }}>
                         <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>👥 Status Refleksi Peserta</p>
                         {adminReflectionStats.participants?.length > 0 ? (
-                          <div className="nk-table-wrap" style={{ maxHeight: 340 }}>
+                          <div className="nk-table-wrap" style={{ maxHeight: 340, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
                             <table className="nk-table">
                               <thead><tr><th>Nama</th><th>Kelompok</th><th>Jadwal Refleksi</th><th>Hari Ini</th><th>30 Hari</th></tr></thead>
                               <tbody>{adminReflectionStats.participants.map((p, i) => (
@@ -2875,7 +2875,7 @@ export default function Page() {
 
                   <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 10px' }}>History EXP</h3>
                   {adminExpHistory.length ? (
-                    <div className="nk-table-wrap" style={{ maxHeight: 320 }}>
+                    <div className="nk-table-wrap" style={{ maxHeight: 320, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
                       <table className="nk-table" style={{ minWidth: 860 }}>
                         <thead><tr><th>Nama</th><th>No. HP</th><th>Delta EXP</th><th>Tipe</th><th>Keterangan</th><th>Waktu</th></tr></thead>
                         <tbody>{adminExpHistory.map((h) => (
@@ -3235,7 +3235,7 @@ export default function Page() {
 
                   <AdminSection title="📋 Klaim Masuk" style={{ marginTop: 14 }}>
                     {adminRedeemClaims.length ? (
-                      <div className="nk-table-wrap" style={{ maxHeight: 480 }}>
+                      <div className="nk-table-wrap" style={{ maxHeight: 480, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
                         <table className="nk-table" style={{ minWidth: 900 }}>
                           <thead><tr><th>Peserta</th><th>No. HP</th><th>Hadiah</th><th>Poin</th><th>Status</th><th>Catatan</th><th>Waktu</th><th>Aksi</th></tr></thead>
                           <tbody>{adminRedeemClaims.map((c) => (
