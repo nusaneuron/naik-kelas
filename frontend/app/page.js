@@ -3509,53 +3509,65 @@ function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote }) {
     }));
   };
 
-  // ── Global mouse handlers (supaya drag tetap jalan walau keluar kartu) ──
-  useEffect(() => {
-    const onMove = (e) => {
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      if (dragRef.current) {
-        const { itemId, startX, startY, origX, origY, scale } = dragRef.current;
-        const dx = (clientX - startX) / scale;
-        const dy = (clientY - startY) / scale;
-        setItems(its => its.map(it => it.id === itemId ? { ...it, x: origX + dx, y: origY + dy } : it));
-      }
-      if (resizeRef.current) {
-        const { itemId, startX, startY, origW, origH, scale } = resizeRef.current;
-        const dx = (clientX - startX) / scale;
-        const dy = (clientY - startY) / scale;
-        setItems(its => its.map(it => it.id === itemId ? {
-          ...it, width: Math.max(160, origW + dx), height: Math.max(100, origH + dy)
-        } : it));
-      }
-    };
-    const onUp = () => {
-      if (dragRef.current) {
-        setItems(its => { const item = its.find(it => it.id === dragRef.current.itemId); if (item) debounceSave(item); return its; });
-        dragRef.current = null; setDragging(null);
-      }
-      if (resizeRef.current) {
-        setItems(its => { const item = its.find(it => it.id === resizeRef.current.itemId); if (item) debounceSave(item); return its; });
-        resizeRef.current = null; setResizing(null);
-      }
-      setPanning(null);
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-  }, []);
-
-  // ── Pan canvas (drag on background) ──
+  // ── Pan canvas ──
   const onBgMouseDown = (e) => {
     if (e.target.closest('.canvas-card')) return;
-    setPanning({ startX: e.clientX, startY: e.clientY, origVX: viewport.x, origVY: viewport.y });
     setSelectedId(null);
-    const onMove = (ev) => setViewport(v => ({ ...v, x: v.x + ev.movementX, y: v.y + ev.movementY }));
-    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); setPanning(null); };
+    const startX = e.clientX, startY = e.clientY;
+    const origX = viewport.x, origY = viewport.y;
+    const onMove = (ev) => setViewport(v => ({ ...v, x: origX + ev.clientX - startX, y: origY + ev.clientY - startY }));
+    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
   };
-  // Dummy (tidak dipakai lagi — pakai global)
+
+  // ── Drag kartu ──
+  const startDrag = (e, item) => {
+    e.stopPropagation();
+    setSelectedId(item.id);
+    setDragging(item.id);
+    setItems(its => its.map(it => ({ ...it, z_index: it.id === item.id ? 99 : it.z_index })));
+    const startX = e.clientX, startY = e.clientY;
+    const origX = item.x, origY = item.y;
+    const scale = viewport.scale;
+    const onMove = (ev) => {
+      setItems(its => its.map(it => it.id === item.id
+        ? { ...it, x: origX + (ev.clientX - startX) / scale, y: origY + (ev.clientY - startY) / scale }
+        : it));
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      setDragging(null);
+      // simpan posisi akhir
+      setItems(its => { const found = its.find(it => it.id === item.id); if (found) debounceSave(found); return its; });
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  // ── Resize kartu ──
+  const startResize = (e, item) => {
+    e.stopPropagation();
+    setResizing(item.id);
+    const startX = e.clientX, startY = e.clientY;
+    const origW = item.width, origH = item.height;
+    const scale = viewport.scale;
+    const onMove = (ev) => {
+      setItems(its => its.map(it => it.id === item.id
+        ? { ...it, width: Math.max(160, origW + (ev.clientX - startX) / scale), height: Math.max(100, origH + (ev.clientY - startY) / scale) }
+        : it));
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      setResizing(null);
+      setItems(its => { const found = its.find(it => it.id === item.id); if (found) debounceSave(found); return its; });
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
   const onMouseMove = () => {};
   const onMouseUp = () => {};
 
@@ -3744,14 +3756,7 @@ function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote }) {
                 overflow: 'hidden',
                 transition: dragging?.itemId === item.id ? 'none' : 'box-shadow 0.15s',
               }}
-              onMouseDown={e => {
-                if (e.target.closest('[data-resize]')) return;
-                e.stopPropagation();
-                setSelectedId(item.id);
-                dragRef.current = { itemId: item.id, startX: e.clientX, startY: e.clientY, origX: item.x, origY: item.y, scale: viewport.scale };
-                setDragging(item.id);
-                setItems(its => its.map(it => ({ ...it, z_index: it.id === item.id ? 99 : it.z_index })));
-              }}>
+              onMouseDown={e => { if (!e.target.closest('[data-resize]')) startDrag(e, item); }}>
 
               {/* Card header */}
               <div style={{ padding: '8px 10px 6px', borderBottom: '1px solid #1e2d45', display: 'flex', alignItems: 'center', gap: 6, background: '#080d18' }}>
@@ -3776,11 +3781,7 @@ function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote }) {
               {/* Resize handle — sudut kanan bawah */}
               <div
                 data-resize="1"
-                onMouseDown={e => {
-                  e.stopPropagation();
-                  resizeRef.current = { itemId: item.id, startX: e.clientX, startY: e.clientY, origW: item.width, origH: item.height, scale: viewport.scale };
-                  setResizing(item.id);
-                }}
+                onMouseDown={e => startResize(e, item)}
                 style={{
                   position: 'absolute', bottom: 0, right: 0,
                   width: 18, height: 18, cursor: 'nwse-resize',
