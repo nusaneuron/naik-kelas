@@ -360,7 +360,7 @@ button:active { transform: translateY(0); }
   border: 1px solid #1e2d45;
   border-radius: 16px;
   background: #0b1220;
-  overflow: hidden;
+  overflow: clip; /* clip tidak buat scroll context baru */
   display: grid;
   grid-template-columns: 210px minmax(0, 1fr);
   min-height: 560px;
@@ -374,8 +374,10 @@ button:active { transform: translateY(0); }
 
 .nk-admin-content {
   padding: 20px;
-  overflow-x: hidden;
+  overflow-x: visible; /* biarkan nk-table-wrap yang handle scroll */
   min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 @media (max-width: 680px) {
@@ -493,6 +495,10 @@ button:active { transform: translateY(0); }
 
   .nk-admin-content {
     padding: 14px 12px;
+    overflow-x: visible !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
   }
 
   .nk-admin-sidebar nav button .nav-label {

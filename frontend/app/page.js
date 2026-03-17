@@ -2007,9 +2007,9 @@ export default function Page() {
                 <>
                   <AdminSection title="📂 Kategori Soal">
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-                      <input className="nk-input-sm" placeholder="Kode" style={{ width: 100 }} value={newCategoryCode} onChange={(e) => setNewCategoryCode(e.target.value)} />
-                      <input className="nk-input-sm" placeholder="Nama kategori" style={{ width: 180 }} value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
-                      <select className="nk-input-sm" style={{ width: 160 }} value={newCategoryGroupId} onChange={e => setNewCategoryGroupId(e.target.value)}>
+                      <input className="nk-input-sm" placeholder="Kode" style={{ flex: '1 1 80px', maxWidth: 120 }} value={newCategoryCode} onChange={(e) => setNewCategoryCode(e.target.value)} />
+                      <input className="nk-input-sm" placeholder="Nama kategori" style={{ flex: '2 1 140px' }} value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
+                      <select className="nk-input-sm" style={{ flex: '1 1 120px' }} value={newCategoryGroupId} onChange={e => setNewCategoryGroupId(e.target.value)}>
                         {isSuperAdmin && <option value="">🌐 Global (Super Admin)</option>}
                         {adminGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                       </select>
