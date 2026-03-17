@@ -455,16 +455,37 @@ button:active { transform: translateY(0); }
     box-sizing: border-box !important;
   }
 
-  /* Admin layout: stack vertikal */
+  /* Admin layout: sidebar fixed di bawah */
   .nk-admin-layout {
     grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
     border-radius: 12px;
+    border: none;
+    background: transparent;
   }
 
+  /* Sembunyikan sidebar dari dalam grid, tampilkan sebagai fixed bottom */
   .nk-admin-sidebar {
-    border-right: none;
-    border-bottom: 1px solid #1e2d45;
-    padding: 10px 8px;
+    position: fixed !important;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100% !important;
+    border-right: none !important;
+    border-top: 1px solid rgba(255,255,255,0.07) !important;
+    border-bottom: none !important;
+    padding: 6px 4px env(safe-area-inset-bottom, 8px) !important;
+    background: rgba(10, 14, 26, 0.82) !important;
+    backdrop-filter: blur(20px) saturate(160%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(160%) !important;
+    z-index: 200;
+    min-height: 56px;
+    /* Sembunyikan label teks (MENU ADMIN) */
+  }
+
+  .nk-admin-sidebar > p,
+  .nk-admin-sidebar > div:not(nav) {
+    display: none !important;
   }
 
   .nk-admin-sidebar nav {
@@ -472,39 +493,48 @@ button:active { transform: translateY(0); }
     flex-wrap: nowrap !important;
     flex-direction: row !important;
     overflow-x: auto !important;
-    gap: 4px !important;
+    gap: 0 !important;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    padding-bottom: 4px;
+    justify-content: space-around;
   }
   .nk-admin-sidebar nav::-webkit-scrollbar { display: none; }
 
   .nk-admin-sidebar nav button {
-    flex-shrink: 0 !important;
+    flex: 1 0 auto !important;
     width: auto !important;
-    min-width: 44px !important;
-    padding: 8px 10px !important;
+    min-width: 56px !important;
+    max-width: 80px !important;
+    padding: 6px 4px !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 2px !important;
-    font-size: 9px !important;
+    gap: 3px !important;
     border-radius: 10px !important;
-  }
-
-  .nk-admin-content {
-    padding: 14px 12px;
-    overflow-x: visible !important;
-    min-width: 0 !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
+    background: transparent !important;
+    border: none !important;
   }
 
   .nk-admin-sidebar nav button .nav-label {
     font-size: 9px !important;
     display: block !important;
     white-space: nowrap;
+    overflow: hidden;
+    max-width: 64px;
+    text-overflow: ellipsis;
+  }
+
+  .nk-admin-sidebar nav button span[style] {
+    font-size: 22px !important;
+  }
+
+  .nk-admin-content {
+    padding: 14px 12px 80px !important;
+    overflow-x: visible !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
   }
 
   /* Class-based grid overrides */
