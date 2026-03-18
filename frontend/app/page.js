@@ -277,7 +277,8 @@ export default function Page() {
       const data = await res.json();
       setActiveNote(data);
       setNoteDraft({ title: data.title, content: data.content });
-      setNoteEditing(false);
+      // Catatan sementara langsung buka dalam mode edit
+      setNoteEditing(data.note_type === 'fleeting');
       setNoteView('editor');
     }
   }
@@ -1451,16 +1452,23 @@ export default function Page() {
                           <div style={{ display: 'grid', gap: 6 }}>
                             {fleeting.map(n => (
                               <div key={n.id}
-                                style={{ background: '#13110e', border: '1px solid #2c2520', borderRadius: 10, padding: '11px 14px' }}>
+                                style={{ background: '#13110e', border: '1px solid #2c2520', borderRadius: 10, padding: '11px 14px', cursor: 'pointer' }}
+                                onClick={() => loadNoteDetail(n.id)}>
                                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                                   <div style={{ flex: 1 }}>
                                     <div style={{ fontSize: 13, color: '#a8a29e', marginBottom: 4, lineHeight: 1.5 }}>{n.title}</div>
                                     <span style={{ fontSize: 11, color: '#57534e' }}>{new Date(n.updated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                                   </div>
                                   <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                                    {/* Tombol Edit — buka editor langsung */}
                                     <button onClick={e => { e.stopPropagation(); loadNoteDetail(n.id); }}
-                                      style={{ padding: '4px 10px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
-                                      📌 Jadikan Permanen
+                                      style={{ padding: '4px 9px', background: 'rgba(167,139,250,0.15)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+                                      ✏️ Edit
+                                    </button>
+                                    {/* Tombol Jadikan Permanen */}
+                                    <button onClick={e => { e.stopPropagation(); loadNoteDetail(n.id); }}
+                                      style={{ padding: '4px 9px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+                                      📌
                                     </button>
                                     <button onClick={async e => { e.stopPropagation(); if (!confirm('Hapus catatan sementara ini?')) return; await deleteNote(n.id); }}
                                       style={{ padding: '4px 8px', background: 'transparent', color: '#78716c', border: '1px solid #2c2520', borderRadius: 6, cursor: 'pointer', fontSize: 11 }}>
