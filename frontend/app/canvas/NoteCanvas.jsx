@@ -12,7 +12,7 @@ import { saveCurrentCanvasId, loadCurrentCanvasId } from './useCanvasStore';
 
 const nodeTypes = { noteCard: CustomNode };
 
-export default function NoteCanvas({ notes, apiBase, onOpenNote }) {
+export default function NoteCanvas({ notes, apiBase, onOpenNote, initialCanvasId }) {
   const [canvases, setCanvases] = useState([]);
   const [activeId, setActiveId] = useState(null);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -29,7 +29,7 @@ export default function NoteCanvas({ notes, apiBase, onOpenNote }) {
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
 
   // ── Load daftar canvas saat pertama buka ──
-  useEffect(() => { loadCanvasList(); }, []);
+  useEffect(() => { loadCanvasList(); }, [initialCanvasId]);
 
   const loadCanvasList = async () => {
     const res = await fetch(`${apiBase}/participant/notes/canvas?list=1`, { credentials: 'include' });
@@ -38,8 +38,11 @@ export default function NoteCanvas({ notes, apiBase, onOpenNote }) {
     const list = data.canvases || [];
     setCanvases(list);
     if (list.length === 0) return;
-    const savedId = loadCurrentCanvasId();
-    const target = list.find(c => String(c.id) === savedId) || list[0];
+    // Prioritas: initialCanvasId → localStorage → pertama
+    const targetId = initialCanvasId
+      || loadCurrentCanvasId()
+      || String(list[0]?.id);
+    const target = list.find(c => String(c.id) === targetId) || list[0];
     if (target) await doSwitchCanvas(target.id);
   };
 
@@ -228,14 +231,17 @@ export default function NoteCanvas({ notes, apiBase, onOpenNote }) {
         <Panel position="top-left">
           {/* stopPropagation di sini agar klik toolbar tidak bubbles ke ReactFlow */}
           <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6, alignItems: 'flex-start', position: 'relative' }}>
-            <CanvasList
-              canvases={canvases}
-              activeId={activeId}
-              onSelect={doSwitchCanvas}
-              onCreate={createCanvas}
-              onDelete={deleteCanvas}
-              onRename={renameCanvas}
-            />
+            {/* Sembunyikan CanvasList jika navigasi sudah dihandle parent */}
+            {!initialCanvasId && (
+              <CanvasList
+                canvases={canvases}
+                activeId={activeId}
+                onSelect={doSwitchCanvas}
+                onCreate={createCanvas}
+                onDelete={deleteCanvas}
+                onRename={renameCanvas}
+              />
+            )}
 
             <div style={{ position: 'relative' }}>
               {/* ✅ Disable jika belum siap */}

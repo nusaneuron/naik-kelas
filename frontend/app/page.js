@@ -152,6 +152,8 @@ export default function Page() {
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteView, setNoteView] = useState('list'); // 'list' | 'editor' | 'graph' | 'canvas'
   const [canvasData, setCanvasData] = useState(null); // { canvas_id, items, edges }
+  const [canvasList, setCanvasList] = useState([]);      // daftar semua canvas
+  const [canvasOpenId, setCanvasOpenId] = useState(null); // canvas yang sedang dibuka
   const [noteAutocomplete, setNoteAutocomplete] = useState([]); // [[title suggestions
   const [graphData, setGraphData] = useState(null);
   const [installPrompt, setInstallPrompt] = useState(null); // PWA install
@@ -318,10 +320,35 @@ export default function Page() {
 
   async function loadCanvas() {
     setNoteView('canvas');
-    const res = await fetch(`${apiBase}/participant/notes/canvas`, { credentials: 'include' });
+    setCanvasOpenId(null); // tampilkan daftar dulu
+    const res = await fetch(`${apiBase}/participant/notes/canvas?list=1`, { credentials: 'include' });
     if (!res.ok) return;
-    const data = await res.json();
-    setCanvasData(data);
+    const d = await res.json();
+    setCanvasList(d.canvases || []);
+  }
+
+  async function createCanvasFromList(name) {
+    const res = await fetch(`${apiBase}/participant/notes/canvas`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'create_canvas', name }),
+    });
+    const d = await res.json();
+    if (d.ok) {
+      await loadCanvas();
+      setCanvasOpenId(d.id);
+    }
+  }
+
+  async function deleteCanvasFromList(cid) {
+    if (!confirm('Hapus canvas ini?')) return;
+    await fetch(`${apiBase}/participant/notes/canvas?canvas_id=${cid}`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete_canvas' }),
+    });
+    if (canvasOpenId === cid) setCanvasOpenId(null);
+    await loadCanvas();
   }
 
   async function loadGraph() {
@@ -1592,13 +1619,89 @@ export default function Page() {
                 )}
 
                 {/* CANVAS VIEW */}
-                {noteView === 'canvas' && (
-                  <NoteCanvasRF
-                    notes={notes}
-                    apiBase={apiBase}
-                    onOpenNote={(id) => { loadNoteDetail(id); setNoteView('editor'); }}
-                  />
-                )}
+                {noteView === 'canvas' && (() => {
+                  // ── Tampilan Canvas editor (saat canvas dipilih) ──
+                  if (canvasOpenId) return (
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                        <button onClick={() => setCanvasOpenId(null)}
+                          style={{ padding: '5px 12px', background: 'transparent', color: '#64748b', border: '1px solid #1e2d45', borderRadius: 7, cursor: 'pointer', fontSize: 12 }}>
+                          ← Daftar Canvas
+                        </button>
+                        <span style={{ fontSize: 13, color: '#93c5fd', fontWeight: 700 }}>
+                          🖼️ {canvasList.find(c => c.id === canvasOpenId)?.name || 'Canvas'}
+                        </span>
+                      </div>
+                      <NoteCanvasRF
+                        notes={notes}
+                        apiBase={apiBase}
+                        initialCanvasId={canvasOpenId}
+                        onOpenNote={(id) => { loadNoteDetail(id); setNoteView('editor'); }}
+                      />
+                    </div>
+                  );
+
+                  // ── Daftar Canvas ──
+                  return (
+                    <div>
+                      {/* Header + tombol buat canvas baru */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                        <span style={{ fontSize: 13, color: '#64748b', fontWeight: 600 }}>🖼️ Canvas ({canvasList.length})</span>
+                        <button
+                          onClick={() => {
+                            const name = prompt('Nama canvas baru:');
+                            if (name?.trim()) createCanvasFromList(name.trim());
+                          }}
+                          style={{ padding: '6px 14px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+                          + Canvas Baru
+                        </button>
+                      </div>
+
+                      {/* Grid daftar canvas */}
+                      {canvasList.length === 0
+                        ? (
+                          <div style={{ textAlign: 'center', padding: '48px 0', color: '#334155' }}>
+                            <div style={{ fontSize: 40, marginBottom: 10 }}>🖼️</div>
+                            <p style={{ fontSize: 14 }}>Belum ada canvas. Buat yang pertama!</p>
+                          </div>
+                        )
+                        : (
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+                            {canvasList.map(c => (
+                              <div key={c.id}
+                                onClick={() => setCanvasOpenId(c.id)}
+                                style={{
+                                  background: 'linear-gradient(135deg, #0b1628, #0f172a)',
+                                  border: '1px solid #1e3a5f', borderRadius: 12,
+                                  padding: '18px 16px', cursor: 'pointer',
+                                  transition: 'border-color 0.15s, box-shadow 0.15s',
+                                  position: 'relative',
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(59,130,246,0.2)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.borderColor = '#1e3a5f'; e.currentTarget.style.boxShadow = 'none'; }}>
+                                <div style={{ fontSize: 28, marginBottom: 8 }}>🖼️</div>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: '#93c5fd', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {c.name}
+                                </div>
+                                <div style={{ fontSize: 11, color: '#475569' }}>
+                                  {new Date(c.updated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                </div>
+                                {/* Tombol hapus */}
+                                {canvasList.length > 1 && (
+                                  <button
+                                    onClick={e => { e.stopPropagation(); deleteCanvasFromList(c.id); }}
+                                    style={{ position: 'absolute', top: 8, right: 8, background: 'transparent', border: 'none', color: '#334155', cursor: 'pointer', fontSize: 14 }}>
+                                    🗑
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      }
+                    </div>
+                  );
+                })()}
 
                 {/* GRAPH VIEW */}
                 {noteView === 'graph' && graphData && (
