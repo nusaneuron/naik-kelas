@@ -8208,7 +8208,8 @@ func (a *app) handleParticipantBadges(w http.ResponseWriter, r *http.Request) {
 // ── Participant: Ubah Password ────────────────────────────────────────────────
 
 func (a *app) handleParticipantChangePassword(w http.ResponseWriter, r *http.Request) {
-	u, err := a.requireRole(r.Context(), r, "participant")
+	// Admin & participant sama-sama bisa ganti password sendiri
+	u, err := a.requireRole(r.Context(), r, "participant", "admin")
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
