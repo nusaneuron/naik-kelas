@@ -1293,7 +1293,7 @@ export default function Page() {
                           });
                           const d = await res.json().catch(()=>({}));
                           setBusy(false);
-                          if (res.ok) { showMsg('Password berhasil diubah ✅', 'success'); setShowChangePass(false); setChangePassForm({old:'',new1:'',new2:''}); }
+                          if (res.ok) { showMsg('Password berhasil diubah ✅', 'success'); setShowChangePass(false); setChangePassForm({old:'',new1:'',new2:''}); setMe(m => ({ ...m, must_change_password: false })); }
                           else showMsg(d.error || 'Gagal ubah password', 'error');
                         }}>💾 Simpan Password</BtnSm>
                       <BtnSm onClick={() => { setShowChangePass(false); setChangePassForm({old:'',new1:'',new2:''}); }}>Batal</BtnSm>
