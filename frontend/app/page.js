@@ -154,6 +154,8 @@ export default function Page() {
   const [canvasData, setCanvasData] = useState(null); // { canvas_id, items, edges }
   const [canvasList, setCanvasList] = useState([]);      // daftar semua canvas
   const [canvasOpenId, setCanvasOpenId] = useState(null); // canvas yang sedang dibuka
+  const [canvasRenamingId, setCanvasRenamingId] = useState(null);
+  const [canvasRenameVal, setCanvasRenameVal] = useState('');
   const [noteAutocomplete, setNoteAutocomplete] = useState([]); // [[title suggestions
   const [graphData, setGraphData] = useState(null);
   const [installPrompt, setInstallPrompt] = useState(null); // PWA install
@@ -338,6 +340,17 @@ export default function Page() {
       await loadCanvas();
       setCanvasOpenId(d.id);
     }
+  }
+
+  async function renameCanvasFromList(cid, name) {
+    if (!name?.trim()) return;
+    await fetch(`${apiBase}/participant/notes/canvas?canvas_id=${cid}`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'rename_canvas', name: name.trim() }),
+    });
+    setCanvasList(cs => cs.map(c => c.id === cid ? { ...c, name: name.trim() } : c));
+    setCanvasRenamingId(null);
   }
 
   async function deleteCanvasFromList(cid) {
@@ -1669,23 +1682,51 @@ export default function Page() {
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
                             {canvasList.map(c => (
                               <div key={c.id}
-                                onClick={() => setCanvasOpenId(c.id)}
+                                onClick={() => canvasRenamingId !== c.id && setCanvasOpenId(c.id)}
                                 style={{
                                   background: 'linear-gradient(135deg, #0b1628, #0f172a)',
                                   border: '1px solid #1e3a5f', borderRadius: 12,
-                                  padding: '18px 16px', cursor: 'pointer',
+                                  padding: '18px 16px', cursor: canvasRenamingId === c.id ? 'default' : 'pointer',
                                   transition: 'border-color 0.15s, box-shadow 0.15s',
                                   position: 'relative',
                                 }}
-                                onMouseEnter={e => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(59,130,246,0.2)'; }}
+                                onMouseEnter={e => { if (canvasRenamingId !== c.id) { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(59,130,246,0.2)'; }}}
                                 onMouseLeave={e => { e.currentTarget.style.borderColor = '#1e3a5f'; e.currentTarget.style.boxShadow = 'none'; }}>
                                 <div style={{ fontSize: 28, marginBottom: 8 }}>🖼️</div>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: '#93c5fd', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {c.name}
-                                </div>
+
+                                {/* Nama canvas — klik ✏️ untuk rename inline */}
+                                {canvasRenamingId === c.id ? (
+                                  <input
+                                    autoFocus
+                                    value={canvasRenameVal}
+                                    onChange={e => setCanvasRenameVal(e.target.value)}
+                                    onClick={e => e.stopPropagation()}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') renameCanvasFromList(c.id, canvasRenameVal);
+                                      if (e.key === 'Escape') setCanvasRenamingId(null);
+                                    }}
+                                    onBlur={() => renameCanvasFromList(c.id, canvasRenameVal)}
+                                    style={{ width: '100%', background: '#1e293b', border: '1px solid #3b82f6', borderRadius: 6, color: '#e2e8f0', padding: '4px 8px', fontSize: 13, fontWeight: 700, outline: 'none', marginBottom: 4 }}
+                                  />
+                                ) : (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#93c5fd', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                                      {c.name}
+                                    </span>
+                                    {/* Tombol rename */}
+                                    <button
+                                      onClick={e => { e.stopPropagation(); setCanvasRenamingId(c.id); setCanvasRenameVal(c.name); }}
+                                      style={{ background: 'transparent', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 13, padding: '0 2px', flexShrink: 0 }}
+                                      title="Ganti nama">
+                                      ✏️
+                                    </button>
+                                  </div>
+                                )}
+
                                 <div style={{ fontSize: 11, color: '#475569' }}>
                                   {new Date(c.updated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                                 </div>
+
                                 {/* Tombol hapus */}
                                 {canvasList.length > 1 && (
                                   <button
