@@ -218,7 +218,7 @@ export default function NoteCanvas({ notes, apiBase, onOpenNote }) {
         minZoom={0.1} maxZoom={3}
         proOptions={{ hideAttribution: true }}
         style={{ background: '#070c17' }}
-        onClick={() => setShowAddMenu(false)}
+        onPaneClick={() => setShowAddMenu(false)}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#1e2d45" />
         <MiniMap nodeColor={() => '#1d4ed8'} maskColor="rgba(7,12,23,0.8)"
@@ -226,7 +226,8 @@ export default function NoteCanvas({ notes, apiBase, onOpenNote }) {
         <Controls style={{ background: '#0b1628', border: '1px solid #1e2d45', borderRadius: 8 }} showInteractive={false} />
 
         <Panel position="top-left">
-          <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', position: 'relative' }}>
+          {/* stopPropagation di sini agar klik toolbar tidak bubbles ke ReactFlow */}
+          <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6, alignItems: 'flex-start', position: 'relative' }}>
             <CanvasList
               canvases={canvases}
               activeId={activeId}
@@ -255,16 +256,16 @@ export default function NoteCanvas({ notes, apiBase, onOpenNote }) {
               {showAddMenu && (
                 <div style={{ position: 'absolute', top: 34, left: 0, background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 10, padding: 8, minWidth: 230, maxHeight: 280, overflowY: 'auto', zIndex: 100, boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
                   <p style={{ fontSize: 10, color: '#475569', margin: '0 0 6px 4px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>
-                    Pilih catatan:
+                    Pilih catatan ({notes.length}):
                   </p>
-                  {notes.filter(n => n.note_type !== 'fleeting').length === 0
-                    ? <p style={{ fontSize: 12, color: '#475569', padding: '6px 8px' }}>Belum ada catatan permanen.</p>
-                    : notes.filter(n => n.note_type !== 'fleeting').map(n => (
+                  {notes.length === 0
+                    ? <p style={{ fontSize: 12, color: '#475569', padding: '6px 8px' }}>Belum ada catatan.</p>
+                    : notes.map(n => (
                       <div key={n.id} onClick={() => addNoteCard(n)}
                         style={{ padding: '8px 10px', cursor: 'pointer', borderRadius: 7, fontSize: 13, color: '#e2e8f0' }}
                         onMouseEnter={e => e.currentTarget.style.background = '#1e293b'}
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                        📝 {n.title}
+                        {n.note_type === 'fleeting' ? '⚡' : '📝'} {n.title}
                       </div>
                     ))
                   }
