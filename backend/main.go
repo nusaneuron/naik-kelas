@@ -8251,7 +8251,7 @@ func (a *app) handleParticipantChangePassword(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	_, err = a.db.ExecContext(r.Context(), `UPDATE users SET password_hash=$1 WHERE id=$2`, string(newHash), u.ID)
+	_, err = a.db.ExecContext(r.Context(), `UPDATE users SET password_hash=$1, must_change_password=FALSE, updated_at=NOW() WHERE id=$2`, string(newHash), u.ID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal simpan password baru"})
 		return
