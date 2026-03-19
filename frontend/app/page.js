@@ -452,8 +452,8 @@ export default function Page() {
   }
 
   // ── Admin Contribution Functions ──────────────────────────────────────────
-  async function refreshAdminContributions() {
-    const res = await fetch(`${apiBase}/admin/contributions?status=${adminContribFilter}`, { credentials: 'include' });
+  async function refreshAdminContributions(status = adminContribFilter) {
+    const res = await fetch(`${apiBase}/admin/contributions?status=${status}`, { credentials: 'include' });
     if (res.ok) {
       const data = await res.json();
       setAdminContributions(data.items || []);
@@ -520,8 +520,10 @@ export default function Page() {
   const [loadedAdminSections, setLoadedAdminSections] = useState({});
 
   async function loadAdminSection(section) {
-    if (loadedAdminSections[section]) return;
-    setLoadedAdminSections(prev => ({...prev, [section]: true}));
+    // Kontribusi harus selalu fresh (agar item baru langsung terlihat setelah submit)
+    const alwaysRefresh = section === 'kontribusi';
+    if (!alwaysRefresh && loadedAdminSections[section]) return;
+    if (!alwaysRefresh) setLoadedAdminSections(prev => ({...prev, [section]: true}));
     if (section === 'poin') {
       const [phRes2, pbRes] = await Promise.all([
         fetch(`${apiBase}/admin/points/history`, { credentials: 'include' }),
@@ -3604,7 +3606,7 @@ export default function Page() {
                           key={status}
                           onClick={() => {
                             setAdminContribFilter(status);
-                            setTimeout(() => refreshAdminContributions(), 0);
+                            refreshAdminContributions(status);
                           }}
                           style={{
                             padding: '6px 12px', borderRadius: 8,
