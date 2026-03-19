@@ -8292,5 +8292,330 @@ func (a *app) handleParticipantChangePassword(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "message": "Password berhasil diubah"})
 }
 
+// ── Material Contributions ──────────────────────────────────────────────────
+
+// Helper functions for contribution exp handling
+func (a *app) awardExp(ctx context.Context, userID int64, ruleKey, sourceRef string) {
+	a.applyExpRule(ctx, userID, ruleKey, fmt.Sprintf("Kontribusi materi (%s)", ruleKey))
+}
+
+func (a *app) awardExpTx(ctx context.Context, tx *sql.Tx, userID int64, ruleKey, sourceRef string) {
+	var expVal, pointBonus int64
+	if err := tx.QueryRowContext(ctx, `SELECT rule_value, COALESCE(point_bonus,0) FROM exp_rules WHERE rule_key=$1`, ruleKey).Scan(&expVal, &pointBonus); err != nil {
+		return
+	}
+	if expVal > 0 {
+		// Insert exp wallet if not exists
+		_, _ = tx.ExecContext(ctx, `INSERT INTO exp_wallets (user_id, total_exp, updated_at) VALUES ($1,0,NOW()) ON CONFLICT (user_id) DO NOTHING`, userID)
+		
+		// Get current total
+		var total int64
+		if err := tx.QueryRowContext(ctx, `SELECT total_exp FROM exp_wallets WHERE user_id=$1 FOR UPDATE`, userID).Scan(&total); err != nil {
+			return
+		}
+		
+		// Update wallet
+		next := total + expVal
+		_, _ = tx.ExecContext(ctx, `UPDATE exp_wallets SET total_exp=$1, updated_at=NOW() WHERE user_id=$2`, next, userID)
+		
+		// Insert ledger entry
+		_, _ = tx.ExecContext(ctx, `INSERT INTO exp_ledger (user_id, delta, type, reason, source_ref) VALUES ($1,$2,$3,$4,$5)`, 
+			userID, expVal, "contribution", fmt.Sprintf("Kontribusi materi (%s)", ruleKey), sourceRef)
+	}
+}
+
+type contributionItem struct {
+	ID             int64  `json:"id"`
+	Title          string `json:"title"`
+	Type           string `json:"type"`
+	Content        string `json:"content"`
+	Status         string `json:"status"`
+	AdminFeedback  string `json:"admin_feedback"`
+	ContributorID  int64  `json:"contributor_id"`
+	ContributorName string `json:"contributor_name"`
+	CategoryID     int    `json:"category_id"`
+	CategoryName   string `json:"category_name"`
+	ExpAwarded     int    `json:"exp_awarded"`
+	CreatedAt      string `json:"created_at"`
+	UpdatedAt      string `json:"updated_at"`
+	ReviewedAt     string `json:"reviewed_at"`
+	ReviewedBy     int64  `json:"reviewed_by"`
+	ReviewedByName string `json:"reviewed_by_name"`
+}
+
+func (a *app) handleParticipantContributions(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	rows, err := a.db.QueryContext(r.Context(), `
+		SELECT 
+			mc.id, mc.title, mc.type, mc.content, mc.status, 
+			COALESCE(mc.admin_feedback, ''), mc.exp_awarded, 
+			mc.created_at, mc.updated_at,
+			qc.name as category_name,
+			COALESCE(mc.reviewed_at, '1970-01-01'::timestamptz) as reviewed_at,
+			COALESCE(reviewer.name, '') as reviewed_by_name
+		FROM material_contributions mc
+		JOIN question_categories qc ON qc.id = mc.category_id  
+		LEFT JOIN users reviewer ON reviewer.id = mc.reviewed_by
+		WHERE mc.contributor_id = $1
+		ORDER BY mc.created_at DESC
+	`, u.ID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "database error"})
+		return
+	}
+	defer rows.Close()
+
+	items := []contributionItem{}
+	for rows.Next() {
+		var c contributionItem
+		var createdAt, updatedAt, reviewedAt time.Time
+		if err := rows.Scan(&c.ID, &c.Title, &c.Type, &c.Content, &c.Status, 
+			&c.AdminFeedback, &c.ExpAwarded, &createdAt, &updatedAt, 
+			&c.CategoryName, &reviewedAt, &c.ReviewedByName); err != nil {
+			continue
+		}
+		c.CreatedAt = createdAt.Format("2006-01-02 15:04")
+		c.UpdatedAt = updatedAt.Format("2006-01-02 15:04")
+		if reviewedAt.Year() > 1970 {
+			c.ReviewedAt = reviewedAt.Format("2006-01-02 15:04")
+		}
+		items = append(items, c)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (a *app) handleParticipantSubmitContribution(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	var req struct {
+		CategoryID int    `json:"category_id"`
+		Title      string `json:"title"`
+		Type       string `json:"type"`
+		Content    string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+
+	req.Title = strings.TrimSpace(req.Title)
+	req.Content = strings.TrimSpace(req.Content)
+	if req.Title == "" || req.Content == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "title dan content tidak boleh kosong"})
+		return
+	}
+	if req.Type == "" {
+		req.Type = "text"
+	}
+
+	// Cek apakah category_id valid
+	var categoryName string
+	if err := a.db.QueryRowContext(r.Context(), `SELECT name FROM question_categories WHERE id=$1`, req.CategoryID).Scan(&categoryName); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kategori tidak ditemukan"})
+		return
+	}
+
+	// Insert contribution
+	var contributionID int64
+	err = a.db.QueryRowContext(r.Context(), `
+		INSERT INTO material_contributions (contributor_id, category_id, title, type, content, status) 
+		VALUES ($1, $2, $3, $4, $5, 'pending') 
+		RETURNING id
+	`, u.ID, req.CategoryID, req.Title, req.Type, req.Content).Scan(&contributionID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal simpan kontribusi"})
+		return
+	}
+
+	// Award exp untuk submit
+	_ = a.awardExp(r.Context(), u.ID, "contribution_submit", fmt.Sprintf("contribution:%d", contributionID))
+
+	_ = a.logAdminAction(r.Context(), u.ID, "contribution.submit", fmt.Sprintf("contribution:%d", contributionID), req)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, 
+		"message": "Kontribusi berhasil dikirim dan sedang direview admin",
+		"contribution_id": contributionID,
+	})
+}
+
+func (a *app) handleAdminContributions(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.requireRole(r.Context(), r, "admin", "super_admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	status := r.URL.Query().Get("status")
+	if status == "" {
+		status = "pending"
+	}
+
+	rows, err := a.db.QueryContext(r.Context(), `
+		SELECT 
+			mc.id, mc.title, mc.type, mc.content, mc.status,
+			COALESCE(mc.admin_feedback, ''), mc.exp_awarded,
+			mc.created_at, mc.updated_at,
+			contributor.name as contributor_name,
+			qc.name as category_name,
+			COALESCE(mc.reviewed_at, '1970-01-01'::timestamptz) as reviewed_at,
+			COALESCE(reviewer.name, '') as reviewed_by_name
+		FROM material_contributions mc
+		JOIN users contributor ON contributor.id = mc.contributor_id
+		JOIN question_categories qc ON qc.id = mc.category_id
+		LEFT JOIN users reviewer ON reviewer.id = mc.reviewed_by
+		WHERE mc.status = $1 OR $1 = 'all'
+		ORDER BY mc.created_at DESC
+	`, status)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "database error"})
+		return
+	}
+	defer rows.Close()
+
+	items := []contributionItem{}
+	for rows.Next() {
+		var c contributionItem
+		var createdAt, updatedAt, reviewedAt time.Time
+		if err := rows.Scan(&c.ID, &c.Title, &c.Type, &c.Content, &c.Status,
+			&c.AdminFeedback, &c.ExpAwarded, &createdAt, &updatedAt,
+			&c.ContributorName, &c.CategoryName, &reviewedAt, &c.ReviewedByName); err != nil {
+			continue
+		}
+		c.CreatedAt = createdAt.Format("2006-01-02 15:04")
+		c.UpdatedAt = updatedAt.Format("2006-01-02 15:04")
+		if reviewedAt.Year() > 1970 {
+			c.ReviewedAt = reviewedAt.Format("2006-01-02 15:04")
+		}
+		items = append(items, c)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (a *app) handleAdminReviewContribution(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.requireRole(r.Context(), r, "admin", "super_admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	var req struct {
+		ContributionID int64  `json:"contribution_id"`
+		Action         string `json:"action"`        // approve, reject
+		AdminFeedback  string `json:"admin_feedback"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+
+	if req.Action != "approve" && req.Action != "reject" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "action harus 'approve' atau 'reject'"})
+		return
+	}
+
+	// Get contribution info
+	var contributorID int64
+	var categoryID int
+	var title, content, currentStatus string
+	err = a.db.QueryRowContext(r.Context(), `
+		SELECT contributor_id, category_id, title, content, status 
+		FROM material_contributions 
+		WHERE id = $1
+	`, req.ContributionID).Scan(&contributorID, &categoryID, &title, &content, &currentStatus)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "kontribusi tidak ditemukan"})
+		return
+	}
+
+	if currentStatus != "pending" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kontribusi sudah di-review sebelumnya"})
+		return
+	}
+
+	tx, err := a.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "transaction error"})
+		return
+	}
+	defer tx.Rollback()
+
+	// Update contribution status
+	_, err = tx.ExecContext(r.Context(), `
+		UPDATE material_contributions 
+		SET status = $1, admin_feedback = $2, reviewed_by = $3, reviewed_at = NOW(), updated_at = NOW()
+		WHERE id = $4
+	`, req.Action+"d", req.AdminFeedback, admin.ID, req.ContributionID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal update status"})
+		return
+	}
+
+	// Award exp based on action
+	expRule := "contribution_" + req.Action + "d"
+	expAwarded := 0
+	if expRule == "contribution_approved" {
+		expAwarded = 50
+	} else {
+		expAwarded = 5
+	}
+
+	// Update exp_awarded di contribution record
+	_, _ = tx.ExecContext(r.Context(), `
+		UPDATE material_contributions SET exp_awarded = $1 WHERE id = $2
+	`, expAwarded, req.ContributionID)
+
+	// Award exp to contributor
+	_ = a.awardExpTx(r.Context(), tx, contributorID, expRule, fmt.Sprintf("contribution:%d", req.ContributionID))
+
+	// If approved, add to learning_materials
+	if req.Action == "approve" {
+		// Get max order_no for this category
+		var maxOrder int
+		_ = tx.QueryRowContext(r.Context(), `SELECT COALESCE(MAX(order_no), 0) FROM learning_materials WHERE category_id = $1`, categoryID).Scan(&maxOrder)
+		
+		_, err = tx.ExecContext(r.Context(), `
+			INSERT INTO learning_materials (category_id, title, type, content, exp_reward, order_no, is_active) 
+			VALUES ($1, $2, $3, $4, 10, $5, TRUE)
+		`, categoryID, title+" (Kontribusi)", "text", content, maxOrder+1)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal tambah ke materi"})
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "transaction commit failed"})
+		return
+	}
+
+	action := fmt.Sprintf("contribution.%s", req.Action)
+	_ = a.logAdminAction(r.Context(), admin.ID, action, fmt.Sprintf("contribution:%d", req.ContributionID), req)
+	
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, 
+		"message": fmt.Sprintf("Kontribusi berhasil %s", req.Action == "approve" ? "disetujui" : "ditolak"),
+		"exp_awarded": expAwarded,
+	})
+}
+
 // ── Admin: Reset Password Peserta ────────────────────────────────────────────
 
