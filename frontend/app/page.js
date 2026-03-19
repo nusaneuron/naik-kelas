@@ -66,6 +66,15 @@ export default function Page() {
   const [adminLearningSummary, setAdminLearningSummary] = useState(null);
   const [reminderMsg, setReminderMsg] = useState('');
   const [reminderLoading, setReminderLoading] = useState(false);
+  
+  // Kontribusi
+  const [myContributions, setMyContributions] = useState([]);
+  const [showContributeForm, setShowContributeForm] = useState(false);
+  const [contributeTitle, setContributeTitle] = useState('');
+  const [contributeContent, setContributeContent] = useState('');
+  const [contributeCategoryId, setContributeCategoryId] = useState('');
+  const [contributeLoading, setContributeLoading] = useState(false);
+  
   // Render Markdown → HTML untuk web display
   function renderMD(md) {
     if (!md) return '';
@@ -258,6 +267,19 @@ export default function Page() {
       if (lRes.ok) setLeaderboard((await lRes.json()).items || []);
     } else if (section === 'catatan') {
       await refreshNotes();
+    } else if (section === 'kontribusi') {
+      const [contribRes, catRes] = await Promise.all([
+        fetch(`${apiBase}/participant/contributions`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/categories`, { credentials: 'include' }),
+      ]);
+      if (contribRes.ok) {
+        const data = await contribRes.json();
+        setMyContributions(data.items || []);
+      }
+      if (catRes.ok) {
+        const catData = await catRes.json();
+        setCategories(catData.items || []);
+      }
     }
   }
 
@@ -367,6 +389,71 @@ export default function Page() {
   async function loadGraph() {
     const res = await fetch(`${apiBase}/participant/notes/graph`, { credentials: 'include' });
     if (res.ok) { setGraphData(await res.json()); setNoteView('graph'); }
+  }
+
+  // ── Kontribusi Functions ──────────────────────────────────────────────────
+  async function refreshContributions() {
+    const res = await fetch(`${apiBase}/participant/contributions`, { credentials: 'include' });
+    if (res.ok) {
+      const data = await res.json();
+      setMyContributions(data.items || []);
+    }
+  }
+
+  async function submitContribution() {
+    if (!contributeTitle.trim() || !contributeContent.trim() || !contributeCategoryId) {
+      showMsg('Mohon lengkapi semua field', 'error');
+      return;
+    }
+    
+    setContributeLoading(true);
+    try {
+      const res = await fetch(`${apiBase}/participant/contributions/submit`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category_id: parseInt(contributeCategoryId),
+          title: contributeTitle.trim(),
+          type: 'text',
+          content: contributeContent.trim(),
+        }),
+      });
+      
+      const data = await res.json();
+      if (data.ok) {
+        showMsg(data.message || 'Kontribusi berhasil dikirim!', 'success');
+        setContributeTitle('');
+        setContributeContent('');
+        setContributeCategoryId('');
+        setShowContributeForm(false);
+        await refreshContributions();
+      } else {
+        showMsg(data.error || 'Gagal mengirim kontribusi', 'error');
+      }
+    } catch (err) {
+      showMsg('Error: ' + err.message, 'error');
+    } finally {
+      setContributeLoading(false);
+    }
+  }
+
+  function getStatusColor(status) {
+    switch (status) {
+      case 'pending': return '#f59e0b';
+      case 'approved': return '#10b981';
+      case 'rejected': return '#ef4444';
+      default: return '#6b7280';
+    }
+  }
+
+  function getStatusText(status) {
+    switch (status) {
+      case 'pending': return 'Menunggu Review';
+      case 'approved': return 'Disetujui';
+      case 'rejected': return 'Ditolak';
+      default: return status;
+    }
   }
 
   async function loadAdmin() {
@@ -1103,6 +1190,7 @@ export default function Page() {
                 ['profil',    '👤', 'Profil'],
                 ['catatan',   '📝', 'Catatan'],
                 ['materi',    '📚', 'Materi'],
+                ['kontribusi','💡', 'Kontribusi'],
                 ['quiz',      '🧠', 'Quiz & Tryout'],
                 ['redeem',    '🎁', 'Redeem'],
                 ['poin',      '💰', 'Poin'],
@@ -1915,6 +2003,214 @@ export default function Page() {
                   );
                 });
               })()}
+            </div>
+            </>)}
+
+            {/* ── Kontribusi ── */}
+            {participantSection === 'kontribusi' && (<>
+            <div style={{ display: 'grid', gridTemplateColumns: showContributeForm ? '1fr' : 'repeat(auto-fit, minmax(400px, 1fr))', gap: 16 }}>
+              
+              {!showContributeForm && (
+                <>
+                  {/* Header & Submit Button */}
+                  <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#e2e8f0' }}>💡 Kontribusi Materi</h2>
+                    <button
+                      onClick={() => setShowContributeForm(true)}
+                      style={{
+                        padding: '8px 16px', borderRadius: 10, border: 'none',
+                        background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+                        color: 'white', fontSize: 13, fontWeight: 700,
+                        cursor: 'pointer', transition: 'all 0.2s ease',
+                        boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)'
+                      }}
+                    >
+                      ✨ Kirim Kontribusi
+                    </button>
+                  </div>
+
+                  {/* My Contributions */}
+                  <Section title="📋 Kontribusi Saya" style={{ gridColumn: '1 / -1' }}>
+                    {myContributions.length ? (
+                      <div style={{ display: 'grid', gap: 12 }}>
+                        {myContributions.map((contrib) => (
+                          <div key={contrib.id} style={{
+                            border: `1px solid ${getStatusColor(contrib.status)}40`,
+                            borderRadius: 12, padding: 16, 
+                            background: `${getStatusColor(contrib.status)}08`
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                              <h4 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#e2e8f0' }}>
+                                {contrib.title}
+                              </h4>
+                              <span style={{
+                                padding: '4px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                                background: getStatusColor(contrib.status),
+                                color: 'white'
+                              }}>
+                                {getStatusText(contrib.status)}
+                              </span>
+                            </div>
+                            
+                            <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>
+                              Kategori: <span style={{ color: '#cbd5e1' }}>{contrib.category_name}</span> • 
+                              Dibuat: <span style={{ color: '#cbd5e1' }}>{contrib.created_at}</span>
+                              {contrib.exp_awarded > 0 && (
+                                <span style={{ color: '#10b981', marginLeft: 8 }}>
+                                  +{contrib.exp_awarded} EXP
+                                </span>
+                              )}
+                            </div>
+
+                            <div style={{ 
+                              fontSize: 13, color: '#94a3b8', lineHeight: 1.5,
+                              maxHeight: 60, overflow: 'hidden', marginBottom: 8
+                            }}>
+                              {contrib.content.slice(0, 200)}
+                              {contrib.content.length > 200 && '...'}
+                            </div>
+
+                            {contrib.admin_feedback && (
+                              <div style={{
+                                background: 'rgba(59, 130, 246, 0.1)', 
+                                border: '1px solid rgba(59, 130, 246, 0.2)',
+                                borderRadius: 8, padding: 10, marginTop: 8
+                              }}>
+                                <div style={{ fontSize: 11, color: '#60a5fa', fontWeight: 600, marginBottom: 4 }}>
+                                  💬 Feedback Admin:
+                                </div>
+                                <div style={{ fontSize: 12, color: '#cbd5e1' }}>
+                                  {contrib.admin_feedback}
+                                </div>
+                                {contrib.reviewed_at && (
+                                  <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                                    Review oleh {contrib.reviewed_by_name} • {contrib.reviewed_at}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="nk-empty">
+                        📝 Belum ada kontribusi. Yuk bagikan catatan bermanfaat untuk teman-teman!
+                      </div>
+                    )}
+                  </Section>
+                </>
+              )}
+
+              {/* Submit Form */}
+              {showContributeForm && (
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <Section title="✨ Kirim Kontribusi Materi">
+                    <div style={{ display: 'grid', gap: 16 }}>
+                      
+                      {/* Category Selection */}
+                      <div>
+                        <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: '#cbd5e1' }}>
+                          📚 Kategori Materi
+                        </label>
+                        <select
+                          value={contributeCategoryId}
+                          onChange={e => setContributeCategoryId(e.target.value)}
+                          style={{
+                            width: '100%', padding: '10px 12px', borderRadius: 8,
+                            border: '1px solid #1e2d45', background: '#0f172a',
+                            color: '#e2e8f0', fontSize: 14
+                          }}
+                        >
+                          <option value="">Pilih kategori...</option>
+                          {categories.map(cat => (
+                            <option key={cat.id} value={cat.id}>{cat.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Title Input */}
+                      <div>
+                        <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: '#cbd5e1' }}>
+                          📝 Judul Kontribusi
+                        </label>
+                        <input
+                          type="text"
+                          value={contributeTitle}
+                          onChange={e => setContributeTitle(e.target.value)}
+                          placeholder="Judul materi yang ingin dibagikan..."
+                          style={{
+                            width: '100%', padding: '10px 12px', borderRadius: 8,
+                            border: '1px solid #1e2d45', background: '#0f172a',
+                            color: '#e2e8f0', fontSize: 14
+                          }}
+                        />
+                      </div>
+
+                      {/* Content Textarea */}
+                      <div>
+                        <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: '#cbd5e1' }}>
+                          📋 Konten Materi
+                        </label>
+                        <textarea
+                          value={contributeContent}
+                          onChange={e => setContributeContent(e.target.value)}
+                          placeholder="Tulis materi, tips, atau catatan bermanfaat yang ingin kamu bagikan..."
+                          rows={8}
+                          style={{
+                            width: '100%', padding: '12px', borderRadius: 8,
+                            border: '1px solid #1e2d45', background: '#0f172a',
+                            color: '#e2e8f0', fontSize: 14, lineHeight: 1.5,
+                            resize: 'vertical', minHeight: 120
+                          }}
+                        />
+                        <div style={{ fontSize: 11, color: '#64748b', marginTop: 6 }}>
+                          💡 Tips: Berikan penjelasan yang jelas dan mudah dipahami. Kontribusi terbaik akan disetujui admin dan masuk ke materi resmi!
+                        </div>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                        <button
+                          onClick={() => {
+                            setShowContributeForm(false);
+                            setContributeTitle('');
+                            setContributeContent('');
+                            setContributeCategoryId('');
+                          }}
+                          style={{
+                            padding: '10px 20px', borderRadius: 8, border: '1px solid #374151',
+                            background: 'transparent', color: '#94a3b8', fontSize: 13,
+                            cursor: 'pointer', fontWeight: 600
+                          }}
+                        >
+                          Batal
+                        </button>
+                        <button
+                          onClick={submitContribution}
+                          disabled={contributeLoading || !contributeTitle.trim() || !contributeContent.trim() || !contributeCategoryId}
+                          style={{
+                            padding: '10px 24px', borderRadius: 8, border: 'none',
+                            background: contributeLoading || !contributeTitle.trim() || !contributeContent.trim() || !contributeCategoryId
+                              ? '#374151' 
+                              : 'linear-gradient(135deg, #10b981, #059669)',
+                            color: 'white', fontSize: 13, fontWeight: 700,
+                            cursor: contributeLoading || !contributeTitle.trim() || !contributeContent.trim() || !contributeCategoryId 
+                              ? 'not-allowed' 
+                              : 'pointer',
+                            opacity: contributeLoading || !contributeTitle.trim() || !contributeContent.trim() || !contributeCategoryId 
+                              ? 0.6 
+                              : 1
+                          }}
+                        >
+                          {contributeLoading ? '⏳ Mengirim...' : '🚀 Kirim Kontribusi'}
+                        </button>
+                      </div>
+
+                    </div>
+                  </Section>
+                </div>
+              )}
+
             </div>
             </>)}
 
