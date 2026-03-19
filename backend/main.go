@@ -8400,10 +8400,11 @@ func (a *app) handleParticipantContributions(w http.ResponseWriter, r *http.Requ
 			mc.created_at, mc.updated_at,
 			qc.name as category_name,
 			COALESCE(mc.reviewed_at, '1970-01-01'::timestamptz) as reviewed_at,
-			COALESCE(reviewer.name, '') as reviewed_by_name
+			COALESCE(rp.name, reviewer.phone, '') as reviewed_by_name
 		FROM material_contributions mc
 		JOIN question_categories qc ON qc.id = mc.category_id  
 		LEFT JOIN users reviewer ON reviewer.id = mc.reviewed_by
+		LEFT JOIN participant_profiles rp ON rp.user_id = reviewer.id
 		WHERE mc.contributor_id = $1
 		ORDER BY mc.created_at DESC
 	`, u.ID)
@@ -8512,14 +8513,16 @@ func (a *app) handleAdminContributions(w http.ResponseWriter, r *http.Request) {
 			mc.id, mc.title, mc.type, mc.content, mc.status,
 			COALESCE(mc.admin_feedback, ''), mc.exp_awarded,
 			mc.created_at, mc.updated_at,
-			contributor.name as contributor_name,
+			COALESCE(cp.name, contributor.phone) as contributor_name,
 			qc.name as category_name,
 			COALESCE(mc.reviewed_at, '1970-01-01'::timestamptz) as reviewed_at,
-			COALESCE(reviewer.name, '') as reviewed_by_name
+			COALESCE(rp.name, reviewer.phone, '') as reviewed_by_name
 		FROM material_contributions mc
 		JOIN users contributor ON contributor.id = mc.contributor_id
+		LEFT JOIN participant_profiles cp ON cp.user_id = contributor.id
 		JOIN question_categories qc ON qc.id = mc.category_id
 		LEFT JOIN users reviewer ON reviewer.id = mc.reviewed_by
+		LEFT JOIN participant_profiles rp ON rp.user_id = reviewer.id
 		WHERE mc.status = $1 OR $1 = 'all'
 		ORDER BY mc.created_at DESC
 	`, status)
