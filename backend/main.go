@@ -2459,6 +2459,10 @@ func (a *app) handleAdminCategories(w http.ResponseWriter, r *http.Request) {
 		if req.GroupID != nil && *req.GroupID > 0 {
 			groupIDVal = *req.GroupID
 		}
+		// Admin biasa: default otomatis ke group admin jika frontend tidak kirim group_id
+		if !isSuperAdmin(admin) && groupIDVal == nil && adminGID > 0 {
+			groupIDVal = int64(adminGID)
+		}
 		// Validasi: admin biasa tidak boleh konten global
 		if req.Action == "create" || req.Action == "update" {
 			if gErr := guardGlobalContent(admin, groupIDVal); gErr != nil {
