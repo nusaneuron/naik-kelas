@@ -2463,6 +2463,10 @@ func (a *app) handleAdminCategories(w http.ResponseWriter, r *http.Request) {
 		if !isSuperAdmin(admin) && groupIDVal == nil && adminGID > 0 {
 			groupIDVal = int64(adminGID)
 		}
+		if !isSuperAdmin(admin) && adminGID == 0 && (req.Action == "create" || req.Action == "update") {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "akun admin ini belum terhubung ke kelompok. minta super_admin set group dulu."})
+			return
+		}
 		// Validasi: admin biasa tidak boleh konten global
 		if req.Action == "create" || req.Action == "update" {
 			if gErr := guardGlobalContent(admin, groupIDVal); gErr != nil {
@@ -7064,13 +7068,38 @@ func (a *app) handleAdminGroups(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
-	// Hanya super_admin yang boleh akses manajemen kelompok
-	if !isSuperAdmin(u) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "hanya super_admin yang bisa mengelola kelompok"})
-		return
-	}
 
 	if r.Method == http.MethodGet {
+		// Admin biasa: kembalikan hanya group miliknya (agar dropdown tetap terisi)
+		if !isSuperAdmin(u) {
+			rows, err := a.db.QueryContext(ctx, `
+				SELECT g.id, g.name, g.code, g.description, g.is_active,
+				       COUNT(pp2.user_id) as member_count
+				FROM participant_profiles pp
+				JOIN groups g ON g.id = pp.group_id
+				LEFT JOIN participant_profiles pp2 ON pp2.group_id = g.id
+				WHERE pp.user_id = $1
+				GROUP BY g.id
+				ORDER BY g.created_at DESC
+			`, u.ID)
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
+				return
+			}
+			defer rows.Close()
+			items := []group{}
+			for rows.Next() {
+				var g group
+				if err := rows.Scan(&g.ID, &g.Name, &g.Code, &g.Description, &g.IsActive, &g.MemberCount); err != nil {
+					continue
+				}
+				items = append(items, g)
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"items": items})
+			return
+		}
+
+		// Super admin: lihat semua group
 		rows, err := a.db.QueryContext(ctx, `
 			SELECT g.id, g.name, g.code, g.description, g.is_active,
 			       COUNT(pp.user_id) as member_count
@@ -7096,6 +7125,10 @@ func (a *app) handleAdminGroups(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPost {
+		if !isSuperAdmin(u) {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "hanya super_admin yang bisa mengelola kelompok"})
+			return
+		}
 		var req struct {
 			Action      string `json:"action"`
 			ID          int    `json:"id"`
