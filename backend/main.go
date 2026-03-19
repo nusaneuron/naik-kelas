@@ -8610,9 +8610,16 @@ func (a *app) handleAdminReviewContribution(w http.ResponseWriter, r *http.Reque
 	action := fmt.Sprintf("contribution.%s", req.Action)
 	_ = a.logAdminAction(r.Context(), admin.ID, action, fmt.Sprintf("contribution:%d", req.ContributionID), req)
 	
+	var message string
+	if req.Action == "approve" {
+		message = "Kontribusi berhasil disetujui"
+	} else {
+		message = "Kontribusi berhasil ditolak"
+	}
+	
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok": true, 
-		"message": fmt.Sprintf("Kontribusi berhasil %s", req.Action == "approve" ? "disetujui" : "ditolak"),
+		"message": message,
 		"exp_awarded": expAwarded,
 	})
 }
