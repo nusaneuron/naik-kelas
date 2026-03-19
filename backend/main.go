@@ -244,6 +244,12 @@ func main() {
 	mux.HandleFunc("/admin/tryout-configs", a.handleAdminTryoutConfigs)
 	mux.HandleFunc("/participant/materials", a.handleParticipantMaterials)
 	mux.HandleFunc("/participant/materials/complete", a.handleParticipantMaterialComplete)
+
+	// Material Contributions
+	mux.HandleFunc("/participant/contributions", a.handleParticipantContributions)
+	mux.HandleFunc("/participant/contributions/submit", a.handleParticipantSubmitContribution)
+	mux.HandleFunc("/admin/contributions", a.handleAdminContributions)
+	mux.HandleFunc("/admin/contributions/review", a.handleAdminReviewContribution)
 	mux.HandleFunc("/participant/reflections", a.handleParticipantReflections)
 	mux.HandleFunc("/participant/reflection-reminder", a.handleParticipantReflectionReminder)
 	mux.HandleFunc("/participant/badges", a.handleParticipantBadges)
@@ -629,7 +635,10 @@ func (a *app) initDB(ctx context.Context) error {
 		('level_step', 100),
 		('reflection_daily', 15),
 		('material_complete', 10),
-		('feedback_submit', 5)
+		('feedback_submit', 5),
+		('contribution_submit', 5),
+		('contribution_approved', 50),
+		('contribution_rejected', 5)
 	ON CONFLICT (rule_key) DO NOTHING`)
 	_, _ = a.db.ExecContext(ctx, `ALTER TABLE exp_rules ADD COLUMN IF NOT EXISTS point_bonus INT NOT NULL DEFAULT 0`)
 
@@ -744,6 +753,28 @@ func (a *app) initDB(ctx context.Context) error {
 			material_id  INT NOT NULL REFERENCES learning_materials(id) ON DELETE CASCADE,
 			completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			UNIQUE(user_id, material_id)
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	// ── Material Contributions ──────────────────────────────────────────────
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS material_contributions (
+			id             BIGSERIAL PRIMARY KEY,
+			contributor_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			category_id    INT NOT NULL REFERENCES question_categories(id) ON DELETE CASCADE,
+			title          TEXT NOT NULL,
+			type           TEXT NOT NULL DEFAULT 'text',
+			content        TEXT NOT NULL,
+			status         TEXT NOT NULL DEFAULT 'pending', -- pending, approved, rejected
+			admin_feedback TEXT,
+			reviewed_by    BIGINT REFERENCES users(id) ON DELETE SET NULL,
+			reviewed_at    TIMESTAMPTZ,
+			exp_awarded    INT DEFAULT 0,
+			created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)
 	`)
 	if err != nil {
