@@ -8534,7 +8534,7 @@ func (a *app) handleParticipantSubmitContribution(w http.ResponseWriter, r *http
 }
 
 func (a *app) handleAdminContributions(w http.ResponseWriter, r *http.Request) {
-	_, err := a.requireRole(r.Context(), r, "admin", "super_admin")
+	admin, err := a.requireRole(r.Context(), r, "admin", "super_admin")
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
@@ -8545,24 +8545,48 @@ func (a *app) handleAdminContributions(w http.ResponseWriter, r *http.Request) {
 		status = "pending"
 	}
 
-	rows, err := a.db.QueryContext(r.Context(), `
-		SELECT 
-			mc.id, mc.title, mc.type, mc.content, mc.status,
-			COALESCE(mc.admin_feedback, ''), mc.exp_awarded,
-			mc.created_at, mc.updated_at,
-			COALESCE(cp.name, contributor.phone) as contributor_name,
-			qc.name as category_name,
-			COALESCE(mc.reviewed_at, '1970-01-01'::timestamptz) as reviewed_at,
-			COALESCE(rp.name, reviewer.phone, '') as reviewed_by_name
-		FROM material_contributions mc
-		JOIN users contributor ON contributor.id = mc.contributor_id
-		LEFT JOIN participant_profiles cp ON cp.user_id = contributor.id
-		JOIN question_categories qc ON qc.id = mc.category_id
-		LEFT JOIN users reviewer ON reviewer.id = mc.reviewed_by
-		LEFT JOIN participant_profiles rp ON rp.user_id = reviewer.id
-		WHERE mc.status = $1 OR $1 = 'all'
-		ORDER BY mc.created_at DESC
-	`, status)
+	adminGID := a.getAdminGroupIDFromUser(r.Context(), admin)
+	var rows *sql.Rows
+	if isSuperAdmin(admin) || adminGID == 0 {
+		rows, err = a.db.QueryContext(r.Context(), `
+			SELECT 
+				mc.id, mc.title, mc.type, mc.content, mc.status,
+				COALESCE(mc.admin_feedback, ''), mc.exp_awarded,
+				mc.created_at, mc.updated_at,
+				COALESCE(cp.name, contributor.phone) as contributor_name,
+				qc.name as category_name,
+				COALESCE(mc.reviewed_at, '1970-01-01'::timestamptz) as reviewed_at,
+				COALESCE(rp.name, reviewer.phone, '') as reviewed_by_name
+			FROM material_contributions mc
+			JOIN users contributor ON contributor.id = mc.contributor_id
+			LEFT JOIN participant_profiles cp ON cp.user_id = contributor.id
+			JOIN question_categories qc ON qc.id = mc.category_id
+			LEFT JOIN users reviewer ON reviewer.id = mc.reviewed_by
+			LEFT JOIN participant_profiles rp ON rp.user_id = reviewer.id
+			WHERE mc.status = $1 OR $1 = 'all'
+			ORDER BY mc.created_at DESC
+		`, status)
+	} else {
+		rows, err = a.db.QueryContext(r.Context(), `
+			SELECT 
+				mc.id, mc.title, mc.type, mc.content, mc.status,
+				COALESCE(mc.admin_feedback, ''), mc.exp_awarded,
+				mc.created_at, mc.updated_at,
+				COALESCE(cp.name, contributor.phone) as contributor_name,
+				qc.name as category_name,
+				COALESCE(mc.reviewed_at, '1970-01-01'::timestamptz) as reviewed_at,
+				COALESCE(rp.name, reviewer.phone, '') as reviewed_by_name
+			FROM material_contributions mc
+			JOIN users contributor ON contributor.id = mc.contributor_id
+			LEFT JOIN participant_profiles cp ON cp.user_id = contributor.id
+			JOIN question_categories qc ON qc.id = mc.category_id
+			LEFT JOIN users reviewer ON reviewer.id = mc.reviewed_by
+			LEFT JOIN participant_profiles rp ON rp.user_id = reviewer.id
+			WHERE (mc.status = $1 OR $1 = 'all')
+			  AND cp.group_id = $2
+			ORDER BY mc.created_at DESC
+		`, status, adminGID)
+	}
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "database error"})
 		return
