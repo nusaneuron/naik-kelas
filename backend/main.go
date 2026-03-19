@@ -8387,7 +8387,7 @@ type contributionItem struct {
 }
 
 func (a *app) handleParticipantContributions(w http.ResponseWriter, r *http.Request) {
-	u, err := a.requireRole(r.Context(), r, "participant")
+	u, err := a.requireRole(r.Context(), r, "participant", "admin", "super_admin")
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
@@ -8434,7 +8434,7 @@ func (a *app) handleParticipantContributions(w http.ResponseWriter, r *http.Requ
 }
 
 func (a *app) handleParticipantSubmitContribution(w http.ResponseWriter, r *http.Request) {
-	u, err := a.requireRole(r.Context(), r, "participant")
+	u, err := a.requireRole(r.Context(), r, "participant", "admin", "super_admin")
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
@@ -8602,22 +8602,25 @@ func (a *app) handleAdminReviewContribution(w http.ResponseWriter, r *http.Reque
 	defer tx.Rollback()
 
 	// Update contribution status
+	newStatus := "approved"
+	if req.Action == "reject" {
+		newStatus = "rejected"
+	}
 	_, err = tx.ExecContext(r.Context(), `
 		UPDATE material_contributions 
 		SET status = $1, admin_feedback = $2, reviewed_by = $3, reviewed_at = NOW(), updated_at = NOW()
 		WHERE id = $4
-	`, req.Action+"d", req.AdminFeedback, admin.ID, req.ContributionID)
+	`, newStatus, req.AdminFeedback, admin.ID, req.ContributionID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal update status"})
 		return
 	}
 
 	// Award exp based on action
-	expRule := "contribution_" + req.Action + "d"
-	expAwarded := 0
-	if expRule == "contribution_approved" {
-		expAwarded = 50
-	} else {
+	expRule := "contribution_approved"
+	expAwarded := 50
+	if req.Action == "reject" {
+		expRule = "contribution_rejected"
 		expAwarded = 5
 	}
 
