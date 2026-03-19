@@ -246,6 +246,7 @@ func main() {
 	mux.HandleFunc("/participant/materials/complete", a.handleParticipantMaterialComplete)
 
 	// Material Contributions
+	mux.HandleFunc("/participant/categories", a.handleParticipantCategories)
 	mux.HandleFunc("/participant/contributions", a.handleParticipantContributions)
 	mux.HandleFunc("/participant/contributions/submit", a.handleParticipantSubmitContribution)
 	mux.HandleFunc("/admin/contributions", a.handleAdminContributions)
@@ -8293,6 +8294,48 @@ func (a *app) handleParticipantChangePassword(w http.ResponseWriter, r *http.Req
 }
 
 // ── Material Contributions ──────────────────────────────────────────────────
+
+// handleParticipantCategories — kembalikan daftar kategori aktif untuk participant
+func (a *app) handleParticipantCategories(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant", "admin", "super_admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	// Ambil group_id user (jika ada)
+	var groupID int
+	_ = a.db.QueryRowContext(r.Context(), `SELECT COALESCE(group_id, 0) FROM participant_profiles WHERE user_id=$1`, u.ID).Scan(&groupID)
+
+	var rows *sql.Rows
+	if groupID > 0 {
+		rows, err = a.db.QueryContext(r.Context(), `
+			SELECT id, name FROM question_categories 
+			WHERE is_active=TRUE AND (group_id=$1 OR group_id IS NULL)
+			ORDER BY name ASC
+		`, groupID)
+	} else {
+		rows, err = a.db.QueryContext(r.Context(), `
+			SELECT id, name FROM question_categories 
+			WHERE is_active=TRUE ORDER BY name ASC
+		`)
+	}
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
+		return
+	}
+	defer rows.Close()
+
+	items := []map[string]any{}
+	for rows.Next() {
+		var id int
+		var name string
+		if rows.Scan(&id, &name) == nil {
+			items = append(items, map[string]any{"id": id, "name": name})
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
 
 // Helper functions for contribution exp handling
 func (a *app) awardExp(ctx context.Context, userID int64, ruleKey, sourceRef string) {
