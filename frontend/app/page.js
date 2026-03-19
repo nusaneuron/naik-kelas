@@ -75,6 +75,15 @@ export default function Page() {
   const [contributeCategoryId, setContributeCategoryId] = useState('');
   const [contributeLoading, setContributeLoading] = useState(false);
   
+  // Admin Kontribusi
+  const [adminContributions, setAdminContributions] = useState([]);
+  const [adminContribFilter, setAdminContribFilter] = useState('pending');
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewingContrib, setReviewingContrib] = useState(null);
+  const [reviewAction, setReviewAction] = useState('');
+  const [reviewFeedback, setReviewFeedback] = useState('');
+  const [reviewLoading, setReviewLoading] = useState(false);
+  
   // Render Markdown → HTML untuk web display
   function renderMD(md) {
     if (!md) return '';
@@ -456,6 +465,53 @@ export default function Page() {
     }
   }
 
+  // ── Admin Contribution Functions ──────────────────────────────────────────
+  async function refreshAdminContributions() {
+    const res = await fetch(`${apiBase}/admin/contributions?status=${adminContribFilter}`, { credentials: 'include' });
+    if (res.ok) {
+      const data = await res.json();
+      setAdminContributions(data.items || []);
+    }
+  }
+
+  function openReviewModal(contrib, action) {
+    setReviewingContrib(contrib);
+    setReviewAction(action);
+    setReviewFeedback('');
+    setShowReviewModal(true);
+  }
+
+  async function submitReview() {
+    if (!reviewingContrib || !reviewAction) return;
+    
+    setReviewLoading(true);
+    try {
+      const res = await fetch(`${apiBase}/admin/contributions/review`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contribution_id: reviewingContrib.id,
+          action: reviewAction,
+          admin_feedback: reviewFeedback.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (data.ok) {
+        showMsg(data.message || 'Review berhasil!', 'success');
+        setShowReviewModal(false);
+        await refreshAdminContributions();
+      } else {
+        showMsg(data.error || 'Gagal melakukan review', 'error');
+      }
+    } catch (err) {
+      showMsg('Error: ' + err.message, 'error');
+    } finally {
+      setReviewLoading(false);
+    }
+  }
+
   async function loadAdmin() {
     // Critical admin data — participants, categories, questions
     const [pRes, cRes, qRes] = await Promise.all([
@@ -534,6 +590,8 @@ export default function Page() {
     } else if (section === 'tryout') {
       const res = await fetch(`${apiBase}/admin/tryout-configs`, { credentials: 'include' });
       if (res.ok) setTryoutConfigs((await res.json()).configs || []);
+    } else if (section === 'kontribusi') {
+      await refreshAdminContributions();
     }
   }
 
@@ -2333,6 +2391,7 @@ export default function Page() {
                   ['bank', '📚', 'Bank Soal'],
                   ['tryout', '🎯', 'Tryout'],
                   ['materi', '📖', 'Materi'],
+                  ['kontribusi', '💡', 'Kontribusi'],
                   ['redeem', '🎁', 'Redeem'],
                   ['refleksi', '📔', 'Refleksi'],
                   ['badges', '🎖️', 'Badges'],
@@ -3676,6 +3735,224 @@ export default function Page() {
                       <p style={{ fontSize: 13, color: '#64748b' }}>Belum ada materi. Tambahkan di atas!</p>
                     )}
                   </AdminSection>
+                </>
+              )}
+
+              {/* Admin — Kontribusi */}
+              {adminSection === 'kontribusi' && (
+                <>
+                  <AdminSection title="💡 Review Kontribusi Materi">
+                    {/* Filter Status */}
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                      {['pending', 'approved', 'rejected', 'all'].map(status => (
+                        <button
+                          key={status}
+                          onClick={() => {
+                            setAdminContribFilter(status);
+                            setTimeout(() => refreshAdminContributions(), 0);
+                          }}
+                          style={{
+                            padding: '6px 12px', borderRadius: 8,
+                            border: adminContribFilter === status ? '1px solid #8b5cf6' : '1px solid #374151',
+                            background: adminContribFilter === status ? 'rgba(139, 92, 246, 0.1)' : 'transparent',
+                            color: adminContribFilter === status ? '#a78bfa' : '#94a3b8',
+                            fontSize: 12, fontWeight: 600, cursor: 'pointer'
+                          }}
+                        >
+                          {status === 'pending' ? '⏳ Pending' :
+                           status === 'approved' ? '✅ Disetujui' :
+                           status === 'rejected' ? '❌ Ditolak' : '📋 Semua'}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Contributions List */}
+                    {adminContributions.length > 0 ? (
+                      <div style={{ display: 'grid', gap: 16 }}>
+                        {adminContributions.map((contrib) => (
+                          <div key={contrib.id} style={{
+                            border: `1px solid ${getStatusColor(contrib.status)}40`,
+                            borderRadius: 12, padding: 20,
+                            background: `${getStatusColor(contrib.status)}08`
+                          }}>
+                            {/* Header */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                              <div style={{ flex: 1 }}>
+                                <h4 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700, color: '#e2e8f0' }}>
+                                  {contrib.title}
+                                </h4>
+                                <div style={{ fontSize: 13, color: '#94a3b8' }}>
+                                  👤 <span style={{ color: '#cbd5e1' }}>{contrib.contributor_name}</span> • 
+                                  📚 <span style={{ color: '#cbd5e1' }}>{contrib.category_name}</span> • 
+                                  📅 {contrib.created_at}
+                                  {contrib.exp_awarded > 0 && (
+                                    <span style={{ color: '#10b981', marginLeft: 8 }}>
+                                      ⭐ +{contrib.exp_awarded} EXP
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{
+                                  padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                                  background: getStatusColor(contrib.status),
+                                  color: 'white'
+                                }}>
+                                  {getStatusText(contrib.status)}
+                                </span>
+                                
+                                {contrib.status === 'pending' && (
+                                  <div style={{ display: 'flex', gap: 6 }}>
+                                    <button
+                                      onClick={() => openReviewModal(contrib, 'approve')}
+                                      style={{
+                                        padding: '6px 12px', borderRadius: 6, border: 'none',
+                                        background: '#10b981', color: 'white',
+                                        fontSize: 11, fontWeight: 600, cursor: 'pointer'
+                                      }}
+                                    >
+                                      ✅ Setujui
+                                    </button>
+                                    <button
+                                      onClick={() => openReviewModal(contrib, 'reject')}
+                                      style={{
+                                        padding: '6px 12px', borderRadius: 6, border: 'none',
+                                        background: '#ef4444', color: 'white',
+                                        fontSize: 11, fontWeight: 600, cursor: 'pointer'
+                                      }}
+                                    >
+                                      ❌ Tolak
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Content */}
+                            <div style={{
+                              background: 'rgba(15, 23, 42, 0.8)',
+                              border: '1px solid #1e2d45',
+                              borderRadius: 8, padding: 16, marginBottom: 12,
+                              fontSize: 14, color: '#cbd5e1', lineHeight: 1.6,
+                              maxHeight: 200, overflowY: 'auto'
+                            }}>
+                              {contrib.content.split('\n').map((line, i) => (
+                                <p key={i} style={{ margin: '0 0 8px 0' }}>
+                                  {line || '\u00A0'}
+                                </p>
+                              ))}
+                            </div>
+
+                            {/* Admin Feedback */}
+                            {contrib.admin_feedback && (
+                              <div style={{
+                                background: 'rgba(59, 130, 246, 0.1)',
+                                border: '1px solid rgba(59, 130, 246, 0.2)',
+                                borderRadius: 8, padding: 12
+                              }}>
+                                <div style={{ fontSize: 11, color: '#60a5fa', fontWeight: 600, marginBottom: 6 }}>
+                                  💬 Feedback Admin:
+                                </div>
+                                <div style={{ fontSize: 13, color: '#cbd5e1', marginBottom: 6 }}>
+                                  {contrib.admin_feedback}
+                                </div>
+                                <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                                  Review oleh {contrib.reviewed_by_name} • {contrib.reviewed_at}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="nk-empty">
+                        {adminContribFilter === 'pending' ? '📝 Tidak ada kontribusi pending' :
+                         adminContribFilter === 'approved' ? '✅ Tidak ada kontribusi yang disetujui' :
+                         adminContribFilter === 'rejected' ? '❌ Tidak ada kontribusi yang ditolak' :
+                         '📋 Belum ada kontribusi'}
+                      </div>
+                    )}
+                  </AdminSection>
+
+                  {/* Review Modal */}
+                  {showReviewModal && reviewingContrib && (
+                    <div style={{
+                      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+                      zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
+                    }}>
+                      <div style={{
+                        background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 16,
+                        padding: 24, width: '100%', maxWidth: 600
+                      }}>
+                        <h3 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 700, color: '#e2e8f0' }}>
+                          {reviewAction === 'approve' ? '✅ Setujui Kontribusi' : '❌ Tolak Kontribusi'}
+                        </h3>
+                        
+                        <div style={{ marginBottom: 16, padding: 16, background: 'rgba(15, 23, 42, 0.5)', borderRadius: 8 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: '#cbd5e1', marginBottom: 8 }}>
+                            {reviewingContrib.title}
+                          </div>
+                          <div style={{ fontSize: 12, color: '#94a3b8' }}>
+                            Oleh: {reviewingContrib.contributor_name} • Kategori: {reviewingContrib.category_name}
+                          </div>
+                        </div>
+
+                        <div style={{ marginBottom: 20 }}>
+                          <label style={{
+                            display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: '#cbd5e1'
+                          }}>
+                            💬 Feedback untuk Kontributor
+                            <span style={{ color: '#6b7280', fontWeight: 400 }}> (opsional)</span>
+                          </label>
+                          <textarea
+                            value={reviewFeedback}
+                            onChange={e => setReviewFeedback(e.target.value)}
+                            placeholder={
+                              reviewAction === 'approve' 
+                                ? "Berikan apresiasi dan komentar positif..."
+                                : "Jelaskan alasan penolakan dan saran perbaikan..."
+                            }
+                            rows={4}
+                            style={{
+                              width: '100%', padding: '12px', borderRadius: 8,
+                              border: '1px solid #1e2d45', background: '#0a1628',
+                              color: '#e2e8f0', fontSize: 14, lineHeight: 1.5,
+                              resize: 'vertical'
+                            }}
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                          <button
+                            onClick={() => setShowReviewModal(false)}
+                            disabled={reviewLoading}
+                            style={{
+                              padding: '10px 20px', borderRadius: 8, border: '1px solid #374151',
+                              background: 'transparent', color: '#94a3b8', fontSize: 13,
+                              cursor: reviewLoading ? 'not-allowed' : 'pointer', fontWeight: 600
+                            }}
+                          >
+                            Batal
+                          </button>
+                          <button
+                            onClick={submitReview}
+                            disabled={reviewLoading}
+                            style={{
+                              padding: '10px 24px', borderRadius: 8, border: 'none',
+                              background: reviewLoading ? '#374151' : 
+                                (reviewAction === 'approve' ? '#10b981' : '#ef4444'),
+                              color: 'white', fontSize: 13, fontWeight: 700,
+                              cursor: reviewLoading ? 'not-allowed' : 'pointer'
+                            }}
+                          >
+                            {reviewLoading ? '⏳ Memproses...' : 
+                             (reviewAction === 'approve' ? '✅ Setujui' : '❌ Tolak')}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
 
