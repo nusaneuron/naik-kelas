@@ -8442,7 +8442,7 @@ func (a *app) handleParticipantSubmitContribution(w http.ResponseWriter, r *http
 	}
 
 	// Award exp untuk submit
-	_ = a.awardExp(r.Context(), u.ID, "contribution_submit", fmt.Sprintf("contribution:%d", contributionID))
+	a.awardExp(r.Context(), u.ID, "contribution_submit", fmt.Sprintf("contribution:%d", contributionID))
 
 	_ = a.logAdminAction(r.Context(), u.ID, "contribution.submit", fmt.Sprintf("contribution:%d", contributionID), req)
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -8453,7 +8453,7 @@ func (a *app) handleParticipantSubmitContribution(w http.ResponseWriter, r *http
 }
 
 func (a *app) handleAdminContributions(w http.ResponseWriter, r *http.Request) {
-	admin, err := a.requireRole(r.Context(), r, "admin", "super_admin")
+	_, err := a.requireRole(r.Context(), r, "admin", "super_admin")
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
@@ -8584,7 +8584,7 @@ func (a *app) handleAdminReviewContribution(w http.ResponseWriter, r *http.Reque
 	`, expAwarded, req.ContributionID)
 
 	// Award exp to contributor
-	_ = a.awardExpTx(r.Context(), tx, contributorID, expRule, fmt.Sprintf("contribution:%d", req.ContributionID))
+	a.awardExpTx(r.Context(), tx, contributorID, expRule, fmt.Sprintf("contribution:%d", req.ContributionID))
 
 	// If approved, add to learning_materials
 	if req.Action == "approve" {
