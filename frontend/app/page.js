@@ -17,6 +17,7 @@ export default function Page() {
   const [adminViewMode, setAdminViewMode] = useState('participant');
   const [adminSection, setAdminSection] = useState('peserta');
   const [participantSection, setParticipantSection] = useState('profil');
+  const [entryMode, setEntryMode] = useState(''); // '' | 'notes' | 'portal'
   const [confirmAction, setConfirmAction] = useState(null);
 
   const [phone, setPhone] = useState('');
@@ -657,7 +658,15 @@ export default function Page() {
       try {
         const u = await fetchMe();
         setMe(u);
-        if (u) await loadPortal(u.role);
+        if (u) {
+          const savedMode = localStorage.getItem('nk_entry_mode') || '';
+          if (savedMode === 'notes' || savedMode === 'portal') {
+            setEntryMode(savedMode);
+            if (savedMode === 'notes') setParticipantSection('catatan');
+          }
+          await loadPortal(u.role);
+          if (savedMode === 'notes') await loadSection('catatan');
+        }
       } catch(e) {
         console.error('Portal load error:', e);
       } finally {
@@ -677,12 +686,15 @@ export default function Page() {
     if (!res.ok) return setErr(d.error || 'Login gagal');
     const u = await fetchMe();
     setMe(u);
+    setEntryMode(''); // paksa pilih mode setiap login
+    localStorage.removeItem('nk_entry_mode');
     await loadPortal(u.role);
   }
 
   async function logout() {
     await fetch(`${apiBase}/auth/logout`, { method: 'POST', credentials: 'include' });
-    setMe(null); setProfile(null);
+    setMe(null); setProfile(null); setEntryMode('');
+    localStorage.removeItem('nk_entry_mode');
   }
 
   function openConfirm(type, participant) {
@@ -1030,6 +1042,20 @@ export default function Page() {
   const isSuperAdmin = me?.role === 'super_admin';
   const showParticipantView = !isAdmin || adminViewMode === 'participant';
   const showAdminView = isAdmin && adminViewMode === 'admin';
+  const notesOnlyMode = entryMode === 'notes';
+  const participantMenu = notesOnlyMode
+    ? [['catatan', '📝', 'Catatan']]
+    : [
+        ['profil', '👤', 'Profil'],
+        ['catatan', '📝', 'Catatan'],
+        ['materi', '📚', 'Materi'],
+        ['quiz', '🧠', 'Quiz & Tryout'],
+        ['redeem', '🎁', 'Redeem'],
+        ['poin', '💰', 'Poin'],
+        ['refleksi', '📔', 'Refleksi'],
+        ['badges', '🎖️', 'Badges'],
+        ['leaderboard', '🏆', 'Leaderboard'],
+      ];
 
   // ── Loading ──────────────────────────────────────────────
   if (loading) {
@@ -1151,6 +1177,30 @@ export default function Page() {
     );
   }
 
+  // ── Pilih Mode Masuk ─────────────────────────────────────
+  if (!entryMode) {
+    return (
+      <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 16 }}>
+        <div style={{ width: '100%', maxWidth: 680, border: '1px solid #1e2d45', borderRadius: 20, padding: 24, background: 'rgba(15,23,42,0.85)' }}>
+          <h2 style={{ margin: '0 0 8px', color: '#fff' }}>Pilih Mode Masuk</h2>
+          <p style={{ margin: '0 0 18px', color: '#94a3b8', fontSize: 13 }}>Kamu bisa masuk cepat ke Catatan atau ke Portal Lengkap. Data catatan tetap sinkron di keduanya.</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <button onClick={async () => { setEntryMode('notes'); localStorage.setItem('nk_entry_mode', 'notes'); setParticipantSection('catatan'); await loadSection('catatan'); }}
+              style={{ border: '1px solid #334155', borderRadius: 14, padding: 16, background: '#0b1220', color: '#e2e8f0', textAlign: 'left', cursor: 'pointer' }}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>📝 Mode Catatan</div>
+              <div style={{ fontSize: 12, color: '#94a3b8' }}>Hanya fitur catatan (cepat, fokus).</div>
+            </button>
+            <button onClick={() => { setEntryMode('portal'); localStorage.setItem('nk_entry_mode', 'portal'); }}
+              style={{ border: '1px solid #334155', borderRadius: 14, padding: 16, background: '#0b1220', color: '#e2e8f0', textAlign: 'left', cursor: 'pointer' }}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>🎓 Portal Lengkap</div>
+              <div style={{ fontSize: 12, color: '#94a3b8' }}>Semua fitur Naik Kelas.</div>
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   // ── Portal ──────────────────────────────────────────────
   return (
     <main style={{ minHeight: '100vh', padding: '16px' }}>
@@ -1204,6 +1254,20 @@ export default function Page() {
                 ⚙️ Admin
               </button>
             )}
+            {showParticipantView && (
+              <button onClick={async () => {
+                const next = notesOnlyMode ? 'portal' : 'notes';
+                setEntryMode(next);
+                localStorage.setItem('nk_entry_mode', next);
+                if (next === 'notes') { setParticipantSection('catatan'); await loadSection('catatan'); }
+              }} style={{
+                border: '1px solid rgba(0,0,0,0.25)',
+                background: 'rgba(0,0,0,0.2)', color: 'white',
+                borderRadius: 10, padding: '7px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600
+              }}>
+                {notesOnlyMode ? '🎓 Portal Lengkap' : '📝 Mode Catatan'}
+              </button>
+            )}
             <button onClick={logout} style={{
               border: '1px solid rgba(0,0,0,0.25)',
               background: 'rgba(0,0,0,0.2)', color: 'white',
@@ -1238,17 +1302,7 @@ export default function Page() {
             {/* Sidebar Peserta */}
             <aside className="nk-sidebar">
               <p className="nk-sidebar-label" style={{ fontSize: 11, color: '#475569', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', margin: '0 0 12px 8px' }}>Menu</p>
-              {[
-                ['profil',    '👤', 'Profil'],
-                ['catatan',   '📝', 'Catatan'],
-                ['materi',    '📚', 'Materi'],
-                ['quiz',      '🧠', 'Quiz & Tryout'],
-                ['redeem',    '🎁', 'Redeem'],
-                ['poin',      '💰', 'Poin'],
-                ['refleksi',  '📔', 'Refleksi'],
-                ['badges',    '🎖️', 'Badges'],
-                ['leaderboard','🏆','Leaderboard'],
-              ].map(([key, icon, label]) => (
+              {participantMenu.map(([key, icon, label]) => (
                 <button key={key} onClick={() => { setParticipantSection(key); loadSection(key); }} style={{
                   display: 'flex', alignItems: 'center', gap: 10,
                   padding: '9px 12px', borderRadius: 10, cursor: 'pointer',
