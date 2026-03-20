@@ -263,15 +263,14 @@ export default function Page() {
     if (loadedSections[section]) return;
     setLoadedSections(prev => ({...prev, [section]: true}));
     if (section === 'profil') {
-      const [rRes, bdgRes] = await Promise.all([
+      const [rRes, bdgRes, lRes] = await Promise.all([
         fetch(`${apiBase}/participant/reminder`, { credentials: 'include' }),
         fetch(`${apiBase}/participant/badges`, { credentials: 'include' }),
+        fetch(`${apiBase}/participant/leaderboard`, { credentials: 'include' }),
       ]);
       if (rRes.ok) setMyReminder(await rRes.json());
       if (bdgRes.ok) setMyBadges((await bdgRes.json()).items || []);
-    } else if (section === 'badges') {
-      const bdgRes2 = await fetch(`${apiBase}/participant/badges`, { credentials: 'include' });
-      if (bdgRes2.ok) setMyBadges((await bdgRes2.json()).items || []);
+      if (lRes.ok) setLeaderboard((await lRes.json()).items || []);
     } else if (section === 'quiz') {
       const hRes = await fetch(`${apiBase}/participant/history`, { credentials: 'include' });
       if (hRes.ok) setHistory(await hRes.json());
@@ -1175,8 +1174,6 @@ export default function Page() {
         ['quiz', '🧠', 'Quiz & Tryout'],
         ['redeem', '🎁', 'Redeem'],
         ['poin', '💰', 'Poin'],
-        ['badges', '🎖️', 'Badges'],
-        ['leaderboard', '🏆', 'Leaderboard'],
       ];
 
   // ── Loading ──────────────────────────────────────────────
@@ -1625,27 +1622,8 @@ export default function Page() {
             )}
 
             {/* ── Poin ── */}
-            {/* Badges di profil — preview 3 terbaru */}
-            {participantSection === 'profil' && myBadges.length > 0 && (
-              <Section title="🎖️ Badges Saya">
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: myBadges.length > 3 ? 12 : 0 }}>
-                  {myBadges.slice(0, 6).map((b, i) => (
-                    <div key={i} title={`${b.name}${b.description ? ` — ${b.description}` : ''}${b.note ? `\n📝 ${b.note}` : ''}\n📅 ${b.awarded_at}`}
-                      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '12px 14px', width: 90, textAlign: 'center', cursor: 'default', transition: 'border-color 0.2s' }}
-                      onMouseEnter={e => e.currentTarget.style.borderColor='#7c3aed'}
-                      onMouseLeave={e => e.currentTarget.style.borderColor='#1e2d45'}>
-                      {b.icon_url ? <img src={b.icon_url} alt={b.name} style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover' }} /> : <span style={{ fontSize: 32 }}>🎖️</span>}
-                      <span style={{ fontSize: 11, fontWeight: 700, color: '#e2e8f0', lineHeight: 1.3 }}>{b.name}</span>
-                      <span style={{ fontSize: 10, color: '#475569' }}>{b.awarded_at}</span>
-                    </div>
-                  ))}
-                </div>
-                {myBadges.length > 6 && <button onClick={() => { setParticipantSection('badges'); loadSection('badges'); }} style={{ background: 'none', border: 'none', color: '#7c3aed', fontSize: 13, cursor: 'pointer', padding: 0 }}>Lihat semua {myBadges.length} badges →</button>}
-              </Section>
-            )}
-
-            {/* ── Badges ── */}
-            {participantSection === 'badges' && (
+            {/* ── Badges (dipindah ke Profil) ── */}
+            {participantSection === 'profil' && (
               <Section title="🎖️ Koleksi Badges">
                 {myBadges.length > 0 ? (
                   <>
@@ -1701,8 +1679,8 @@ export default function Page() {
             {/* Leaderboard */}
             </>)}
 
-            {/* ── Leaderboard ── */}
-            {participantSection === 'leaderboard' && (<>
+            {/* ── Leaderboard (dipindah ke Profil) ── */}
+            {participantSection === 'profil' && (<>
             <Section title="🏆 Leaderbot Tryout">
               {leaderboard.length ? (
                 <div className="nk-table-wrap" style={{ maxHeight: 280, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
