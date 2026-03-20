@@ -1727,7 +1727,7 @@ export default function Page() {
                     style={{ padding: '7px 14px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
                     📔 Refleksi Baru
                   </button>
-                  <button onClick={() => setNoteView('list')}
+                  <button onClick={() => { setNoteView('list'); setNoteListMode('all'); }}
                     style={{ padding: '7px 12px', background: noteView === 'list' ? '#1e3a5f' : 'transparent', color: noteView === 'list' ? '#93c5fd' : '#64748b', border: '1px solid #1e2d45', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>
                     📋 Daftar
                   </button>
@@ -1742,7 +1742,6 @@ export default function Page() {
                   {noteView === 'list' && (
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       {[
-                        ['all', '📚 Semua Daftar'],
                         ['permanent', '📌 Permanen'],
                         ['quick', '⚡ Cepat'],
                         ['reflection', '📔 Refleksi Diri'],
