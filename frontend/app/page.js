@@ -192,6 +192,10 @@ export default function Page() {
   const [adminExpHistory, setAdminExpHistory] = useState([]);
   const [adminExpStatus, setAdminExpStatus] = useState([]);
   const [expReportSetting, setExpReportSetting] = useState({ time_of_day: '10:00', timezone: 'Asia/Jakarta', is_active: true });
+  const [aiSettings, setAiSettings] = useState({
+    provider: 'sumopod', base_url: 'https://ai.sumopod.com/v1/chat/completions', api_key: '',
+    api_key_masked: '', model: 'gpt-4o-mini', temperature: 0.7, max_tokens: 2000, is_active: true,
+  });
   const [pointPhone, setPointPhone] = useState('');
   const [pointDelta, setPointDelta] = useState('');
   const [pointReason, setPointReason] = useState('');
@@ -587,6 +591,9 @@ export default function Page() {
       if (res.ok) setTryoutConfigs((await res.json()).configs || []);
     } else if (section === 'kontribusi') {
       await refreshAdminContributions();
+    } else if (section === 'ai') {
+      const res = await fetch(`${apiBase}/admin/ai-settings`, { credentials: 'include' });
+      if (res.ok) setAiSettings(await res.json());
     }
   }
 
@@ -905,6 +912,38 @@ export default function Page() {
     if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal update rule EXP.'); setBusy(false); return; }
     await refreshAdmin();
     setActionType('success'); setActionMsg(`Rule EXP ${ruleKey} berhasil diperbarui.`); setBusy(false);
+  }
+
+  async function saveAISettings() {
+    setBusy(true); setActionMsg('');
+    const res = await fetch(`${apiBase}/admin/ai-settings`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({
+        provider: aiSettings.provider,
+        base_url: aiSettings.base_url,
+        api_key: aiSettings.api_key || '',
+        model: aiSettings.model,
+        temperature: Number(aiSettings.temperature || 0.7),
+        max_tokens: Number(aiSettings.max_tokens || 2000),
+        is_active: !!aiSettings.is_active,
+      })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal simpan AI settings.'); setBusy(false); return; }
+    const rr = await fetch(`${apiBase}/admin/ai-settings`, { credentials: 'include' });
+    if (rr.ok) setAiSettings(await rr.json());
+    setActionType('success'); setActionMsg('AI Settings berhasil disimpan.'); setBusy(false);
+  }
+
+  async function testAISettings() {
+    setBusy(true); setActionMsg('');
+    const res = await fetch(`${apiBase}/admin/ai-settings`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ action: 'test' })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Tes AI gagal.'); setBusy(false); return; }
+    setActionType('success'); setActionMsg(`Tes AI OK: ${d.result || 'berhasil'}`); setBusy(false);
   }
 
   async function claimRedeem(itemId) {
@@ -2322,6 +2361,7 @@ export default function Page() {
                   ['jadwal', '📅', 'Jadwal Belajar'],
                   ['poin', '💰', 'Poin'],
                   ['exp', '⭐', 'EXP'],
+                  ...(isSuperAdmin ? [['ai', '🤖', 'AI Settings']] : []),
                 ].map(([key, icon, label]) => (
                   <button
                     key={key}
@@ -3354,6 +3394,50 @@ export default function Page() {
                       </table>
                     </div>
                   ) : <div className="nk-empty">Belum ada history EXP.</div>}
+                </AdminSection>
+              )}
+
+              {/* Admin — AI Settings (super_admin only) */}
+              {adminSection === 'ai' && isSuperAdmin && (
+                <AdminSection title="🤖 AI Settings (Super Admin)">
+                  <div style={{ display: 'grid', gap: 10, maxWidth: 760 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <div>
+                        <label style={fieldLbl}>Provider</label>
+                        <input className="nk-input-sm" value={aiSettings.provider || ''} onChange={e=>setAiSettings(s=>({...s, provider:e.target.value}))} />
+                      </div>
+                      <div>
+                        <label style={fieldLbl}>Model</label>
+                        <input className="nk-input-sm" value={aiSettings.model || ''} onChange={e=>setAiSettings(s=>({...s, model:e.target.value}))} />
+                      </div>
+                    </div>
+                    <div>
+                      <label style={fieldLbl}>Base URL</label>
+                      <input className="nk-input-sm" value={aiSettings.base_url || ''} onChange={e=>setAiSettings(s=>({...s, base_url:e.target.value}))} />
+                    </div>
+                    <div>
+                      <label style={fieldLbl}>API Key {aiSettings.api_key_masked ? <span style={{ color:'#64748b' }}>(current: {aiSettings.api_key_masked})</span> : null}</label>
+                      <input className="nk-input-sm" type="password" placeholder="Kosongkan jika tidak ingin ganti key" value={aiSettings.api_key || ''} onChange={e=>setAiSettings(s=>({...s, api_key:e.target.value}))} />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '120px 120px 1fr', gap: 8, alignItems:'end' }}>
+                      <div>
+                        <label style={fieldLbl}>Temp</label>
+                        <input className="nk-input-sm" type="number" step="0.1" min="0" max="2" value={aiSettings.temperature ?? 0.7} onChange={e=>setAiSettings(s=>({...s, temperature:e.target.value}))} />
+                      </div>
+                      <div>
+                        <label style={fieldLbl}>Max Tokens</label>
+                        <input className="nk-input-sm" type="number" min="1" value={aiSettings.max_tokens ?? 2000} onChange={e=>setAiSettings(s=>({...s, max_tokens:e.target.value}))} />
+                      </div>
+                      <label style={{ display:'flex', alignItems:'center', gap:6, color:'#cbd5e1', fontSize:13 }}>
+                        <input type="checkbox" checked={!!aiSettings.is_active} onChange={e=>setAiSettings(s=>({...s, is_active:e.target.checked}))} />
+                        Active
+                      </label>
+                    </div>
+                    <div style={{ display:'flex', gap:8 }}>
+                      <BtnSm disabled={busy} onClick={saveAISettings}>{busy ? '...' : '💾 Simpan AI Settings'}</BtnSm>
+                      <BtnSm disabled={busy} onClick={testAISettings}>🧪 Test Koneksi</BtnSm>
+                    </div>
+                  </div>
                 </AdminSection>
               )}
 

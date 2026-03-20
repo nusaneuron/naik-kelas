@@ -251,6 +251,7 @@ func main() {
 	mux.HandleFunc("/participant/contributions/submit", a.handleParticipantSubmitContribution)
 	mux.HandleFunc("/admin/contributions", a.handleAdminContributions)
 	mux.HandleFunc("/admin/contributions/review", a.handleAdminReviewContribution)
+	mux.HandleFunc("/admin/ai-settings", a.handleAdminAISettings)
 	mux.HandleFunc("/participant/reflections", a.handleParticipantReflections)
 	mux.HandleFunc("/participant/reflection-reminder", a.handleParticipantReflectionReminder)
 	mux.HandleFunc("/participant/badges", a.handleParticipantBadges)
@@ -642,6 +643,27 @@ func (a *app) initDB(ctx context.Context) error {
 		('contribution_rejected', 5)
 	ON CONFLICT (rule_key) DO NOTHING`)
 	_, _ = a.db.ExecContext(ctx, `ALTER TABLE exp_rules ADD COLUMN IF NOT EXISTS point_bonus INT NOT NULL DEFAULT 0`)
+
+	// AI Provider Settings (super_admin only)
+	_, _ = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS ai_provider_settings (
+			id INT PRIMARY KEY,
+			provider TEXT NOT NULL DEFAULT 'sumopod',
+			base_url TEXT NOT NULL DEFAULT 'https://ai.sumopod.com/v1/chat/completions',
+			api_key TEXT NOT NULL DEFAULT '',
+			model TEXT NOT NULL DEFAULT 'gpt-4o-mini',
+			temperature DOUBLE PRECISION NOT NULL DEFAULT 0.7,
+			max_tokens INT NOT NULL DEFAULT 2000,
+			is_active BOOLEAN NOT NULL DEFAULT TRUE,
+			updated_by BIGINT REFERENCES users(id),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	_, _ = a.db.ExecContext(ctx, `
+		INSERT INTO ai_provider_settings (id, provider, base_url, api_key, model, temperature, max_tokens, is_active)
+		VALUES (1, 'sumopod', 'https://ai.sumopod.com/v1/chat/completions', $1, 'gpt-4o-mini', 0.7, 2000, TRUE)
+		ON CONFLICT (id) DO NOTHING
+	`, os.Getenv("SUMOPOD_API_KEY"))
 
 	// Badges
 	_, _ = a.db.ExecContext(ctx, `
@@ -5846,37 +5868,8 @@ Format output HARUS berupa JSON array of strings, setiap item adalah satu bubble
 Gunakan Bahasa Indonesia, ringkas, jelas, boleh pakai markdown (**bold**, bullet, heading).`
 	userPrompt := fmt.Sprintf("Judul materi: %s\n\nCatatan sumber:\n%s\n\nBuat %d bubble.", title, source, bubbleCount)
 
-	type aiMsg struct {
-		Role    string `json:"role"`
-		Content string `json:"content"`
-	}
-	type aiReq struct {
-		Model       string  `json:"model"`
-		Messages    []aiMsg `json:"messages"`
-		MaxTokens   int     `json:"max_tokens"`
-		Temperature float64 `json:"temperature"`
-	}
-	payload, _ := json.Marshal(aiReq{
-		Model: "gpt-4o-mini",
-		Messages: []aiMsg{{Role: "system", Content: systemPrompt}, {Role: "user", Content: userPrompt}},
-		MaxTokens: 2000, Temperature: 0.7,
-	})
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://ai.sumopod.com/v1/chat/completions", bytes.NewReader(payload))
+	content, err := a.aiChat(ctx, systemPrompt, userPrompt, 2000, 0.7)
 	if err != nil { return "", err }
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer sk-bTZ7vafsuH0O4NMduyvwUA")
-	resp, err := (&http.Client{Timeout: 60 * time.Second}).Do(httpReq)
-	if err != nil { return "", err }
-	defer resp.Body.Close()
-
-	var aiResp struct {
-		Choices []struct{ Message struct{ Content string `json:"content"` } `json:"message"` } `json:"choices"`
-		Error   *struct{ Message string `json:"message"` } `json:"error"`
-	}
-	if json.NewDecoder(resp.Body).Decode(&aiResp) != nil { return "", errors.New("gagal parse respons AI") }
-	if aiResp.Error != nil { return "", errors.New(aiResp.Error.Message) }
-	if len(aiResp.Choices) == 0 { return "", errors.New("AI tidak menghasilkan konten") }
-	content := strings.TrimSpace(aiResp.Choices[0].Message.Content)
 
 	var bubbles []string
 	start := strings.Index(content, "[")
@@ -6415,54 +6408,11 @@ Output langsung JSON array saja.`
 		userPrompt = fmt.Sprintf("Kategori: %s\n\n", catName) + userPrompt
 	}
 
-	type aiMsg struct {
-		Role    string `json:"role"`
-		Content string `json:"content"`
-	}
-	type aiReqBody struct {
-		Model       string  `json:"model"`
-		Messages    []aiMsg `json:"messages"`
-		MaxTokens   int     `json:"max_tokens"`
-		Temperature float64 `json:"temperature"`
-	}
-	payload, _ := json.Marshal(aiReqBody{
-		Model: "gpt-4o-mini",
-		Messages: []aiMsg{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: userPrompt},
-		},
-		MaxTokens:   3000,
-		Temperature: 0.6,
-	})
-
-	httpReq, _ := http.NewRequestWithContext(ctx, http.MethodPost, "https://ai.sumopod.com/v1/chat/completions", bytes.NewReader(payload))
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer sk-bTZ7vafsuH0O4NMduyvwUA")
-
-	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err2 := client.Do(httpReq)
+	content, err2 := a.aiChat(ctx, systemPrompt, userPrompt, 3000, 0.6)
 	if err2 != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "gagal hubungi AI: " + err2.Error()})
 		return
 	}
-	defer resp.Body.Close()
-
-	var aiResp struct {
-		Choices []struct {
-			Message struct{ Content string `json:"content"` } `json:"message"`
-		} `json:"choices"`
-		Error *struct{ Message string `json:"message"` } `json:"error"`
-	}
-	if json.NewDecoder(resp.Body).Decode(&aiResp) != nil || len(aiResp.Choices) == 0 {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal parse respons AI"})
-		return
-	}
-	if aiResp.Error != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "AI error: " + aiResp.Error.Message})
-		return
-	}
-
-	content := strings.TrimSpace(aiResp.Choices[0].Message.Content)
 	start := strings.Index(content, "[")
 	end := strings.LastIndex(content, "]")
 	if start < 0 || end <= start {
@@ -6671,6 +6621,131 @@ func (a *app) shuffledTryoutQuestionsFromConfig(ctx context.Context, groupID int
 	return all, nil
 }
 
+type aiProviderSetting struct {
+	Provider    string
+	BaseURL     string
+	APIKey      string
+	Model       string
+	Temperature float64
+	MaxTokens   int
+	IsActive    bool
+}
+
+func (a *app) getActiveAISetting(ctx context.Context) (aiProviderSetting, error) {
+	cfg := aiProviderSetting{
+		Provider:    "sumopod",
+		BaseURL:     "https://ai.sumopod.com/v1/chat/completions",
+		APIKey:      os.Getenv("SUMOPOD_API_KEY"),
+		Model:       "gpt-4o-mini",
+		Temperature: 0.7,
+		MaxTokens:   2000,
+		IsActive:    true,
+	}
+	_ = a.db.QueryRowContext(ctx, `
+		SELECT provider, base_url, api_key, model, temperature, max_tokens, is_active
+		FROM ai_provider_settings WHERE id=1
+	`).Scan(&cfg.Provider, &cfg.BaseURL, &cfg.APIKey, &cfg.Model, &cfg.Temperature, &cfg.MaxTokens, &cfg.IsActive)
+	if strings.TrimSpace(cfg.APIKey) == "" {
+		cfg.APIKey = os.Getenv("SUMOPOD_API_KEY")
+	}
+	if !cfg.IsActive {
+		return cfg, errors.New("AI provider nonaktif")
+	}
+	if strings.TrimSpace(cfg.APIKey) == "" {
+		return cfg, errors.New("API key AI belum di-set")
+	}
+	return cfg, nil
+}
+
+func (a *app) aiChat(ctx context.Context, systemPrompt, userPrompt string, maxTokens int, temperature float64) (string, error) {
+	cfg, err := a.getActiveAISetting(ctx)
+	if err != nil {
+		return "", err
+	}
+	if maxTokens <= 0 { maxTokens = cfg.MaxTokens }
+	if temperature <= 0 { temperature = cfg.Temperature }
+
+	type aiMsg struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+	type aiReq struct {
+		Model       string  `json:"model"`
+		Messages    []aiMsg `json:"messages"`
+		MaxTokens   int     `json:"max_tokens"`
+		Temperature float64 `json:"temperature"`
+	}
+	payload, _ := json.Marshal(aiReq{
+		Model: cfg.Model,
+		Messages: []aiMsg{{Role: "system", Content: systemPrompt}, {Role: "user", Content: userPrompt}},
+		MaxTokens: maxTokens, Temperature: temperature,
+	})
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.BaseURL, bytes.NewReader(payload))
+	if err != nil { return "", err }
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+cfg.APIKey)
+	resp, err := (&http.Client{Timeout: 60 * time.Second}).Do(httpReq)
+	if err != nil { return "", err }
+	defer resp.Body.Close()
+
+	var aiResp struct {
+		Choices []struct{ Message struct{ Content string `json:"content"` } `json:"message"` } `json:"choices"`
+		Error   *struct{ Message string `json:"message"` } `json:"error"`
+	}
+	if json.NewDecoder(resp.Body).Decode(&aiResp) != nil { return "", errors.New("gagal parse respons AI") }
+	if aiResp.Error != nil { return "", errors.New(aiResp.Error.Message) }
+	if len(aiResp.Choices) == 0 { return "", errors.New("AI tidak menghasilkan konten") }
+	return strings.TrimSpace(aiResp.Choices[0].Message.Content), nil
+}
+
+func (a *app) handleAdminAISettings(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "admin", "super_admin")
+	if err != nil { writeJSON(w, http.StatusUnauthorized, map[string]string{"error":"unauthorized"}); return }
+	if !isSuperAdmin(u) { writeJSON(w, http.StatusForbidden, map[string]string{"error":"hanya super_admin"}); return }
+
+	switch r.Method {
+	case http.MethodGet:
+		cfg := aiProviderSetting{Provider: "sumopod", BaseURL: "https://ai.sumopod.com/v1/chat/completions", Model: "gpt-4o-mini", Temperature: 0.7, MaxTokens: 2000, IsActive: true}
+		_ = a.db.QueryRowContext(r.Context(), `SELECT provider, base_url, api_key, model, temperature, max_tokens, is_active FROM ai_provider_settings WHERE id=1`).
+			Scan(&cfg.Provider, &cfg.BaseURL, &cfg.APIKey, &cfg.Model, &cfg.Temperature, &cfg.MaxTokens, &cfg.IsActive)
+		if strings.TrimSpace(cfg.APIKey) == "" { cfg.APIKey = os.Getenv("SUMOPOD_API_KEY") }
+		masked := ""
+		if len(cfg.APIKey) > 8 { masked = cfg.APIKey[:4] + "****" + cfg.APIKey[len(cfg.APIKey)-4:] }
+		writeJSON(w, http.StatusOK, map[string]any{
+			"provider": cfg.Provider, "base_url": cfg.BaseURL, "model": cfg.Model,
+			"temperature": cfg.Temperature, "max_tokens": cfg.MaxTokens, "is_active": cfg.IsActive,
+			"api_key_masked": masked,
+		})
+	case http.MethodPost:
+		var req struct {
+			Provider string `json:"provider"`; BaseURL string `json:"base_url"`; APIKey string `json:"api_key"`; Model string `json:"model"`
+			Temperature float64 `json:"temperature"`; MaxTokens int `json:"max_tokens"`; IsActive *bool `json:"is_active"`; Action string `json:"action"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"invalid json"}); return }
+		if req.Action=="test" {
+			content, err := a.aiChat(r.Context(), "Balas singkat.", "Tes koneksi AI", 50, 0.3)
+			if err != nil { writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()}); return }
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true, "result": content}); return
+		}
+		isActive := true
+		if req.IsActive != nil { isActive = *req.IsActive }
+		_, err := a.db.ExecContext(r.Context(), `
+			INSERT INTO ai_provider_settings (id, provider, base_url, api_key, model, temperature, max_tokens, is_active, updated_by, updated_at)
+			VALUES (1,$1,$2,$3,$4,$5,$6,$7,$8,NOW())
+			ON CONFLICT (id) DO UPDATE SET
+			provider=EXCLUDED.provider, base_url=EXCLUDED.base_url,
+			api_key=CASE WHEN EXCLUDED.api_key='' THEN ai_provider_settings.api_key ELSE EXCLUDED.api_key END,
+			model=EXCLUDED.model, temperature=EXCLUDED.temperature, max_tokens=EXCLUDED.max_tokens,
+			is_active=EXCLUDED.is_active, updated_by=EXCLUDED.updated_by, updated_at=NOW()
+		`, strings.TrimSpace(req.Provider), strings.TrimSpace(req.BaseURL), strings.TrimSpace(req.APIKey), strings.TrimSpace(req.Model), req.Temperature, req.MaxTokens, isActive, u.ID)
+		if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal simpan ai settings"}); return }
+		_ = a.logAdminAction(r.Context(), u.ID, "ai_settings.update", "ai_provider_settings:1", req)
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error":"method not allowed"})
+	}
+}
+
 func (a *app) handleAdminGenerateMaterial(w http.ResponseWriter, r *http.Request) {
 	_, err := a.requireRole(r.Context(), r, "admin")
 	if err != nil {
@@ -6712,67 +6787,11 @@ Contoh format: ["bubble 1 content", "bubble 2 content", "bubble 3 content"]`
 	}
 	userPrompt += fmt.Sprintf("\n\nBagi menjadi %d bubble pesan yang mengalir secara natural.", req.BubbleCount)
 
-	// Call SumoPod AI (OpenAI-compatible)
-	type aiMsg struct {
-		Role    string `json:"role"`
-		Content string `json:"content"`
-	}
-	type aiReq struct {
-		Model       string  `json:"model"`
-		Messages    []aiMsg `json:"messages"`
-		MaxTokens   int     `json:"max_tokens"`
-		Temperature float64 `json:"temperature"`
-	}
-	payload, _ := json.Marshal(aiReq{
-		Model: "gpt-4o-mini",
-		Messages: []aiMsg{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: userPrompt},
-		},
-		MaxTokens:   2000,
-		Temperature: 0.7,
-	})
-
-	httpReq, err2 := http.NewRequestWithContext(r.Context(), http.MethodPost, "https://ai.sumopod.com/v1/chat/completions", bytes.NewReader(payload))
-	if err2 != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal buat request AI"})
+	content, errAI := a.aiChat(r.Context(), systemPrompt, userPrompt, 2000, 0.7)
+	if errAI != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "gagal hubungi AI: " + errAI.Error()})
 		return
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer sk-bTZ7vafsuH0O4NMduyvwUA")
-
-	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err3 := client.Do(httpReq)
-	if err3 != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "gagal hubungi AI: " + err3.Error()})
-		return
-	}
-	defer resp.Body.Close()
-
-	var aiResp struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-		Error *struct {
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	if json.NewDecoder(resp.Body).Decode(&aiResp) != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal parse respons AI"})
-		return
-	}
-	if aiResp.Error != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "AI error: " + aiResp.Error.Message})
-		return
-	}
-	if len(aiResp.Choices) == 0 {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "AI tidak menghasilkan konten"})
-		return
-	}
-
-	content := strings.TrimSpace(aiResp.Choices[0].Message.Content)
 	// Coba parse sebagai JSON array
 	var bubbles []string
 	// Cari JSON array dalam respons (kadang AI tambah teks di sekitar JSON)
