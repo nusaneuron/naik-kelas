@@ -5885,7 +5885,8 @@ Gunakan Bahasa Indonesia, ringkas, jelas, boleh pakai markdown (**bold**, bullet
 		_ = json.Unmarshal([]byte(content[start:end+1]), &bubbles)
 	}
 	if len(bubbles) == 0 { bubbles = []string{content} }
-	return strings.Join(bubbles, "\n\n---\n\n"), nil
+	b, _ := json.Marshal(bubbles)
+	return string(b), nil
 }
 
 func (a *app) handleParticipantNotes(w http.ResponseWriter, r *http.Request) {
