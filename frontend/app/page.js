@@ -2425,37 +2425,7 @@ export default function Page() {
               {/* Admin — Bank Soal */}
               {adminSection === 'bank' && (
                 <>
-                  <AdminSection title="📂 Kategori Soal">
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-                      <input className="nk-input-sm" placeholder="Kode" style={{ flex: '1 1 80px', maxWidth: 120 }} value={newCategoryCode} onChange={(e) => setNewCategoryCode(e.target.value)} />
-                      <input className="nk-input-sm" placeholder="Nama kategori" style={{ flex: '2 1 140px' }} value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
-                      <select className="nk-input-sm" style={{ flex: '1 1 120px' }} value={newCategoryGroupId} onChange={e => setNewCategoryGroupId(e.target.value)}>
-                        {isSuperAdmin && <option value="">🌐 Global (Super Admin)</option>}
-                        {adminGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                      </select>
-                      <BtnSm disabled={busy} onClick={addCategory}>{busy ? '...' : (editingCategoryId ? 'Update' : '+ Tambah')}</BtnSm>
-                      {editingCategoryId && <BtnSm disabled={busy} onClick={() => { setEditingCategoryId(''); setNewCategoryCode(''); setNewCategoryName(''); setNewCategoryGroupId(''); }}>Batal</BtnSm>}
-                    </div>
-                    <div className="nk-grid-auto" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
-                      {categories.map((c) => (
-                        <div key={c.id} style={{
-                          border: '1px solid #1e2d45', borderRadius: 12,
-                          padding: '14px 16px', background: '#0f172a'
-                        }}>
-                          <div style={{ fontWeight: 700, marginBottom: 2 }}>{c.name}</div>
-                          <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>{c.code}</div>
-                          <div style={{ fontSize: 11, marginBottom: 10 }}>{c.group_name ? <span className="nk-badge nk-badge-purple">🏢 {c.group_name}</span> : <span className="nk-badge" style={{ background: '#1e293b', color: '#64748b' }}>🌐 Global</span>}</div>
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <BtnSm disabled={busy} onClick={() => startEditCategory(c)}>Edit</BtnSm>
-                            <BtnSm disabled={busy} onClick={() => deleteCategory(c.id)} danger>Hapus</BtnSm>
-                          </div>
-                        </div>
-                      ))}
-                      {!categories.length && <div className="nk-empty">Belum ada kategori.</div>}
-                    </div>
-                  </AdminSection>
-
-                  <AdminSection title="📝 Bank Soal" style={{ marginTop: 14 }}>
+                  <AdminSection title="📝 Bank Soal">
                     {/* AI Generate Soal */}
                     <div style={{ background: '#0a1e3a', border: '1px dashed #2563eb', borderRadius: 10, padding: '12px 14px', marginBottom: 16 }}>
                       <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, color: '#93c5fd' }}>✨ Generate Soal dengan AI</p>
@@ -3330,7 +3300,37 @@ export default function Page() {
               {/* Admin — Materi */}
               {adminSection === 'materi' && (
                 <>
-                  <AdminSection title="📚 Manajemen Materi Belajar">
+                  <AdminSection title="📂 Kategori Materi">
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+                      <input className="nk-input-sm" placeholder="Kode" style={{ flex: '1 1 80px', maxWidth: 120 }} value={newCategoryCode} onChange={(e) => setNewCategoryCode(e.target.value)} />
+                      <input className="nk-input-sm" placeholder="Nama kategori materi" style={{ flex: '2 1 140px' }} value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
+                      <select className="nk-input-sm" style={{ flex: '1 1 120px' }} value={newCategoryGroupId} onChange={e => setNewCategoryGroupId(e.target.value)}>
+                        {isSuperAdmin && <option value="">🌐 Global (Super Admin)</option>}
+                        {adminGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                      </select>
+                      <BtnSm disabled={busy} onClick={addCategory}>{busy ? '...' : (editingCategoryId ? 'Update' : '+ Tambah')}</BtnSm>
+                      {editingCategoryId && <BtnSm disabled={busy} onClick={() => { setEditingCategoryId(''); setNewCategoryCode(''); setNewCategoryName(''); setNewCategoryGroupId(''); }}>Batal</BtnSm>}
+                    </div>
+                    <div className="nk-grid-auto" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
+                      {categories.map((c) => (
+                        <div key={c.id} style={{
+                          border: '1px solid #1e2d45', borderRadius: 12,
+                          padding: '14px 16px', background: '#0f172a'
+                        }}>
+                          <div style={{ fontWeight: 700, marginBottom: 2 }}>{c.name}</div>
+                          <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>{c.code}</div>
+                          <div style={{ fontSize: 11, marginBottom: 10 }}>{c.group_name ? <span className="nk-badge nk-badge-purple">🏢 {c.group_name}</span> : <span className="nk-badge" style={{ background: '#1e293b', color: '#64748b' }}>🌐 Global</span>}</div>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <BtnSm disabled={busy} onClick={() => startEditCategory(c)}>Edit</BtnSm>
+                            <BtnSm disabled={busy} onClick={() => deleteCategory(c.id)} danger>Hapus</BtnSm>
+                          </div>
+                        </div>
+                      ))}
+                      {!categories.length && <div className="nk-empty">Belum ada kategori materi.</div>}
+                    </div>
+                  </AdminSection>
+
+                  <AdminSection title="📚 Manajemen Materi Belajar" style={{ marginTop: 14 }}>
                     {/* Form tambah/edit */}
                     <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 16 }}>
                       <p style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>
