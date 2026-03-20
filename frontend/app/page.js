@@ -65,6 +65,7 @@ export default function Page() {
   const [myReflections, setMyReflections] = useState([]);
   const [reflectionDraft, setReflectionDraft] = useState('');
   const [reflectionSaving, setReflectionSaving] = useState(false);
+  const [showReflectionEditor, setShowReflectionEditor] = useState(false);
   const [adminReflectionStats, setAdminReflectionStats] = useState(null);
   const [adminLearningSummary, setAdminLearningSummary] = useState(null);
   const [reminderMsg, setReminderMsg] = useState('');
@@ -640,7 +641,7 @@ export default function Page() {
   }
 
   async function submitReflectionWeb() {
-    if (!reflectionDraft.trim()) return showMsg('Isi refleksi dulu ya', 'error');
+    if (!reflectionDraft.trim()) { showMsg('Isi refleksi dulu ya', 'error'); return false; }
     setReflectionSaving(true);
     const res = await fetch(`${apiBase}/participant/reflections`, {
       method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
@@ -648,11 +649,12 @@ export default function Page() {
     });
     const d = await res.json().catch(() => ({}));
     setReflectionSaving(false);
-    if (!res.ok) return showMsg(d.error || 'Gagal simpan refleksi', 'error');
+    if (!res.ok) { showMsg(d.error || 'Gagal simpan refleksi', 'error'); return false; }
     showMsg(d.awarded_exp ? 'Refleksi tersimpan (+EXP) ✅' : 'Refleksi hari ini diperbarui ✅', 'success');
     setReflectionDraft('');
     const refRes = await fetch(`${apiBase}/participant/reflections`, { credentials: 'include' });
     if (refRes.ok) setMyReflections((await refRes.json()).items || []);
+    return true;
   }
 
   useEffect(() => {
@@ -1745,6 +1747,10 @@ export default function Page() {
                     style={{ padding: '7px 14px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
                     ✏️ Catatan Baru
                   </button>
+                  <button onClick={() => { setShowReflectionEditor(true); }}
+                    style={{ padding: '7px 14px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
+                    📔 Refleksi Baru
+                  </button>
                   <button onClick={() => setNoteView('list')}
                     style={{ padding: '7px 12px', background: noteView === 'list' ? '#1e3a5f' : 'transparent', color: noteView === 'list' ? '#93c5fd' : '#64748b', border: '1px solid #1e2d45', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>
                     📋 Daftar
@@ -1777,25 +1783,28 @@ export default function Page() {
                   </div>
                 )}
 
-                {/* Refleksi Harian (dipindah ke Catatan) */}
+                {/* Refleksi Harian (di Catatan) */}
                 <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 12, marginBottom: 12 }}>
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 8, gap: 8, flexWrap:'wrap' }}>
                     <div style={{ fontWeight: 700, fontSize: 13, color: '#cbd5e1' }}>📔 Refleksi Harian</div>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>Privat • tersimpan di akunmu</div>
-                  </div>
-                  <textarea
-                    value={reflectionDraft}
-                    onChange={e => setReflectionDraft(e.target.value)}
-                    placeholder="Tulis refleksi harianmu di sini..."
-                    style={{ width:'100%', minHeight: 90, background:'#080d18', border:'1px solid #1e2d45', borderRadius: 8, color:'#e2e8f0', padding:'10px 12px', fontSize:13, resize:'vertical' }}
-                  />
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop: 8 }}>
-                    <span style={{ fontSize: 11, color: '#64748b' }}>Setiap hari pertama kali submit dapat EXP refleksi.</span>
-                    <button onClick={submitReflectionWeb} disabled={reflectionSaving || !reflectionDraft.trim()}
-                      style={{ padding:'6px 12px', borderRadius:8, border:'none', background: reflectionSaving || !reflectionDraft.trim() ? '#334155' : '#7c3aed', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer' }}>
-                      {reflectionSaving ? '⏳ Menyimpan...' : '💾 Simpan Refleksi'}
+                    <button onClick={() => setShowReflectionEditor(true)}
+                      style={{ padding:'6px 12px', borderRadius:8, border:'none', background:'#7c3aed', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                      ➕ Buat Refleksi
                     </button>
                   </div>
+                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>Privat • tersimpan di akunmu • submit pertama harian dapat EXP</div>
+                  {myReflections.length ? (
+                    <div style={{ display: 'grid', gap: 8, maxHeight: 180, overflowY: 'auto' }}>
+                      {myReflections.slice(0, 5).map(r => (
+                        <div key={r.id} style={{ background:'#080d18', border:'1px solid #1e2d45', borderRadius:8, padding:'8px 10px' }}>
+                          <div style={{ fontSize:11, color:'#94a3b8', marginBottom:4 }}>📅 {new Date(r.reflected_date + 'T00:00:00').toLocaleDateString('id-ID')}</div>
+                          <div style={{ fontSize:12, color:'#cbd5e1', lineHeight:1.5, whiteSpace:'pre-wrap' }}>{(r.content || '').slice(0, 140)}{(r.content || '').length > 140 ? '...' : ''}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="nk-empty" style={{ margin: 0 }}>Belum ada refleksi.</div>
+                  )}
                 </div>
 
                 {/* LIST VIEW */}
@@ -2406,6 +2415,34 @@ export default function Page() {
                   }}
                 >
                   {contributeLoading ? '⏳ Mengajukan...' : '🚀 Ajukan ke Materi'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Modal Refleksi Harian ── */}
+        {showReflectionEditor && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 16, padding: 20, width: '100%', maxWidth: 560 }}>
+              <h3 style={{ margin: '0 0 8px', color: '#e2e8f0' }}>📔 Buat Refleksi Harian</h3>
+              <p style={{ margin: '0 0 12px', fontSize: 12, color: '#64748b' }}>Refleksi bersifat privat. Submit pertama hari ini dapat EXP.</p>
+              <textarea
+                value={reflectionDraft}
+                onChange={e => setReflectionDraft(e.target.value)}
+                placeholder="Tulis refleksi harianmu di sini..."
+                style={{ width:'100%', minHeight: 140, background:'#080d18', border:'1px solid #1e2d45', borderRadius: 8, color:'#e2e8f0', padding:'10px 12px', fontSize:13, resize:'vertical' }}
+              />
+              <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop: 10 }}>
+                <button onClick={() => setShowReflectionEditor(false)}
+                  style={{ padding:'8px 12px', borderRadius:8, border:'1px solid #334155', background:'transparent', color:'#94a3b8', fontSize:12, cursor:'pointer' }}>
+                  Batal
+                </button>
+                <button
+                  onClick={async () => { const ok = await submitReflectionWeb(); if (ok) setShowReflectionEditor(false); }}
+                  disabled={reflectionSaving || !reflectionDraft.trim()}
+                  style={{ padding:'8px 12px', borderRadius:8, border:'none', background: reflectionSaving || !reflectionDraft.trim() ? '#334155' : '#7c3aed', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                  {reflectionSaving ? '⏳ Menyimpan...' : '💾 Simpan Refleksi'}
                 </button>
               </div>
             </div>
