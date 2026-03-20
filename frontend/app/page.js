@@ -198,6 +198,12 @@ export default function Page() {
   });
   const [aiProfiles, setAiProfiles] = useState([]);
   const [aiProfileForm, setAiProfileForm] = useState({ id: 0, name: '', provider: 'sumopod', base_url: 'https://ai.sumopod.com/v1/chat/completions', api_key: '', model: 'gpt-4o-mini', temperature: 0.7, max_tokens: 2000 });
+  const aiProviderPresets = {
+    sumopod: { base_url: 'https://ai.sumopod.com/v1/chat/completions', model: 'gpt-4o-mini' },
+    openrouter: { base_url: 'https://openrouter.ai/api/v1/chat/completions', model: 'openai/gpt-4o-mini' },
+    openai: { base_url: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini' },
+    custom: { base_url: '', model: '' },
+  };
   const [pointPhone, setPointPhone] = useState('');
   const [pointDelta, setPointDelta] = useState('');
   const [pointReason, setPointReason] = useState('');
@@ -3457,10 +3463,37 @@ export default function Page() {
                       <div style={{ display: 'grid', gap: 8 }}>
                         <input className="nk-input-sm" placeholder="Profile name" value={aiProfileForm.name} onChange={e=>setAiProfileForm(s=>({...s,name:e.target.value}))} />
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                          <input className="nk-input-sm" placeholder="Provider" value={aiProfileForm.provider} onChange={e=>setAiProfileForm(s=>({...s,provider:e.target.value}))} />
+                          <select className="nk-input-sm" value={aiProfileForm.provider}
+                            onChange={e => {
+                              const pv = e.target.value;
+                              const preset = aiProviderPresets[pv] || aiProviderPresets.custom;
+                              setAiProfileForm(s => ({
+                                ...s,
+                                provider: pv,
+                                base_url: preset.base_url || s.base_url,
+                                model: preset.model || s.model,
+                              }));
+                            }}>
+                            <option value="sumopod">sumopod</option>
+                            <option value="openrouter">openrouter</option>
+                            <option value="openai">openai</option>
+                            <option value="custom">custom</option>
+                          </select>
                           <input className="nk-input-sm" placeholder="Model" value={aiProfileForm.model} onChange={e=>setAiProfileForm(s=>({...s,model:e.target.value}))} />
                         </div>
                         <input className="nk-input-sm" placeholder="Base URL" value={aiProfileForm.base_url} onChange={e=>setAiProfileForm(s=>({...s,base_url:e.target.value}))} />
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {['sumopod','openrouter','openai'].map(p => (
+                            <button key={p} type="button"
+                              onClick={() => {
+                                const preset = aiProviderPresets[p];
+                                setAiProfileForm(s => ({ ...s, provider: p, base_url: preset.base_url, model: preset.model || s.model }));
+                              }}
+                              style={{ border:'1px solid #334155', background:'transparent', color:'#94a3b8', borderRadius:8, padding:'4px 8px', fontSize:11, cursor:'pointer' }}>
+                              preset: {p}
+                            </button>
+                          ))}
+                        </div>
                         <input className="nk-input-sm" type="password" placeholder="API Key (kosongkan saat update untuk keep)" value={aiProfileForm.api_key} onChange={e=>setAiProfileForm(s=>({...s,api_key:e.target.value}))} />
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                           <input className="nk-input-sm" type="number" step="0.1" min="0" max="2" value={aiProfileForm.temperature} onChange={e=>setAiProfileForm(s=>({...s,temperature:e.target.value}))} />
