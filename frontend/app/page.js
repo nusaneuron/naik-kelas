@@ -1774,7 +1774,7 @@ export default function Page() {
                 )}
 
                 {/* Refleksi Harian (di Catatan) */}
-                {(noteListMode === 'all' || noteListMode === 'reflection') && (
+                {noteView === 'list' && (noteListMode === 'all' || noteListMode === 'reflection') && (
                 <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 12, marginBottom: 12 }}>
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 8, gap: 8, flexWrap:'wrap' }}>
                     <div style={{ fontWeight: 700, fontSize: 13, color: '#cbd5e1' }}>📔 Refleksi Harian</div>
