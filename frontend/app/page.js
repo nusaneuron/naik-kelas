@@ -3459,7 +3459,7 @@ export default function Page() {
               {/* Admin — AI Settings (super_admin only) */}
               {adminSection === 'ai' && isSuperAdmin && (
                 <AdminSection title="🤖 AI Settings & Profiles (Super Admin)">
-                  <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 14 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
                     <div style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 12, background: '#0f172a' }}>
                       <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700 }}>Profile Form</p>
                       <div style={{ display: 'grid', gap: 8 }}>
@@ -3519,7 +3519,7 @@ export default function Page() {
                                 <div style={{ fontWeight: 700, fontSize: 13 }}>{p.name} {p.is_active ? '✅' : ''}</div>
                                 <div style={{ fontSize: 12, color: '#94a3b8' }}>{p.provider} • {p.model}</div>
                               </div>
-                              <div style={{ display:'flex', gap:6 }}>
+                              <div style={{ display:'flex', gap:6, flexWrap:'wrap', justifyContent:'flex-end' }}>
                                 <BtnSm disabled={busy} onClick={()=>setAiProfileForm({ id:p.id, name:p.name, provider:p.provider, base_url:p.base_url, api_key:'', model:p.model, temperature:p.temperature, max_tokens:p.max_tokens })}>Edit</BtnSm>
                                 <BtnSm disabled={busy} onClick={()=>activateAIProfile(p.id)}>Aktifkan</BtnSm>
                                 <BtnSm disabled={busy} onClick={()=>deleteAIProfile(p.id)} danger>Hapus</BtnSm>
