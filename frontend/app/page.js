@@ -605,7 +605,9 @@ export default function Page() {
         fetch(`${apiBase}/admin/ai-profiles`, { credentials: 'include' }),
       ]);
       if (res.ok) setAiSettings(await res.json());
+      else showMsg('Gagal load AI settings', 'error');
       if (pRes.ok) setAiProfiles((await pRes.json()).items || []);
+      else showMsg('Gagal load AI profiles (cek role super_admin)', 'error');
     }
   }
 
@@ -966,11 +968,11 @@ export default function Page() {
       body: JSON.stringify({ action, ...aiProfileForm })
     });
     const d = await res.json().catch(() => ({}));
-    if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal simpan profile AI.'); setBusy(false); return; }
+    if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal simpan profile AI.'); showMsg(d.error || 'Gagal simpan profile AI.', 'error'); setBusy(false); return; }
     const pRes = await fetch(`${apiBase}/admin/ai-profiles`, { credentials: 'include' });
     if (pRes.ok) setAiProfiles((await pRes.json()).items || []);
     setAiProfileForm({ id: 0, name: '', provider: 'sumopod', base_url: 'https://ai.sumopod.com/v1/chat/completions', api_key: '', model: 'gpt-4o-mini', temperature: 0.7, max_tokens: 2000 });
-    setActionType('success'); setActionMsg('Profile AI disimpan.'); setBusy(false);
+    setActionType('success'); setActionMsg('Profile AI disimpan.'); showMsg('Profile AI disimpan ✅', 'success'); setBusy(false);
   }
 
   async function activateAIProfile(id) {
@@ -3499,8 +3501,9 @@ export default function Page() {
                           <input className="nk-input-sm" type="number" step="0.1" min="0" max="2" value={aiProfileForm.temperature} onChange={e=>setAiProfileForm(s=>({...s,temperature:e.target.value}))} />
                           <input className="nk-input-sm" type="number" min="1" value={aiProfileForm.max_tokens} onChange={e=>setAiProfileForm(s=>({...s,max_tokens:e.target.value}))} />
                         </div>
-                        <div style={{ display: 'flex', gap: 8 }}>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           <BtnSm disabled={busy} onClick={saveAIProfile}>{aiProfileForm.id ? '💾 Update Profile' : '+ Simpan Profile'}</BtnSm>
+                          <BtnSm disabled={busy} onClick={testAISettings}>🧪 Test Profile Aktif</BtnSm>
                           <BtnSm disabled={busy} onClick={()=>setAiProfileForm({ id: 0, name: '', provider: 'sumopod', base_url: 'https://ai.sumopod.com/v1/chat/completions', api_key: '', model: 'gpt-4o-mini', temperature: 0.7, max_tokens: 2000 })}>Reset</BtnSm>
                         </div>
                       </div>
