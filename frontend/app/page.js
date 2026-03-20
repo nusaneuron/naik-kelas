@@ -646,8 +646,9 @@ export default function Page() {
       || window.navigator.standalone === true;
     if (isStandalone) return; // sudah diinstall, skip banner
 
-    // 3. Cek dismiss
-    if (localStorage.getItem('pwa-dismissed')) return;
+    // 3. Cek dismiss (cooldown 24 jam)
+    const dismissUntil = Number(localStorage.getItem('pwa-dismissed-until') || 0);
+    if (dismissUntil > Date.now()) return;
 
     // 4. Android/Chrome: tangkap beforeinstallprompt
     const handler = (e) => {
@@ -668,7 +669,7 @@ export default function Page() {
     window.addEventListener('appinstalled', () => {
       setShowInstallBanner(false);
       setInstallPrompt(null);
-      localStorage.setItem('pwa-dismissed', '1');
+      localStorage.setItem('pwa-dismissed-until', String(Date.now() + 24*60*60*1000));
     });
 
     return () => window.removeEventListener('beforeinstallprompt', handler);
@@ -4253,54 +4254,6 @@ export default function Page() {
       )}
       {/* PWA Install Banner */}
       {showInstallBanner && (
-        <div style={{
-          position: 'fixed', bottom: 80, left: 12, right: 12, zIndex: 999,
-          background: 'linear-gradient(135deg, #1e1b4b, #312e81)',
-          border: '1px solid rgba(139,92,246,0.5)',
-          borderRadius: 16, padding: '14px 16px',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-          display: 'flex', alignItems: 'center', gap: 12,
-          animation: 'slideUp 0.3s ease'
-        }}>
-          <span style={{ fontSize: 32, flexShrink: 0 }}>📲</span>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: '#e2e8f0', marginBottom: 2 }}>
-              Install Naik Kelas
-            </div>
-            <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.4 }}>
-              {/iphone|ipad|ipod/i.test(typeof navigator !== 'undefined' ? navigator.userAgent : '')
-                ? 'Tap Share ↑ lalu "Add to Home Screen"'
-                : 'Pasang di HP untuk akses lebih cepat tanpa buka browser'}
-            </div>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-            {installPrompt && (
-              <button onClick={async () => {
-                installPrompt.prompt();
-                const { outcome } = await installPrompt.userChoice;
-                if (outcome === 'accepted') {
-                  setShowInstallBanner(false);
-                  localStorage.setItem('pwa-dismissed', '1');
-                }
-              }} style={{
-                background: '#7c3aed', color: '#fff', border: 'none',
-                borderRadius: 8, padding: '6px 14px', cursor: 'pointer',
-                fontSize: 12, fontWeight: 700
-              }}>Install</button>
-            )}
-            <button onClick={() => {
-              setShowInstallBanner(false);
-              localStorage.setItem('pwa-dismissed', '1');
-            }} style={{
-              background: 'transparent', color: '#64748b', border: '1px solid #334155',
-              borderRadius: 8, padding: '5px 10px', cursor: 'pointer', fontSize: 11
-            }}>Nanti</button>
-          </div>
-        </div>
-      )}
-
-      {/* PWA Install Banner */}
-      {showInstallBanner && (
         <div id="installBtn" style={{
           position: 'fixed', bottom: 76, left: 10, right: 10, zIndex: 1000,
           background: 'linear-gradient(135deg, #1e1b4b 0%, #2e1065 100%)',
@@ -4329,7 +4282,7 @@ export default function Page() {
                   const { outcome } = await installPrompt.userChoice;
                   if (outcome === 'accepted') {
                     setShowInstallBanner(false);
-                    localStorage.setItem('pwa-dismissed', '1');
+                    localStorage.setItem('pwa-dismissed-until', String(Date.now() + 24*60*60*1000));
                   }
                 } catch(e) {}
               }} style={{
@@ -4339,7 +4292,7 @@ export default function Page() {
                 cursor: 'pointer', boxShadow: '0 2px 8px rgba(124,58,237,0.5)'
               }}>Install</button>
             )}
-            <button onClick={() => { setShowInstallBanner(false); localStorage.setItem('pwa-dismissed', '1'); }}
+            <button onClick={() => { setShowInstallBanner(false); localStorage.setItem('pwa-dismissed-until', String(Date.now() + 24*60*60*1000)); }}
               style={{ background: 'rgba(255,255,255,0.07)', color: '#94a3b8', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '8px 12px', fontSize: 12, cursor: 'pointer' }}>
               ✕
             </button>
