@@ -683,8 +683,9 @@ func (a *app) initDB(ctx context.Context) error {
 	_, _ = a.db.ExecContext(ctx, `
 		INSERT INTO ai_provider_profiles (name, provider, base_url, api_key, model, temperature, max_tokens, is_active)
 		SELECT 'default-sumopod', provider, base_url, api_key, model, temperature, max_tokens, TRUE
-		FROM ai_provider_settings WHERE id=1
-		ON CONFLICT (name) DO NOTHING
+		FROM ai_provider_settings
+		WHERE id=1
+		  AND NOT EXISTS (SELECT 1 FROM ai_provider_profiles)
 	`)
 
 	// Badges
