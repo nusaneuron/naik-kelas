@@ -174,6 +174,7 @@ export default function Page() {
   const [noteDraft, setNoteDraft] = useState({ title: '', content: '' });
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteView, setNoteView] = useState('list'); // 'list' | 'editor' | 'graph' | 'canvas'
+  const [noteListMode, setNoteListMode] = useState('all'); // all | permanent | quick | reflection
   const [canvasData, setCanvasData] = useState(null); // { canvas_id, items, edges }
   const [canvasList, setCanvasList] = useState([]);      // daftar semua canvas
   const [canvasOpenId, setCanvasOpenId] = useState(null); // canvas yang sedang dibuka
@@ -1738,6 +1739,21 @@ export default function Page() {
                     style={{ padding: '7px 12px', background: noteView === 'canvas' ? '#1e3a5f' : 'transparent', color: noteView === 'canvas' ? '#93c5fd' : '#64748b', border: '1px solid #1e2d45', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>
                     🖼️ Canvas
                   </button>
+                  {noteView === 'list' && (
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {[
+                        ['all', '📚 Semua Daftar'],
+                        ['permanent', '📌 Permanen'],
+                        ['quick', '⚡ Cepat'],
+                        ['reflection', '📔 Refleksi Diri'],
+                      ].map(([k, label]) => (
+                        <button key={k} onClick={() => setNoteListMode(k)}
+                          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid', borderColor: noteListMode === k ? '#7c3aed' : '#1e2d45', background: noteListMode === k ? 'rgba(124,58,237,0.18)' : 'transparent', color: noteListMode === k ? '#c4b5fd' : '#64748b', cursor: 'pointer', fontSize: 12 }}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <input value={notesSearch} onChange={e => { setNotesSearch(e.target.value); refreshNotes(notesTagFilter, e.target.value); }}
                     placeholder="🔍 Cari catatan..." className="nk-input-sm" style={{ flex: 1, minWidth: 140 }} />
                 </div>
@@ -1759,6 +1775,7 @@ export default function Page() {
                 )}
 
                 {/* Refleksi Harian (di Catatan) */}
+                {(noteListMode === 'all' || noteListMode === 'reflection') && (
                 <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 12, marginBottom: 12 }}>
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 8, gap: 8, flexWrap:'wrap' }}>
                     <div style={{ fontWeight: 700, fontSize: 13, color: '#cbd5e1' }}>📔 Refleksi Harian</div>
@@ -1781,6 +1798,7 @@ export default function Page() {
                     <div className="nk-empty" style={{ margin: 0 }}>Belum ada refleksi.</div>
                   )}
                 </div>
+                )}
 
                 {/* LIST VIEW */}
                 {noteView === 'list' && (() => {
@@ -1788,10 +1806,11 @@ export default function Page() {
                   const fleeting = notes.filter(n => n.note_type === 'fleeting');
                   return (
                     <div style={{ display: 'grid', gap: 12 }}>
-                      {notes.length === 0 && <div className="nk-empty">📝 Belum ada catatan. Buat yang pertama atau kirim /catatan di bot Nala!</div>}
+                      {noteListMode !== 'reflection' && notes.length === 0 && <div className="nk-empty">📝 Belum ada catatan. Buat yang pertama atau kirim /catatan di bot Nala!</div>}
+                      {noteListMode === 'reflection' && myReflections.length === 0 && <div className="nk-empty">📔 Belum ada refleksi diri.</div>}
 
                       {/* Catatan Permanen */}
-                      {permanent.length > 0 && (
+                      {(noteListMode === 'all' || noteListMode === 'permanent') && permanent.length > 0 && (
                         <div>
                           <p style={{ fontSize: 11, color: '#475569', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, margin: '0 0 6px' }}>📌 Catatan Permanen ({permanent.length})</p>
                           <div style={{ display: 'grid', gap: 6 }}>
@@ -1810,7 +1829,7 @@ export default function Page() {
                       )}
 
                       {/* Catatan Sementara */}
-                      {fleeting.length > 0 && (
+                      {(noteListMode === 'all' || noteListMode === 'quick') && fleeting.length > 0 && (
                         <div>
                           <p style={{ fontSize: 11, color: '#78716c', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, margin: '0 0 6px' }}>⚡ Catatan Sementara dari Bot ({fleeting.length})</p>
                           <div style={{ display: 'grid', gap: 6 }}>
