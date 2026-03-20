@@ -196,6 +196,8 @@ export default function Page() {
     provider: 'sumopod', base_url: 'https://ai.sumopod.com/v1/chat/completions', api_key: '',
     api_key_masked: '', model: 'gpt-4o-mini', temperature: 0.7, max_tokens: 2000, is_active: true,
   });
+  const [aiProfiles, setAiProfiles] = useState([]);
+  const [aiProfileForm, setAiProfileForm] = useState({ id: 0, name: '', provider: 'sumopod', base_url: 'https://ai.sumopod.com/v1/chat/completions', api_key: '', model: 'gpt-4o-mini', temperature: 0.7, max_tokens: 2000 });
   const [pointPhone, setPointPhone] = useState('');
   const [pointDelta, setPointDelta] = useState('');
   const [pointReason, setPointReason] = useState('');
@@ -592,8 +594,12 @@ export default function Page() {
     } else if (section === 'kontribusi') {
       await refreshAdminContributions();
     } else if (section === 'ai') {
-      const res = await fetch(`${apiBase}/admin/ai-settings`, { credentials: 'include' });
+      const [res, pRes] = await Promise.all([
+        fetch(`${apiBase}/admin/ai-settings`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/ai-profiles`, { credentials: 'include' }),
+      ]);
       if (res.ok) setAiSettings(await res.json());
+      if (pRes.ok) setAiProfiles((await pRes.json()).items || []);
     }
   }
 
@@ -944,6 +950,51 @@ export default function Page() {
     const d = await res.json().catch(() => ({}));
     if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Tes AI gagal.'); setBusy(false); return; }
     setActionType('success'); setActionMsg(`Tes AI OK: ${d.result || 'berhasil'}`); setBusy(false);
+  }
+
+  async function saveAIProfile() {
+    setBusy(true); setActionMsg('');
+    const action = aiProfileForm.id ? 'update' : 'create';
+    const res = await fetch(`${apiBase}/admin/ai-profiles`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ action, ...aiProfileForm })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal simpan profile AI.'); setBusy(false); return; }
+    const pRes = await fetch(`${apiBase}/admin/ai-profiles`, { credentials: 'include' });
+    if (pRes.ok) setAiProfiles((await pRes.json()).items || []);
+    setAiProfileForm({ id: 0, name: '', provider: 'sumopod', base_url: 'https://ai.sumopod.com/v1/chat/completions', api_key: '', model: 'gpt-4o-mini', temperature: 0.7, max_tokens: 2000 });
+    setActionType('success'); setActionMsg('Profile AI disimpan.'); setBusy(false);
+  }
+
+  async function activateAIProfile(id) {
+    setBusy(true); setActionMsg('');
+    const res = await fetch(`${apiBase}/admin/ai-profiles`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ action: 'activate', id })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal aktifkan profile.'); setBusy(false); return; }
+    const [sRes, pRes] = await Promise.all([
+      fetch(`${apiBase}/admin/ai-settings`, { credentials: 'include' }),
+      fetch(`${apiBase}/admin/ai-profiles`, { credentials: 'include' }),
+    ]);
+    if (sRes.ok) setAiSettings(await sRes.json());
+    if (pRes.ok) setAiProfiles((await pRes.json()).items || []);
+    setActionType('success'); setActionMsg('Profile AI diaktifkan.'); setBusy(false);
+  }
+
+  async function deleteAIProfile(id) {
+    setBusy(true); setActionMsg('');
+    const res = await fetch(`${apiBase}/admin/ai-profiles`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ action: 'delete', id })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal hapus profile.'); setBusy(false); return; }
+    const pRes = await fetch(`${apiBase}/admin/ai-profiles`, { credentials: 'include' });
+    if (pRes.ok) setAiProfiles((await pRes.json()).items || []);
+    setActionType('success'); setActionMsg('Profile AI dihapus.'); setBusy(false);
   }
 
   async function claimRedeem(itemId) {
@@ -3399,43 +3450,53 @@ export default function Page() {
 
               {/* Admin — AI Settings (super_admin only) */}
               {adminSection === 'ai' && isSuperAdmin && (
-                <AdminSection title="🤖 AI Settings (Super Admin)">
-                  <div style={{ display: 'grid', gap: 10, maxWidth: 760 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                      <div>
-                        <label style={fieldLbl}>Provider</label>
-                        <input className="nk-input-sm" value={aiSettings.provider || ''} onChange={e=>setAiSettings(s=>({...s, provider:e.target.value}))} />
-                      </div>
-                      <div>
-                        <label style={fieldLbl}>Model</label>
-                        <input className="nk-input-sm" value={aiSettings.model || ''} onChange={e=>setAiSettings(s=>({...s, model:e.target.value}))} />
+                <AdminSection title="🤖 AI Settings & Profiles (Super Admin)">
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 14 }}>
+                    <div style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 12, background: '#0f172a' }}>
+                      <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700 }}>Profile Form</p>
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        <input className="nk-input-sm" placeholder="Profile name" value={aiProfileForm.name} onChange={e=>setAiProfileForm(s=>({...s,name:e.target.value}))} />
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                          <input className="nk-input-sm" placeholder="Provider" value={aiProfileForm.provider} onChange={e=>setAiProfileForm(s=>({...s,provider:e.target.value}))} />
+                          <input className="nk-input-sm" placeholder="Model" value={aiProfileForm.model} onChange={e=>setAiProfileForm(s=>({...s,model:e.target.value}))} />
+                        </div>
+                        <input className="nk-input-sm" placeholder="Base URL" value={aiProfileForm.base_url} onChange={e=>setAiProfileForm(s=>({...s,base_url:e.target.value}))} />
+                        <input className="nk-input-sm" type="password" placeholder="API Key (kosongkan saat update untuk keep)" value={aiProfileForm.api_key} onChange={e=>setAiProfileForm(s=>({...s,api_key:e.target.value}))} />
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                          <input className="nk-input-sm" type="number" step="0.1" min="0" max="2" value={aiProfileForm.temperature} onChange={e=>setAiProfileForm(s=>({...s,temperature:e.target.value}))} />
+                          <input className="nk-input-sm" type="number" min="1" value={aiProfileForm.max_tokens} onChange={e=>setAiProfileForm(s=>({...s,max_tokens:e.target.value}))} />
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <BtnSm disabled={busy} onClick={saveAIProfile}>{aiProfileForm.id ? '💾 Update Profile' : '+ Simpan Profile'}</BtnSm>
+                          <BtnSm disabled={busy} onClick={()=>setAiProfileForm({ id: 0, name: '', provider: 'sumopod', base_url: 'https://ai.sumopod.com/v1/chat/completions', api_key: '', model: 'gpt-4o-mini', temperature: 0.7, max_tokens: 2000 })}>Reset</BtnSm>
+                        </div>
                       </div>
                     </div>
-                    <div>
-                      <label style={fieldLbl}>Base URL</label>
-                      <input className="nk-input-sm" value={aiSettings.base_url || ''} onChange={e=>setAiSettings(s=>({...s, base_url:e.target.value}))} />
-                    </div>
-                    <div>
-                      <label style={fieldLbl}>API Key {aiSettings.api_key_masked ? <span style={{ color:'#64748b' }}>(current: {aiSettings.api_key_masked})</span> : null}</label>
-                      <input className="nk-input-sm" type="password" placeholder="Kosongkan jika tidak ingin ganti key" value={aiSettings.api_key || ''} onChange={e=>setAiSettings(s=>({...s, api_key:e.target.value}))} />
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '120px 120px 1fr', gap: 8, alignItems:'end' }}>
-                      <div>
-                        <label style={fieldLbl}>Temp</label>
-                        <input className="nk-input-sm" type="number" step="0.1" min="0" max="2" value={aiSettings.temperature ?? 0.7} onChange={e=>setAiSettings(s=>({...s, temperature:e.target.value}))} />
+
+                    <div style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 12, background: '#0f172a' }}>
+                      <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700 }}>Profiles</p>
+                      <div style={{ display: 'grid', gap: 8, maxHeight: 300, overflow: 'auto' }}>
+                        {aiProfiles.map(p => (
+                          <div key={p.id} style={{ border: '1px solid #26364d', borderRadius: 10, padding: 10, background: p.is_active ? 'rgba(34,197,94,0.08)' : '#0b1220' }}>
+                            <div style={{ display:'flex', justifyContent:'space-between', gap:8 }}>
+                              <div>
+                                <div style={{ fontWeight: 700, fontSize: 13 }}>{p.name} {p.is_active ? '✅' : ''}</div>
+                                <div style={{ fontSize: 12, color: '#94a3b8' }}>{p.provider} • {p.model}</div>
+                              </div>
+                              <div style={{ display:'flex', gap:6 }}>
+                                <BtnSm disabled={busy} onClick={()=>setAiProfileForm({ id:p.id, name:p.name, provider:p.provider, base_url:p.base_url, api_key:'', model:p.model, temperature:p.temperature, max_tokens:p.max_tokens })}>Edit</BtnSm>
+                                <BtnSm disabled={busy} onClick={()=>activateAIProfile(p.id)}>Aktifkan</BtnSm>
+                                <BtnSm disabled={busy} onClick={()=>deleteAIProfile(p.id)} danger>Hapus</BtnSm>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        {!aiProfiles.length && <div className="nk-empty">Belum ada profile AI.</div>}
                       </div>
-                      <div>
-                        <label style={fieldLbl}>Max Tokens</label>
-                        <input className="nk-input-sm" type="number" min="1" value={aiSettings.max_tokens ?? 2000} onChange={e=>setAiSettings(s=>({...s, max_tokens:e.target.value}))} />
+                      <div style={{ marginTop: 10, display:'flex', gap:8 }}>
+                        <BtnSm disabled={busy} onClick={testAISettings}>🧪 Test Profile Aktif</BtnSm>
+                        <span style={{ fontSize: 12, color: '#94a3b8', alignSelf:'center' }}>Aktif: {aiSettings.provider} / {aiSettings.model}</span>
                       </div>
-                      <label style={{ display:'flex', alignItems:'center', gap:6, color:'#cbd5e1', fontSize:13 }}>
-                        <input type="checkbox" checked={!!aiSettings.is_active} onChange={e=>setAiSettings(s=>({...s, is_active:e.target.checked}))} />
-                        Active
-                      </label>
-                    </div>
-                    <div style={{ display:'flex', gap:8 }}>
-                      <BtnSm disabled={busy} onClick={saveAISettings}>{busy ? '...' : '💾 Simpan AI Settings'}</BtnSm>
-                      <BtnSm disabled={busy} onClick={testAISettings}>🧪 Test Koneksi</BtnSm>
                     </div>
                   </div>
                 </AdminSection>

@@ -252,6 +252,7 @@ func main() {
 	mux.HandleFunc("/admin/contributions", a.handleAdminContributions)
 	mux.HandleFunc("/admin/contributions/review", a.handleAdminReviewContribution)
 	mux.HandleFunc("/admin/ai-settings", a.handleAdminAISettings)
+	mux.HandleFunc("/admin/ai-profiles", a.handleAdminAIProfiles)
 	mux.HandleFunc("/participant/reflections", a.handleParticipantReflections)
 	mux.HandleFunc("/participant/reflection-reminder", a.handleParticipantReflectionReminder)
 	mux.HandleFunc("/participant/badges", a.handleParticipantBadges)
@@ -664,6 +665,27 @@ func (a *app) initDB(ctx context.Context) error {
 		VALUES (1, 'sumopod', 'https://ai.sumopod.com/v1/chat/completions', $1, 'gpt-4o-mini', 0.7, 2000, TRUE)
 		ON CONFLICT (id) DO NOTHING
 	`, os.Getenv("SUMOPOD_API_KEY"))
+	_, _ = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS ai_provider_profiles (
+			id BIGSERIAL PRIMARY KEY,
+			name TEXT NOT NULL UNIQUE,
+			provider TEXT NOT NULL DEFAULT 'sumopod',
+			base_url TEXT NOT NULL,
+			api_key TEXT NOT NULL DEFAULT '',
+			model TEXT NOT NULL,
+			temperature DOUBLE PRECISION NOT NULL DEFAULT 0.7,
+			max_tokens INT NOT NULL DEFAULT 2000,
+			is_active BOOLEAN NOT NULL DEFAULT FALSE,
+			updated_by BIGINT REFERENCES users(id),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	_, _ = a.db.ExecContext(ctx, `
+		INSERT INTO ai_provider_profiles (name, provider, base_url, api_key, model, temperature, max_tokens, is_active)
+		SELECT 'default-sumopod', provider, base_url, api_key, model, temperature, max_tokens, TRUE
+		FROM ai_provider_settings WHERE id=1
+		ON CONFLICT (name) DO NOTHING
+	`)
 
 	// Badges
 	_, _ = a.db.ExecContext(ctx, `
@@ -6641,10 +6663,18 @@ func (a *app) getActiveAISetting(ctx context.Context) (aiProviderSetting, error)
 		MaxTokens:   2000,
 		IsActive:    true,
 	}
-	_ = a.db.QueryRowContext(ctx, `
+	// Prioritas: profile aktif
+	err := a.db.QueryRowContext(ctx, `
 		SELECT provider, base_url, api_key, model, temperature, max_tokens, is_active
-		FROM ai_provider_settings WHERE id=1
+		FROM ai_provider_profiles WHERE is_active=TRUE
+		ORDER BY updated_at DESC LIMIT 1
 	`).Scan(&cfg.Provider, &cfg.BaseURL, &cfg.APIKey, &cfg.Model, &cfg.Temperature, &cfg.MaxTokens, &cfg.IsActive)
+	if err != nil {
+		_ = a.db.QueryRowContext(ctx, `
+			SELECT provider, base_url, api_key, model, temperature, max_tokens, is_active
+			FROM ai_provider_settings WHERE id=1
+		`).Scan(&cfg.Provider, &cfg.BaseURL, &cfg.APIKey, &cfg.Model, &cfg.Temperature, &cfg.MaxTokens, &cfg.IsActive)
+	}
 	if strings.TrimSpace(cfg.APIKey) == "" {
 		cfg.APIKey = os.Getenv("SUMOPOD_API_KEY")
 	}
@@ -6741,6 +6771,62 @@ func (a *app) handleAdminAISettings(w http.ResponseWriter, r *http.Request) {
 		if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal simpan ai settings"}); return }
 		_ = a.logAdminAction(r.Context(), u.ID, "ai_settings.update", "ai_provider_settings:1", req)
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error":"method not allowed"})
+	}
+}
+
+func (a *app) handleAdminAIProfiles(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "admin", "super_admin")
+	if err != nil { writeJSON(w, http.StatusUnauthorized, map[string]string{"error":"unauthorized"}); return }
+	if !isSuperAdmin(u) { writeJSON(w, http.StatusForbidden, map[string]string{"error":"hanya super_admin"}); return }
+
+	switch r.Method {
+	case http.MethodGet:
+		rows, err := a.db.QueryContext(r.Context(), `SELECT id,name,provider,base_url,model,temperature,max_tokens,is_active,updated_at FROM ai_provider_profiles ORDER BY updated_at DESC`)
+		if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"db error"}); return }
+		defer rows.Close()
+		items := []map[string]any{}
+		for rows.Next() {
+			var id int64; var name, provider, baseURL, model string; var temp float64; var maxTokens int; var active bool; var updated time.Time
+			if rows.Scan(&id,&name,&provider,&baseURL,&model,&temp,&maxTokens,&active,&updated)==nil {
+				items = append(items, map[string]any{"id":id,"name":name,"provider":provider,"base_url":baseURL,"model":model,"temperature":temp,"max_tokens":maxTokens,"is_active":active,"updated_at":updated})
+			}
+		}
+		writeJSON(w,http.StatusOK,map[string]any{"items":items})
+	case http.MethodPost:
+		var req struct {
+			Action string `json:"action"`; ID int64 `json:"id"`; Name string `json:"name"`
+			Provider string `json:"provider"`; BaseURL string `json:"base_url"`; APIKey string `json:"api_key"`; Model string `json:"model"`
+			Temperature float64 `json:"temperature"`; MaxTokens int `json:"max_tokens"`; IsActive *bool `json:"is_active"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req)!=nil { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"invalid json"}); return }
+		switch req.Action {
+		case "create", "update":
+			if strings.TrimSpace(req.Name)=="" || strings.TrimSpace(req.BaseURL)=="" || strings.TrimSpace(req.Model)=="" {
+				writeJSON(w,http.StatusBadRequest,map[string]string{"error":"name/base_url/model wajib"}); return
+			}
+			if req.MaxTokens<=0 { req.MaxTokens = 2000 }
+			if req.Temperature<=0 { req.Temperature = 0.7 }
+			if req.Action=="create" {
+				_, err = a.db.ExecContext(r.Context(), `INSERT INTO ai_provider_profiles (name,provider,base_url,api_key,model,temperature,max_tokens,is_active,updated_by,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,FALSE,$8,NOW())`, strings.TrimSpace(req.Name), strings.TrimSpace(req.Provider), strings.TrimSpace(req.BaseURL), strings.TrimSpace(req.APIKey), strings.TrimSpace(req.Model), req.Temperature, req.MaxTokens, u.ID)
+			} else {
+				_, err = a.db.ExecContext(r.Context(), `UPDATE ai_provider_profiles SET name=$1,provider=$2,base_url=$3,api_key=CASE WHEN $4='' THEN api_key ELSE $4 END,model=$5,temperature=$6,max_tokens=$7,updated_by=$8,updated_at=NOW() WHERE id=$9`, strings.TrimSpace(req.Name), strings.TrimSpace(req.Provider), strings.TrimSpace(req.BaseURL), strings.TrimSpace(req.APIKey), strings.TrimSpace(req.Model), req.Temperature, req.MaxTokens, u.ID, req.ID)
+			}
+			if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal simpan profile"}); return }
+			writeJSON(w,http.StatusOK,map[string]any{"ok":true})
+		case "activate":
+			_, _ = a.db.ExecContext(r.Context(), `UPDATE ai_provider_profiles SET is_active=FALSE`)
+			_, err = a.db.ExecContext(r.Context(), `UPDATE ai_provider_profiles SET is_active=TRUE, updated_by=$1, updated_at=NOW() WHERE id=$2`, u.ID, req.ID)
+			if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal aktifkan profile"}); return }
+			writeJSON(w,http.StatusOK,map[string]any{"ok":true})
+		case "delete":
+			_, err = a.db.ExecContext(r.Context(), `DELETE FROM ai_provider_profiles WHERE id=$1`, req.ID)
+			if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal hapus profile"}); return }
+			writeJSON(w,http.StatusOK,map[string]any{"ok":true})
+		default:
+			writeJSON(w,http.StatusBadRequest,map[string]string{"error":"unknown action"})
+		}
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error":"method not allowed"})
 	}
