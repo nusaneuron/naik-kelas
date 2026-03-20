@@ -5836,6 +5836,58 @@ func (a *app) syncNoteLinks(ctx context.Context, noteID, userID int64, content s
 // GET  /participant/notes          → list semua notes user (+ tags)
 // GET  /participant/notes?id=X     → single note dengan content
 // POST /participant/notes          → create | update | delete
+func (a *app) generateContributionMaterial(ctx context.Context, title, source string, bubbleCount int) (string, error) {
+	if bubbleCount <= 0 || bubbleCount > 8 {
+		bubbleCount = 3
+	}
+	systemPrompt := `Kamu adalah asisten editor materi pembelajaran.
+Ubah catatan mentah menjadi materi belajar yang lebih rapi, terstruktur, dan mudah dipahami.
+Format output HARUS berupa JSON array of strings, setiap item adalah satu bubble materi.
+Gunakan Bahasa Indonesia, ringkas, jelas, boleh pakai markdown (**bold**, bullet, heading).`
+	userPrompt := fmt.Sprintf("Judul materi: %s\n\nCatatan sumber:\n%s\n\nBuat %d bubble.", title, source, bubbleCount)
+
+	type aiMsg struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+	type aiReq struct {
+		Model       string  `json:"model"`
+		Messages    []aiMsg `json:"messages"`
+		MaxTokens   int     `json:"max_tokens"`
+		Temperature float64 `json:"temperature"`
+	}
+	payload, _ := json.Marshal(aiReq{
+		Model: "gpt-4o-mini",
+		Messages: []aiMsg{{Role: "system", Content: systemPrompt}, {Role: "user", Content: userPrompt}},
+		MaxTokens: 2000, Temperature: 0.7,
+	})
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://ai.sumopod.com/v1/chat/completions", bytes.NewReader(payload))
+	if err != nil { return "", err }
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer sk-bTZ7vafsuH0O4NMduyvwUA")
+	resp, err := (&http.Client{Timeout: 60 * time.Second}).Do(httpReq)
+	if err != nil { return "", err }
+	defer resp.Body.Close()
+
+	var aiResp struct {
+		Choices []struct{ Message struct{ Content string `json:"content"` } `json:"message"` } `json:"choices"`
+		Error   *struct{ Message string `json:"message"` } `json:"error"`
+	}
+	if json.NewDecoder(resp.Body).Decode(&aiResp) != nil { return "", errors.New("gagal parse respons AI") }
+	if aiResp.Error != nil { return "", errors.New(aiResp.Error.Message) }
+	if len(aiResp.Choices) == 0 { return "", errors.New("AI tidak menghasilkan konten") }
+	content := strings.TrimSpace(aiResp.Choices[0].Message.Content)
+
+	var bubbles []string
+	start := strings.Index(content, "[")
+	end := strings.LastIndex(content, "]")
+	if start >= 0 && end > start {
+		_ = json.Unmarshal([]byte(content[start:end+1]), &bubbles)
+	}
+	if len(bubbles) == 0 { bubbles = []string{content} }
+	return strings.Join(bubbles, "\n\n---\n\n"), nil
+}
+
 func (a *app) handleParticipantNotes(w http.ResponseWriter, r *http.Request) {
 	u, err := a.requireRole(r.Context(), r, "participant", "admin")
 	if err != nil {
@@ -8628,6 +8680,8 @@ func (a *app) handleAdminReviewContribution(w http.ResponseWriter, r *http.Reque
 		ContributionID int64  `json:"contribution_id"`
 		Action         string `json:"action"`        // approve, reject
 		AdminFeedback  string `json:"admin_feedback"`
+		ApproveMode    string `json:"approve_mode"`  // direct, ai
+		BubbleCount    int    `json:"bubble_count"`  // optional for ai mode
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -8637,6 +8691,12 @@ func (a *app) handleAdminReviewContribution(w http.ResponseWriter, r *http.Reque
 	if req.Action != "approve" && req.Action != "reject" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "action harus 'approve' atau 'reject'"})
 		return
+	}
+	if strings.TrimSpace(req.ApproveMode) == "" {
+		req.ApproveMode = "direct"
+	}
+	if req.BubbleCount <= 0 || req.BubbleCount > 8 {
+		req.BubbleCount = 3
 	}
 
 	// Get contribution info
@@ -8656,6 +8716,18 @@ func (a *app) handleAdminReviewContribution(w http.ResponseWriter, r *http.Reque
 	if currentStatus != "pending" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kontribusi sudah di-review sebelumnya"})
 		return
+	}
+
+	materialTitle := title + " (Kontribusi)"
+	materialContent := content
+	if req.Action == "approve" && req.ApproveMode == "ai" {
+		generated, gErr := a.generateContributionMaterial(r.Context(), title, content, req.BubbleCount)
+		if gErr != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "gagal generate AI: " + gErr.Error()})
+			return
+		}
+		materialTitle = title + " (AI)"
+		materialContent = generated
 	}
 
 	tx, err := a.db.BeginTx(r.Context(), nil)
@@ -8705,7 +8777,7 @@ func (a *app) handleAdminReviewContribution(w http.ResponseWriter, r *http.Reque
 		_, err = tx.ExecContext(r.Context(), `
 			INSERT INTO learning_materials (category_id, title, type, content, exp_reward, order_no, is_active) 
 			VALUES ($1, $2, $3, $4, 10, $5, TRUE)
-		`, categoryID, title+" (Kontribusi)", "text", content, maxOrder+1)
+		`, categoryID, materialTitle, "text", materialContent, maxOrder+1)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal tambah ke materi"})
 			return

@@ -80,6 +80,7 @@ export default function Page() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewingContrib, setReviewingContrib] = useState(null);
   const [reviewAction, setReviewAction] = useState('');
+  const [reviewApproveMode, setReviewApproveMode] = useState('direct');
   const [reviewFeedback, setReviewFeedback] = useState('');
   const [reviewLoading, setReviewLoading] = useState(false);
   
@@ -463,6 +464,7 @@ export default function Page() {
   function openReviewModal(contrib, action) {
     setReviewingContrib(contrib);
     setReviewAction(action);
+    setReviewApproveMode('direct');
     setReviewFeedback('');
     setShowReviewModal(true);
   }
@@ -479,6 +481,8 @@ export default function Page() {
         body: JSON.stringify({
           contribution_id: reviewingContrib.id,
           action: reviewAction,
+          approve_mode: reviewApproveMode,
+          bubble_count: 3,
           admin_feedback: reviewFeedback.trim(),
         }),
       });
@@ -3755,6 +3759,40 @@ export default function Page() {
                           </div>
                         </div>
 
+                        {reviewAction === 'approve' && (
+                          <div style={{ marginBottom: 14 }}>
+                            <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: '#cbd5e1' }}>
+                              ⚙️ Mode Persetujuan
+                            </label>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button
+                                onClick={() => setReviewApproveMode('direct')}
+                                style={{
+                                  padding: '6px 10px', borderRadius: 8,
+                                  border: reviewApproveMode === 'direct' ? '1px solid #22c55e' : '1px solid #374151',
+                                  background: reviewApproveMode === 'direct' ? 'rgba(34,197,94,0.12)' : 'transparent',
+                                  color: reviewApproveMode === 'direct' ? '#4ade80' : '#94a3b8',
+                                  fontSize: 12, cursor: 'pointer'
+                                }}
+                              >
+                                ✅ Langsung jadi materi
+                              </button>
+                              <button
+                                onClick={() => setReviewApproveMode('ai')}
+                                style={{
+                                  padding: '6px 10px', borderRadius: 8,
+                                  border: reviewApproveMode === 'ai' ? '1px solid #8b5cf6' : '1px solid #374151',
+                                  background: reviewApproveMode === 'ai' ? 'rgba(139,92,246,0.12)' : 'transparent',
+                                  color: reviewApproveMode === 'ai' ? '#c4b5fd' : '#94a3b8',
+                                  fontSize: 12, cursor: 'pointer'
+                                }}
+                              >
+                                🤖 Generate AI dulu
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
                         <div style={{ marginBottom: 20 }}>
                           <label style={{
                             display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: '#cbd5e1'
@@ -3804,7 +3842,9 @@ export default function Page() {
                             }}
                           >
                             {reviewLoading ? '⏳ Memproses...' : 
-                             (reviewAction === 'approve' ? '✅ Setujui' : '❌ Tolak')}
+                             (reviewAction === 'approve'
+                               ? (reviewApproveMode === 'ai' ? '🤖 Setujui + Generate AI' : '✅ Setujui Langsung')
+                               : '❌ Tolak')}
                           </button>
                         </div>
                       </div>
