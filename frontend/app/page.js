@@ -81,6 +81,7 @@ export default function Page() {
   const [reviewingContrib, setReviewingContrib] = useState(null);
   const [reviewAction, setReviewAction] = useState('');
   const [reviewApproveMode, setReviewApproveMode] = useState('direct');
+  const [reviewBubbleCount, setReviewBubbleCount] = useState(3);
   const [reviewFeedback, setReviewFeedback] = useState('');
   const [reviewLoading, setReviewLoading] = useState(false);
   
@@ -465,6 +466,7 @@ export default function Page() {
     setReviewingContrib(contrib);
     setReviewAction(action);
     setReviewApproveMode('direct');
+    setReviewBubbleCount(3);
     setReviewFeedback('');
     setShowReviewModal(true);
   }
@@ -482,7 +484,7 @@ export default function Page() {
           contribution_id: reviewingContrib.id,
           action: reviewAction,
           approve_mode: reviewApproveMode,
-          bubble_count: 3,
+          bubble_count: reviewBubbleCount,
           admin_feedback: reviewFeedback.trim(),
         }),
       });
@@ -3790,6 +3792,30 @@ export default function Page() {
                                 🤖 Generate AI dulu
                               </button>
                             </div>
+                            {reviewApproveMode === 'ai' && (
+                              <div style={{ marginTop: 10 }}>
+                                <label style={{ display: 'block', marginBottom: 6, fontSize: 12, color: '#94a3b8' }}>
+                                  Jumlah bubble pesan
+                                </label>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                  {[3,4,5].map(n => (
+                                    <button
+                                      key={n}
+                                      onClick={() => setReviewBubbleCount(n)}
+                                      style={{
+                                        padding: '5px 10px', borderRadius: 8,
+                                        border: reviewBubbleCount === n ? '1px solid #8b5cf6' : '1px solid #374151',
+                                        background: reviewBubbleCount === n ? 'rgba(139,92,246,0.18)' : 'transparent',
+                                        color: reviewBubbleCount === n ? '#c4b5fd' : '#94a3b8',
+                                        fontSize: 12, cursor: 'pointer'
+                                      }}
+                                    >
+                                      {n} Bubble
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
 
