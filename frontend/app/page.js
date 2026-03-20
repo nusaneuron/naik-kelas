@@ -1551,75 +1551,7 @@ export default function Page() {
               </a>
             )}
 
-            {/* Ubah Password */}
-            {participantSection === 'profil' && (
-              <Section title="🔒 Keamanan Akun">
-                {!showChangePass ? (
-                  <button onClick={() => setShowChangePass(true)}
-                    style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 8, color: '#818cf8', padding: '8px 18px', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
-                    🔑 Ubah Password
-                  </button>
-                ) : (
-                  <div style={{ maxWidth: 400 }}>
-                    {/* Password lama */}
-                    <div style={{ marginBottom: 12 }}>
-                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Password Lama</div>
-                      <div style={{ position: 'relative' }}>
-                        <input type={showPassOld ? 'text' : 'password'} className="nk-input-sm" style={{ width: '100%', paddingRight: 40 }}
-                          value={changePassForm.old} onChange={e => setChangePassForm(f=>({...f, old: e.target.value}))} placeholder="Masukkan password lama" />
-                        <button type="button" onClick={() => setShowPassOld(p=>!p)}
-                          style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 16 }}>
-                          {showPassOld ? '🙈' : '👁️'}
-                        </button>
-                      </div>
-                    </div>
-                    {/* Password baru */}
-                    <div style={{ marginBottom: 12 }}>
-                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Password Baru <span style={{ color: '#475569' }}>(min. 6 karakter)</span></div>
-                      <div style={{ position: 'relative' }}>
-                        <input type={showPassNew ? 'text' : 'password'} className="nk-input-sm" style={{ width: '100%', paddingRight: 40 }}
-                          value={changePassForm.new1} onChange={e => setChangePassForm(f=>({...f, new1: e.target.value}))} placeholder="Password baru" />
-                        <button type="button" onClick={() => setShowPassNew(p=>!p)}
-                          style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 16 }}>
-                          {showPassNew ? '🙈' : '👁️'}
-                        </button>
-                      </div>
-                    </div>
-                    {/* Konfirmasi */}
-                    <div style={{ marginBottom: 16 }}>
-                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Konfirmasi Password Baru</div>
-                      <input type="password" className="nk-input-sm" style={{ width: '100%' }}
-                        value={changePassForm.new2} onChange={e => setChangePassForm(f=>({...f, new2: e.target.value}))} placeholder="Ulangi password baru" />
-                      {changePassForm.new2 && changePassForm.new1 !== changePassForm.new2 && (
-                        <p style={{ margin: '4px 0 0', fontSize: 12, color: '#f87171' }}>⚠️ Password tidak cocok</p>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <BtnSm color="purple" disabled={busy || changePassForm.new1 !== changePassForm.new2 || changePassForm.new1.length < 6}
-                        onClick={async () => {
-                          setBusy(true);
-                          const res = await fetch(`${apiBase}/participant/change-password`, {
-                            method: 'POST', credentials: 'include',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ old_password: changePassForm.old, new_password: changePassForm.new1 })
-                          });
-                          const d = await res.json().catch(()=>({}));
-                          setBusy(false);
-                          if (res.ok) {
-                            showMsg('Password berhasil diubah ✅', 'success');
-                            setShowChangePass(false);
-                            setChangePassForm({old:'',new1:'',new2:''});
-                            const latestMe = await fetchMe();
-                            if (latestMe) setMe(latestMe);
-                            else setMe(m => ({ ...m, must_change_password: false }));
-                          } else showMsg(d.error || 'Gagal ubah password', 'error');
-                        }}>💾 Simpan Password</BtnSm>
-                      <BtnSm onClick={() => { setShowChangePass(false); setChangePassForm({old:'',new1:'',new2:''}); }}>Batal</BtnSm>
-                    </div>
-                  </div>
-                )}
-              </Section>
-            )}
+            {/* Keamanan Akun dipindah ke bawah profil */}
 
             {/* ── Poin ── */}
             {/* ── Badges (dipindah ke Profil) ── */}
@@ -1712,6 +1644,71 @@ export default function Page() {
                   </table>
                 </div>
               ) : <div className="nk-empty">🏆 Belum ada data leaderboard.</div>}
+            </Section>
+
+            {/* Ubah Password (dipindah ke paling bawah Profil) */}
+            <Section title="🔒 Keamanan Akun" style={{ marginTop: 12 }}>
+              {!showChangePass ? (
+                <button onClick={() => setShowChangePass(true)}
+                  style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 8, color: '#818cf8', padding: '8px 18px', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+                  🔑 Ubah Password
+                </button>
+              ) : (
+                <div style={{ maxWidth: 400 }}>
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Password Lama</div>
+                    <div style={{ position: 'relative' }}>
+                      <input type={showPassOld ? 'text' : 'password'} className="nk-input-sm" style={{ width: '100%', paddingRight: 40 }}
+                        value={changePassForm.old} onChange={e => setChangePassForm(f=>({...f, old: e.target.value}))} placeholder="Masukkan password lama" />
+                      <button type="button" onClick={() => setShowPassOld(p=>!p)}
+                        style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 16 }}>
+                        {showPassOld ? '🙈' : '👁️'}
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Password Baru <span style={{ color: '#475569' }}>(min. 6 karakter)</span></div>
+                    <div style={{ position: 'relative' }}>
+                      <input type={showPassNew ? 'text' : 'password'} className="nk-input-sm" style={{ width: '100%', paddingRight: 40 }}
+                        value={changePassForm.new1} onChange={e => setChangePassForm(f=>({...f, new1: e.target.value}))} placeholder="Password baru" />
+                      <button type="button" onClick={() => setShowPassNew(p=>!p)}
+                        style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 16 }}>
+                        {showPassNew ? '🙈' : '👁️'}
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Konfirmasi Password Baru</div>
+                    <input type="password" className="nk-input-sm" style={{ width: '100%' }}
+                      value={changePassForm.new2} onChange={e => setChangePassForm(f=>({...f, new2: e.target.value}))} placeholder="Ulangi password baru" />
+                    {changePassForm.new2 && changePassForm.new1 !== changePassForm.new2 && (
+                      <p style={{ margin: '4px 0 0', fontSize: 12, color: '#f87171' }}>⚠️ Password tidak cocok</p>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <BtnSm color="purple" disabled={busy || changePassForm.new1 !== changePassForm.new2 || changePassForm.new1.length < 6}
+                      onClick={async () => {
+                        setBusy(true);
+                        const res = await fetch(`${apiBase}/participant/change-password`, {
+                          method: 'POST', credentials: 'include',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ old_password: changePassForm.old, new_password: changePassForm.new1 })
+                        });
+                        const d = await res.json().catch(()=>({}));
+                        setBusy(false);
+                        if (res.ok) {
+                          showMsg('Password berhasil diubah ✅', 'success');
+                          setShowChangePass(false);
+                          setChangePassForm({old:'',new1:'',new2:''});
+                          const latestMe = await fetchMe();
+                          if (latestMe) setMe(latestMe);
+                          else setMe(m => ({ ...m, must_change_password: false }));
+                        } else showMsg(d.error || 'Gagal ubah password', 'error');
+                      }}>💾 Simpan Password</BtnSm>
+                    <BtnSm onClick={() => { setShowChangePass(false); setChangePassForm({old:'',new1:'',new2:''}); }}>Batal</BtnSm>
+                  </div>
+                </div>
+              )}
             </Section>
 
             </>)}
