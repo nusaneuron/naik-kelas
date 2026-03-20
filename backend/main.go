@@ -7437,6 +7437,35 @@ func (a *app) handleParticipantReflections(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusOK, map[string]any{"items": items})
 		return
 	}
+	if r.Method == http.MethodPost {
+		var req struct { Content string `json:"content"` }
+		if json.NewDecoder(r.Body).Decode(&req) != nil || strings.TrimSpace(req.Content) == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "isi refleksi tidak boleh kosong"})
+			return
+		}
+		content := strings.TrimSpace(req.Content)
+		if len(content) > 5000 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "refleksi terlalu panjang (maks 5000 karakter)"})
+			return
+		}
+		var existed bool
+		_ = a.db.QueryRowContext(r.Context(), `SELECT EXISTS(SELECT 1 FROM reflections WHERE user_id=$1 AND reflected_date=CURRENT_DATE)`, u.ID).Scan(&existed)
+		_, err = a.db.ExecContext(r.Context(), `
+			INSERT INTO reflections (user_id, content, reflected_date, created_at)
+			VALUES ($1,$2,CURRENT_DATE,NOW())
+			ON CONFLICT (user_id, reflected_date)
+			DO UPDATE SET content=EXCLUDED.content, created_at=NOW()
+		`, u.ID, content)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal simpan refleksi"})
+			return
+		}
+		if !existed {
+			a.applyExpRule(r.Context(), u.ID, "reflection_daily", "Refleksi harian via web")
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "awarded_exp": !existed})
+		return
+	}
 	writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 }
 

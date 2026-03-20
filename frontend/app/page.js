@@ -63,6 +63,8 @@ export default function Page() {
   // Materi
   const [myMaterials, setMyMaterials] = useState([]);
   const [myReflections, setMyReflections] = useState([]);
+  const [reflectionDraft, setReflectionDraft] = useState('');
+  const [reflectionSaving, setReflectionSaving] = useState(false);
   const [adminReflectionStats, setAdminReflectionStats] = useState(null);
   const [adminLearningSummary, setAdminLearningSummary] = useState(null);
   const [reminderMsg, setReminderMsg] = useState('');
@@ -289,7 +291,11 @@ export default function Page() {
       const lRes = await fetch(`${apiBase}/participant/leaderboard`, { credentials: 'include' });
       if (lRes.ok) setLeaderboard((await lRes.json()).items || []);
     } else if (section === 'catatan') {
-      await refreshNotes();
+      const [_, refRes] = await Promise.all([
+        refreshNotes(),
+        fetch(`${apiBase}/participant/reflections`, { credentials: 'include' }),
+      ]);
+      if (refRes.ok) setMyReflections((await refRes.json()).items || []);
     }
   }
 
@@ -631,6 +637,22 @@ export default function Page() {
     setLoadedSections({});
     await loadParticipant();
     await loadSection(participantSection);
+  }
+
+  async function submitReflectionWeb() {
+    if (!reflectionDraft.trim()) return showMsg('Isi refleksi dulu ya', 'error');
+    setReflectionSaving(true);
+    const res = await fetch(`${apiBase}/participant/reflections`, {
+      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: reflectionDraft.trim() })
+    });
+    const d = await res.json().catch(() => ({}));
+    setReflectionSaving(false);
+    if (!res.ok) return showMsg(d.error || 'Gagal simpan refleksi', 'error');
+    showMsg(d.awarded_exp ? 'Refleksi tersimpan (+EXP) ✅' : 'Refleksi hari ini diperbarui ✅', 'success');
+    setReflectionDraft('');
+    const refRes = await fetch(`${apiBase}/participant/reflections`, { credentials: 'include' });
+    if (refRes.ok) setMyReflections((await refRes.json()).items || []);
   }
 
   useEffect(() => {
@@ -1151,7 +1173,6 @@ export default function Page() {
         ['quiz', '🧠', 'Quiz & Tryout'],
         ['redeem', '🎁', 'Redeem'],
         ['poin', '💰', 'Poin'],
-        ['refleksi', '📔', 'Refleksi'],
         ['badges', '🎖️', 'Badges'],
         ['leaderboard', '🏆', 'Leaderboard'],
       ];
@@ -1756,6 +1777,27 @@ export default function Page() {
                   </div>
                 )}
 
+                {/* Refleksi Harian (dipindah ke Catatan) */}
+                <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 12, marginBottom: 12 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 8, gap: 8, flexWrap:'wrap' }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#cbd5e1' }}>📔 Refleksi Harian</div>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>Privat • tersimpan di akunmu</div>
+                  </div>
+                  <textarea
+                    value={reflectionDraft}
+                    onChange={e => setReflectionDraft(e.target.value)}
+                    placeholder="Tulis refleksi harianmu di sini..."
+                    style={{ width:'100%', minHeight: 90, background:'#080d18', border:'1px solid #1e2d45', borderRadius: 8, color:'#e2e8f0', padding:'10px 12px', fontSize:13, resize:'vertical' }}
+                  />
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop: 8 }}>
+                    <span style={{ fontSize: 11, color: '#64748b' }}>Setiap hari pertama kali submit dapat EXP refleksi.</span>
+                    <button onClick={submitReflectionWeb} disabled={reflectionSaving || !reflectionDraft.trim()}
+                      style={{ padding:'6px 12px', borderRadius:8, border:'none', background: reflectionSaving || !reflectionDraft.trim() ? '#334155' : '#7c3aed', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                      {reflectionSaving ? '⏳ Menyimpan...' : '💾 Simpan Refleksi'}
+                    </button>
+                  </div>
+                </div>
+
                 {/* LIST VIEW */}
                 {noteView === 'list' && (() => {
                   const permanent = notes.filter(n => n.note_type !== 'fleeting');
@@ -2292,35 +2334,7 @@ export default function Page() {
             {/* Refleksi Harian */}
             </>)}
 
-            {/* ── Refleksi ── */}
-            {participantSection === 'refleksi' && (<>
-            <Section title="📔 Refleksi Harianku">
-              <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 16 }}>
-                Refleksi harianmu bersifat <strong>privat</strong> — hanya kamu yang bisa membacanya 🔒<br/>
-                Tulis lewat bot Nala dengan perintah <code style={{ color: '#be94f5' }}>/refleksi</code> dan dapatkan <strong>+15 EXP</strong> setiap hari!
-              </p>
-              {myReflections.length > 0 ? (
-                <div style={{ display: 'grid', gap: 10, maxHeight: 400, overflowY: 'auto' }}>
-                  {myReflections.map(r => (
-                    <div key={r.id} style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '14px 16px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: '#be94f5' }}>
-                          📅 {new Date(r.reflected_date + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                        </span>
-                      </div>
-                      <p style={{ margin: 0, fontSize: 14, color: '#cbd5e1', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{r.content}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ textAlign: 'center', padding: '32px 0' }}>
-                  <div style={{ fontSize: 32, marginBottom: 10 }}>📔</div>
-                  <p style={{ color: '#475569', fontSize: 14, margin: 0 }}>Belum ada refleksi.</p>
-                  <p style={{ color: '#334155', fontSize: 13, margin: '8px 0 0' }}>Mulai hari ini dengan ketik <strong>/refleksi</strong> di bot Nala!</p>
-                </div>
-              )}
-            </Section>
-            </>)}
+            
 
             </div>
           </div>
