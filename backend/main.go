@@ -7467,6 +7467,30 @@ func (a *app) handleParticipantReflections(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "awarded_exp": !existed})
 		return
 	}
+	if r.Method == http.MethodDelete {
+		idStr := strings.TrimSpace(r.URL.Query().Get("id"))
+		if idStr == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id refleksi wajib diisi"})
+			return
+		}
+		id, convErr := strconv.ParseInt(idStr, 10, 64)
+		if convErr != nil || id <= 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id refleksi tidak valid"})
+			return
+		}
+		res, err := a.db.ExecContext(r.Context(), `DELETE FROM reflections WHERE id=$1 AND user_id=$2`, id, u.ID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal hapus refleksi"})
+			return
+		}
+		affected, _ := res.RowsAffected()
+		if affected == 0 {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "refleksi tidak ditemukan"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+		return
+	}
 	writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 }
 

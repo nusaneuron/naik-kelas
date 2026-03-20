@@ -65,6 +65,7 @@ export default function Page() {
   const [myReflections, setMyReflections] = useState([]);
   const [reflectionDraft, setReflectionDraft] = useState('');
   const [reflectionSaving, setReflectionSaving] = useState(false);
+  const [reflectionDeletingId, setReflectionDeletingId] = useState(null);
   const [showReflectionEditor, setShowReflectionEditor] = useState(false);
   const [adminReflectionStats, setAdminReflectionStats] = useState(null);
   const [adminLearningSummary, setAdminLearningSummary] = useState(null);
@@ -655,6 +656,18 @@ export default function Page() {
     const refRes = await fetch(`${apiBase}/participant/reflections`, { credentials: 'include' });
     if (refRes.ok) setMyReflections((await refRes.json()).items || []);
     return true;
+  }
+
+  async function deleteReflection(id) {
+    if (!id) return;
+    if (!confirm('Hapus refleksi ini?')) return;
+    setReflectionDeletingId(id);
+    const res = await fetch(`${apiBase}/participant/reflections?id=${id}`, { method: 'DELETE', credentials: 'include' });
+    const d = await res.json().catch(() => ({}));
+    setReflectionDeletingId(null);
+    if (!res.ok) return showMsg(d.error || 'Gagal hapus refleksi', 'error');
+    setMyReflections(prev => prev.filter(r => r.id !== id));
+    showMsg('Refleksi berhasil dihapus ✅', 'success');
   }
 
   useEffect(() => {
@@ -1788,7 +1801,13 @@ export default function Page() {
                     <div style={{ display: 'grid', gap: 8, maxHeight: 180, overflowY: 'auto' }}>
                       {myReflections.slice(0, 5).map(r => (
                         <div key={r.id} style={{ background:'#080d18', border:'1px solid #1e2d45', borderRadius:8, padding:'8px 10px' }}>
-                          <div style={{ fontSize:11, color:'#94a3b8', marginBottom:4 }}>📅 {new Date(r.reflected_date + 'T00:00:00').toLocaleDateString('id-ID')}</div>
+                          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:4 }}>
+                            <div style={{ fontSize:11, color:'#94a3b8' }}>📅 {new Date(r.reflected_date + 'T00:00:00').toLocaleDateString('id-ID')}</div>
+                            <button onClick={() => deleteReflection(r.id)} disabled={reflectionDeletingId === r.id}
+                              style={{ background:'transparent', border:'1px solid #7f1d1d', color:'#fca5a5', borderRadius:6, fontSize:11, padding:'2px 7px', cursor:'pointer' }}>
+                              {reflectionDeletingId === r.id ? '⏳' : '🗑 Hapus'}
+                            </button>
+                          </div>
                           <div style={{ fontSize:12, color:'#cbd5e1', lineHeight:1.5, whiteSpace:'pre-wrap' }}>{(r.content || '').slice(0, 140)}{(r.content || '').length > 140 ? '...' : ''}</div>
                         </div>
                       ))}
