@@ -264,8 +264,6 @@ func main() {
 	mux.HandleFunc("/admin/feedback/list", a.handleAdminFeedbackList)
 	mux.HandleFunc("/admin/feedback/stats", a.handleAdminFeedbackStats)
 	mux.HandleFunc("/admin/reflections/stats", a.handleAdminReflectionStats)
-	mux.HandleFunc("/admin/roadmaps", a.handleAdminRoadmaps)
-	mux.HandleFunc("/participant/roadmaps", a.handleParticipantRoadmaps)
 
 	port := getenv("PORT", "8080")
 	addr := ":" + port
@@ -899,25 +897,6 @@ func (a *app) initDB(ctx context.Context) error {
 			reflected_date DATE NOT NULL DEFAULT CURRENT_DATE,
 			created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			UNIQUE(user_id, reflected_date)
-		)
-	`)
-	if err != nil {
-		return err
-	}
-
-	// Roadmap belajar per kategori (admin-managed)
-	_, err = a.db.ExecContext(ctx, `
-		CREATE TABLE IF NOT EXISTS category_roadmaps (
-			id            BIGSERIAL PRIMARY KEY,
-			category_id   INT NOT NULL REFERENCES question_categories(id) ON DELETE CASCADE,
-			title         TEXT NOT NULL,
-			description   TEXT NOT NULL DEFAULT '',
-			graph_json    TEXT NOT NULL DEFAULT '{"nodes":[],"edges":[]}',
-			is_published  BOOLEAN NOT NULL DEFAULT FALSE,
-			created_by    BIGINT REFERENCES users(id) ON DELETE SET NULL,
-			updated_by    BIGINT REFERENCES users(id) ON DELETE SET NULL,
-			created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)
 	`)
 	if err != nil {
@@ -7513,168 +7492,6 @@ func (a *app) handleParticipantReflections(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-}
-
-// ── Roadmap Belajar per Kategori ───────────────────────────────────────────
-
-func (a *app) handleAdminRoadmaps(w http.ResponseWriter, r *http.Request) {
-	admin, err := a.requireRole(r.Context(), r, "admin", "super_admin")
-	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-		return
-	}
-
-	if r.Method == http.MethodGet {
-		rows, err := a.db.QueryContext(r.Context(), `
-			SELECT cr.id, cr.category_id, qc.name, cr.title, cr.description, cr.graph_json, cr.is_published,
-			       COALESCE(pp.name, u.phone, '-') AS updated_by_name, cr.updated_at
-			FROM category_roadmaps cr
-			JOIN question_categories qc ON qc.id = cr.category_id
-			LEFT JOIN users u ON u.id = cr.updated_by
-			LEFT JOIN participant_profiles pp ON pp.user_id = u.id
-			ORDER BY cr.updated_at DESC
-		`)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
-			return
-		}
-		defer rows.Close()
-		type item struct {
-			ID            int64  `json:"id"`
-			CategoryID    int64  `json:"category_id"`
-			CategoryName  string `json:"category_name"`
-			Title         string `json:"title"`
-			Description   string `json:"description"`
-			GraphJSON     string `json:"graph_json"`
-			IsPublished   bool   `json:"is_published"`
-			UpdatedByName string `json:"updated_by_name"`
-			UpdatedAt     string `json:"updated_at"`
-		}
-		items := []item{}
-		for rows.Next() {
-			var it item
-			var updatedAt time.Time
-			if err := rows.Scan(&it.ID, &it.CategoryID, &it.CategoryName, &it.Title, &it.Description, &it.GraphJSON, &it.IsPublished, &it.UpdatedByName, &updatedAt); err == nil {
-				it.UpdatedAt = updatedAt.Format(time.RFC3339)
-				if admin.Role != "super_admin" {
-					var gidA, gidC sql.NullInt64
-					_ = a.db.QueryRowContext(r.Context(), `SELECT group_id FROM participant_profiles WHERE user_id=$1`, admin.ID).Scan(&gidA)
-					_ = a.db.QueryRowContext(r.Context(), `SELECT group_id FROM question_categories WHERE id=$1`, it.CategoryID).Scan(&gidC)
-					if gidA.Valid != gidC.Valid || (gidA.Valid && gidA.Int64 != gidC.Int64) {
-						continue
-					}
-				}
-				items = append(items, it)
-			}
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"items": items})
-		return
-	}
-
-	if r.Method == http.MethodPost {
-		var req struct {
-			ID          int64  `json:"id"`
-			CategoryID  int64  `json:"category_id"`
-			Title       string `json:"title"`
-			Description string `json:"description"`
-			GraphJSON   string `json:"graph_json"`
-			Publish     *bool  `json:"is_published"`
-		}
-		if json.NewDecoder(r.Body).Decode(&req) != nil || req.CategoryID <= 0 || strings.TrimSpace(req.Title) == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "category_id dan title wajib diisi"})
-			return
-		}
-		if strings.TrimSpace(req.GraphJSON) == "" {
-			req.GraphJSON = `{"nodes":[],"edges":[]}`
-		}
-		if admin.Role != "super_admin" {
-			var gidA, gidC sql.NullInt64
-			_ = a.db.QueryRowContext(r.Context(), `SELECT group_id FROM participant_profiles WHERE user_id=$1`, admin.ID).Scan(&gidA)
-			_ = a.db.QueryRowContext(r.Context(), `SELECT group_id FROM question_categories WHERE id=$1`, req.CategoryID).Scan(&gidC)
-			if gidA.Valid != gidC.Valid || (gidA.Valid && gidA.Int64 != gidC.Int64) {
-				writeJSON(w, http.StatusForbidden, map[string]string{"error": "kategori di luar kelompok admin"})
-				return
-			}
-		}
-		pub := false
-		if req.Publish != nil {
-			pub = *req.Publish
-		}
-		if req.ID > 0 {
-			_, err = a.db.ExecContext(r.Context(), `
-				UPDATE category_roadmaps
-				SET category_id=$1, title=$2, description=$3, graph_json=$4, is_published=$5, updated_by=$6, updated_at=NOW()
-				WHERE id=$7
-			`, req.CategoryID, strings.TrimSpace(req.Title), strings.TrimSpace(req.Description), req.GraphJSON, pub, admin.ID, req.ID)
-		} else {
-			_, err = a.db.ExecContext(r.Context(), `
-				INSERT INTO category_roadmaps(category_id, title, description, graph_json, is_published, created_by, updated_by)
-				VALUES($1,$2,$3,$4,$5,$6,$6)
-			`, req.CategoryID, strings.TrimSpace(req.Title), strings.TrimSpace(req.Description), req.GraphJSON, pub, admin.ID)
-		}
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal simpan roadmap"})
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-		return
-	}
-
-	writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-}
-
-func (a *app) handleParticipantRoadmaps(w http.ResponseWriter, r *http.Request) {
-	u, err := a.requireRole(r.Context(), r, "participant", "admin", "super_admin")
-	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-		return
-	}
-	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-		return
-	}
-	rows, err := a.db.QueryContext(r.Context(), `
-		SELECT cr.id, cr.category_id, qc.name, cr.title, cr.description, cr.graph_json, cr.updated_at
-		FROM category_roadmaps cr
-		JOIN question_categories qc ON qc.id = cr.category_id
-		WHERE cr.is_published = TRUE
-		ORDER BY qc.name ASC
-	`)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
-		return
-	}
-	defer rows.Close()
-	type item struct {
-		ID           int64  `json:"id"`
-		CategoryID   int64  `json:"category_id"`
-		CategoryName string `json:"category_name"`
-		Title        string `json:"title"`
-		Description  string `json:"description"`
-		GraphJSON    string `json:"graph_json"`
-		UpdatedAt    string `json:"updated_at"`
-	}
-	items := []item{}
-	var userGroup sql.NullInt64
-	if u.Role != "super_admin" {
-		_ = a.db.QueryRowContext(r.Context(), `SELECT group_id FROM participant_profiles WHERE user_id=$1`, u.ID).Scan(&userGroup)
-	}
-	for rows.Next() {
-		var it item
-		var updatedAt time.Time
-		if err := rows.Scan(&it.ID, &it.CategoryID, &it.CategoryName, &it.Title, &it.Description, &it.GraphJSON, &updatedAt); err == nil {
-			if u.Role != "super_admin" {
-				var catGroup sql.NullInt64
-				_ = a.db.QueryRowContext(r.Context(), `SELECT group_id FROM question_categories WHERE id=$1`, it.CategoryID).Scan(&catGroup)
-				if userGroup.Valid != catGroup.Valid || (userGroup.Valid && userGroup.Int64 != catGroup.Int64) {
-					continue
-				}
-			}
-			it.UpdatedAt = updatedAt.Format(time.RFC3339)
-			items = append(items, it)
-		}
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 // ── Refleksi: Agregat Admin ─────────────────────────────────────────────────
