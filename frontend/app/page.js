@@ -1385,7 +1385,6 @@ export default function Page() {
         ['profil', '👤', 'Profil'],
         ['catatan', '📝', 'Catatan'],
         ['materi', '📚', 'Materi'],
-        ['roadmap', '🧭', 'Roadmap'],
         ['quiz', '🧠', 'Quiz & Tryout'],
         ['redeem', '🎁', 'Redeem'],
         ['poin', '💰', 'Poin'],
@@ -2326,7 +2325,7 @@ export default function Page() {
             )}
 
             {/* ── Roadmap (Participant Read-Only) ── */}
-            {participantSection === 'roadmap' && (
+            {false && (
               <>
                 <Section title="🧭 Roadmap Jabatan">
                   <div style={{ display:'grid', gap:10 }}>
@@ -2740,7 +2739,6 @@ export default function Page() {
                   ['bank', '📚', 'Bank Soal'],
                   ['tryout', '🎯', 'Tryout'],
                   ['materi', '📖', 'Materi'],
-                  ['roadmap', '🧭', 'Roadmap Jabatan'],
                   ['kontribusi', '💡', 'Kontribusi'],
                   ['redeem', '🎁', 'Redeem'],
                   ['refleksi', '📔', 'Refleksi'],
@@ -4172,7 +4170,7 @@ export default function Page() {
               )}
 
               {/* Admin — Roadmap Jabatan (Phase 1) */}
-              {adminSection === 'roadmap' && (
+              {false && (
                 <>
                   <AdminSection title="🧭 Roadmap per Jabatan — Phase 1">
                     <div style={{ display:'grid', gap: 14 }}>

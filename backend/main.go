@@ -241,15 +241,6 @@ func main() {
 	// Learning Materials
 	mux.HandleFunc("/admin/materials", a.handleAdminMaterials)
 	mux.HandleFunc("/admin/materials/generate", a.handleAdminGenerateMaterial)
-	mux.HandleFunc("/admin/roadmap/positions", a.handleAdminRoadmapPositions)
-	mux.HandleFunc("/admin/roadmap/categories", a.handleAdminRoadmapCategories)
-	mux.HandleFunc("/admin/roadmap/notes", a.handleAdminRoadmapNotes)
-	mux.HandleFunc("/admin/roadmap/graph", a.handleAdminRoadmapGraph)
-	mux.HandleFunc("/admin/roadmap/position-graph", a.handleAdminRoadmapPositionGraph)
-	mux.HandleFunc("/participant/roadmap/positions", a.handleParticipantRoadmapPositions)
-	mux.HandleFunc("/participant/roadmap/categories", a.handleParticipantRoadmapCategories)
-	mux.HandleFunc("/participant/roadmap/graph", a.handleParticipantRoadmapGraph)
-	mux.HandleFunc("/participant/roadmap/position-graph", a.handleParticipantRoadmapPositionGraph)
 	mux.HandleFunc("/admin/tryout-configs", a.handleAdminTryoutConfigs)
 	mux.HandleFunc("/participant/materials", a.handleParticipantMaterials)
 	mux.HandleFunc("/participant/materials/complete", a.handleParticipantMaterialComplete)
@@ -912,76 +903,11 @@ func (a *app) initDB(ctx context.Context) error {
 		return err
 	}
 
-	// Roadmap per jabatan (Phase 1)
-	_, err = a.db.ExecContext(ctx, `
-		CREATE TABLE IF NOT EXISTS roadmap_positions (
-			id          BIGSERIAL PRIMARY KEY,
-			name        TEXT NOT NULL,
-			description TEXT NOT NULL DEFAULT '',
-			group_id    INT REFERENCES groups(id) ON DELETE SET NULL,
-			is_active   BOOLEAN NOT NULL DEFAULT TRUE,
-			created_by  BIGINT REFERENCES users(id) ON DELETE SET NULL,
-			updated_by  BIGINT REFERENCES users(id) ON DELETE SET NULL,
-			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		)
-	`)
-	if err != nil {
-		return err
-	}
-	_, err = a.db.ExecContext(ctx, `
-		CREATE TABLE IF NOT EXISTS roadmap_categories (
-			id          BIGSERIAL PRIMARY KEY,
-			position_id BIGINT NOT NULL REFERENCES roadmap_positions(id) ON DELETE CASCADE,
-			name        TEXT NOT NULL,
-			description TEXT NOT NULL DEFAULT '',
-			order_no    INT NOT NULL DEFAULT 0,
-			is_active   BOOLEAN NOT NULL DEFAULT TRUE,
-			created_by  BIGINT REFERENCES users(id) ON DELETE SET NULL,
-			updated_by  BIGINT REFERENCES users(id) ON DELETE SET NULL,
-			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			UNIQUE(position_id, name)
-		)
-	`)
-	if err != nil {
-		return err
-	}
-	_, err = a.db.ExecContext(ctx, `
-		CREATE TABLE IF NOT EXISTS roadmap_notes (
-			id          BIGSERIAL PRIMARY KEY,
-			category_id BIGINT NOT NULL REFERENCES roadmap_categories(id) ON DELETE CASCADE,
-			title       TEXT NOT NULL,
-			content     TEXT NOT NULL DEFAULT '',
-			created_by  BIGINT REFERENCES users(id) ON DELETE SET NULL,
-			updated_by  BIGINT REFERENCES users(id) ON DELETE SET NULL,
-			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			UNIQUE(category_id, title)
-		)
-	`)
-	if err != nil {
-		return err
-	}
-	// Cleanup legacy roadmap schema to avoid conflicts with the new model
+	// Roadmap feature removed: drop roadmap-related tables to prevent legacy conflicts
+	_, _ = a.db.ExecContext(ctx, `DROP TABLE IF EXISTS roadmap_notes CASCADE`)
+	_, _ = a.db.ExecContext(ctx, `DROP TABLE IF EXISTS roadmap_categories CASCADE`)
+	_, _ = a.db.ExecContext(ctx, `DROP TABLE IF EXISTS roadmap_positions CASCADE`)
 	_, _ = a.db.ExecContext(ctx, `DROP TABLE IF EXISTS category_roadmaps CASCADE`)
-	_, _ = a.db.ExecContext(ctx, `ALTER TABLE roadmap_notes DROP COLUMN IF EXISTS roadmap_id`)
-	_, _ = a.db.ExecContext(ctx, `DO $$
-	BEGIN
-		IF NOT EXISTS (
-			SELECT 1 FROM pg_indexes WHERE schemaname='public' AND indexname='roadmap_notes_category_title_uniq'
-		) THEN
-			CREATE UNIQUE INDEX roadmap_notes_category_title_uniq ON roadmap_notes(category_id, title);
-		END IF;
-	END $$;`)
-	// Hard reset FK consistency for roadmap_notes -> roadmap_categories
-	_, _ = a.db.ExecContext(ctx, `
-		DELETE FROM roadmap_notes rn
-		WHERE rn.category_id IS NULL
-		   OR NOT EXISTS (SELECT 1 FROM roadmap_categories rc WHERE rc.id = rn.category_id)
-	`)
-	_, _ = a.db.ExecContext(ctx, `ALTER TABLE roadmap_notes DROP CONSTRAINT IF EXISTS roadmap_notes_category_id_fkey`)
-	_, _ = a.db.ExecContext(ctx, `ALTER TABLE roadmap_notes ADD CONSTRAINT roadmap_notes_category_id_fkey FOREIGN KEY (category_id) REFERENCES roadmap_categories(id) ON DELETE CASCADE`)
 
 	return nil
 }

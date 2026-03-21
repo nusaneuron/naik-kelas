@@ -34,3 +34,17 @@
 ### Catatan Deploy
 - Wajib redeploy backend agar cleanup migrasi dijalankan di database target.
 - Setelah deploy, uji ulang create/update catatan roadmap pada kategori yang sama.
+
+## 2026-03-21 — Roadmap Feature Removal (by request)
+### Perubahan
+- Menonaktifkan route API roadmap di router backend (admin + participant).
+- Menambahkan cleanup migrasi startup untuk menghapus tabel roadmap terkait:
+  - `roadmap_notes`
+  - `roadmap_categories`
+  - `roadmap_positions`
+  - `category_roadmaps` (legacy)
+- Menyembunyikan menu dan panel Roadmap di frontend (admin + participant).
+
+### Dampak
+- Fitur roadmap tidak lagi bisa diakses dari UI maupun endpoint publik aplikasi.
+- Data roadmap existing di database akan terhapus saat backend start setelah deploy.
