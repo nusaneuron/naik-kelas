@@ -4759,6 +4759,12 @@ export default function Page() {
                             return <option key={c.id} value={c.id}>{pos?.code || '-'} • {c.code} • {c.name}</option>;
                           })}
                         </select>
+                        <input className="nk-input-sm" readOnly value={(() => {
+                          const comp = roadmapCompetencies.find(c => String(c.id) === String(materialForm.competency_id || ''));
+                          if (!comp) return '';
+                          const pos = roadmapPositions.find(p => String(p.id) === String(comp.position_id));
+                          return pos ? `${pos.code || '-'} • ${pos.name || ''}` : '';
+                        })()} placeholder="Nama jabatan (otomatis)" style={{ color:'#cbd5e1', background:'#0a1220' }} />
                         <input ref={materialTitleInputRef} className="nk-input-sm" placeholder="Judul materi" value={materialForm.title} onChange={e => setMaterialForm(f => ({ ...f, title: e.target.value }))} />
                         <textarea className="nk-input-sm" placeholder="Deskripsi singkat materi (untuk AI generate draft)" value={materialForm.brief || ''} onChange={e => setMaterialForm(f => ({ ...f, brief: e.target.value }))} style={{ minHeight: 72 }} />
                         <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(180px,1fr))' }}>
