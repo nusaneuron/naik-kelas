@@ -675,7 +675,7 @@ export default function Page() {
       body: JSON.stringify({ ...noteForm, category_id: Number(noteForm.category_id) })
     });
     const d = await res.json().catch(() => ({}));
-    if (!res.ok) return showMsg(d.error || 'Gagal simpan catatan roadmap', 'error');
+    if (!res.ok) return showMsg((d.error || 'Gagal simpan catatan roadmap') + (d.detail ? `\n${d.detail}` : ''), 'error');
     showMsg('Catatan roadmap tersimpan ✅', 'success');
     if (d.item) {
       setRoadmapNotes(prev => {
