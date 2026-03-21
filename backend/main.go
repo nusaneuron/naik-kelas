@@ -974,6 +974,14 @@ func (a *app) initDB(ctx context.Context) error {
 			CREATE UNIQUE INDEX roadmap_notes_category_title_uniq ON roadmap_notes(category_id, title);
 		END IF;
 	END $$;`)
+	// Hard reset FK consistency for roadmap_notes -> roadmap_categories
+	_, _ = a.db.ExecContext(ctx, `
+		DELETE FROM roadmap_notes rn
+		WHERE rn.category_id IS NULL
+		   OR NOT EXISTS (SELECT 1 FROM roadmap_categories rc WHERE rc.id = rn.category_id)
+	`)
+	_, _ = a.db.ExecContext(ctx, `ALTER TABLE roadmap_notes DROP CONSTRAINT IF EXISTS roadmap_notes_category_id_fkey`)
+	_, _ = a.db.ExecContext(ctx, `ALTER TABLE roadmap_notes ADD CONSTRAINT roadmap_notes_category_id_fkey FOREIGN KEY (category_id) REFERENCES roadmap_categories(id) ON DELETE CASCADE`)
 
 	return nil
 }
