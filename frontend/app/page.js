@@ -106,6 +106,7 @@ export default function Page() {
   const [materialForm, setMaterialForm] = useState({ id: 0, competency_id: '', title: '', content: '', is_active: true });
   const [materialLinkSuggestions, setMaterialLinkSuggestions] = useState([]);
   const [materialLinkQuery, setMaterialLinkQuery] = useState('');
+  const [materialSuggestionIndex, setMaterialSuggestionIndex] = useState(0);
   const [roadmapMenu, setRoadmapMenu] = useState('positions');
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewingContrib, setReviewingContrib] = useState(null);
@@ -702,16 +703,22 @@ export default function Page() {
   function updateMaterialContentWithSuggestions(text) {
     setMaterialForm(f => ({ ...f, content: text }));
     const m = text.match(/\[\[([^\]]*)$/);
-    if (!m) { setMaterialLinkSuggestions([]); setMaterialLinkQuery(''); return; }
+    if (!m) { setMaterialLinkSuggestions([]); setMaterialLinkQuery(''); setMaterialSuggestionIndex(0); return; }
     const q = (m[1] || '').trim().toLowerCase();
     setMaterialLinkQuery(m[1] || '');
-    const pool = roadmapMaterials
-      .filter(x => String(x.competency_id) === String(materialForm.competency_id || x.competency_id))
+
+    const localPool = roadmapMaterials
+      .filter(x => String(x.competency_id) === String(materialForm.competency_id || ''))
       .map(x => x.title)
       .filter(Boolean);
-    const uniq = [...new Set(pool)];
-    const filtered = uniq.filter(t => !q || t.toLowerCase().includes(q)).slice(0, 8);
-    setMaterialLinkSuggestions(filtered);
+    const globalPool = roadmapMaterials.map(x => x.title).filter(Boolean);
+
+    const localUniq = [...new Set(localPool)].filter(t => !q || t.toLowerCase().includes(q));
+    const globalUniq = [...new Set(globalPool)].filter(t => !q || t.toLowerCase().includes(q) && !localUniq.includes(t));
+
+    const merged = [...localUniq.map(t => ({ title: t, scope: 'local' })), ...globalUniq.map(t => ({ title: t, scope: 'global' }))].slice(0, 8);
+    setMaterialLinkSuggestions(merged);
+    setMaterialSuggestionIndex(0);
   }
 
   function insertMaterialBacklink(title) {
@@ -720,6 +727,7 @@ export default function Page() {
     setMaterialForm(f => ({ ...f, content: next }));
     setMaterialLinkSuggestions([]);
     setMaterialLinkQuery('');
+    setMaterialSuggestionIndex(0);
   }
 
   function renderBacklinkBold(text) {
@@ -730,6 +738,25 @@ export default function Page() {
       if (mm) return <b key={i}>{mm[1]}</b>;
       return <span key={i}>{p}</span>;
     });
+  }
+
+  function handleMaterialSuggestionKeyDown(e) {
+    if (!materialLinkSuggestions.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setMaterialSuggestionIndex(i => Math.min(i + 1, materialLinkSuggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setMaterialSuggestionIndex(i => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      const picked = materialLinkSuggestions[materialSuggestionIndex];
+      if (picked?.title) insertMaterialBacklink(picked.title);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setMaterialLinkSuggestions([]);
+      setMaterialSuggestionIndex(0);
+    }
   }
 
   async function deleteRoadmapCategory(id) {
@@ -4396,14 +4423,14 @@ export default function Page() {
                           })}
                         </select>
                         <input className="nk-input-sm" placeholder="Judul materi" value={materialForm.title} onChange={e => setMaterialForm(f => ({ ...f, title: e.target.value }))} />
-                        <textarea className="nk-input-sm" placeholder="Isi materi... ketik [[ untuk saran judul materi" value={materialForm.content} onChange={e => updateMaterialContentWithSuggestions(e.target.value)} style={{ minHeight: 120 }} />
+                        <textarea className="nk-input-sm" placeholder="Isi materi... ketik [[ untuk saran judul materi" value={materialForm.content} onChange={e => updateMaterialContentWithSuggestions(e.target.value)} onKeyDown={handleMaterialSuggestionKeyDown} style={{ minHeight: 120 }} />
                         {materialLinkSuggestions.length > 0 && (
                           <div style={{ border:'1px solid #334155', borderRadius:8, padding:8, background:'#0b1220' }}>
-                            <div style={{ fontSize:11, color:'#94a3b8', marginBottom:6 }}>Saran backlink untuk [[{materialLinkQuery}]]:</div>
+                            <div style={{ fontSize:11, color:'#94a3b8', marginBottom:6 }}>Saran backlink untuk [[{materialLinkQuery}]] (↑ ↓ Enter/Tab):</div>
                             <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-                              {materialLinkSuggestions.map((t, i) => (
-                                <button key={i} onClick={() => insertMaterialBacklink(t)} style={{ border:'1px solid #475569', background:'transparent', color:'#cbd5e1', borderRadius:999, padding:'4px 10px', fontSize:11, cursor:'pointer' }}>
-                                  [[{t}]]
+                              {materialLinkSuggestions.map((it, i) => (
+                                <button key={i} onClick={() => insertMaterialBacklink(it.title)} style={{ border: i === materialSuggestionIndex ? '1px solid #a78bfa' : '1px solid #475569', background: i === materialSuggestionIndex ? 'rgba(167,139,250,0.14)' : 'transparent', color:'#cbd5e1', borderRadius:999, padding:'4px 10px', fontSize:11, cursor:'pointer' }}>
+                                  [[{it.title}]] {it.scope === 'local' ? '• kompetensi ini' : '• global'}
                                 </button>
                               ))}
                             </div>
