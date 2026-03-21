@@ -66,6 +66,7 @@ export default function Page() {
   const [participantRoadmapFilter, setParticipantRoadmapFilter] = useState({ position_id: '', mode: 'material' });
   const [participantRoadmapGraph, setParticipantRoadmapGraph] = useState('{"nodes":[],"edges":[]}');
   const [participantUnknownBacklinks, setParticipantUnknownBacklinks] = useState([]);
+  const [participantRoadmapMaterialDetail, setParticipantRoadmapMaterialDetail] = useState(null);
   const [myReflections, setMyReflections] = useState([]);
   const [reflectionDraft, setReflectionDraft] = useState('');
   const [reflectionSaving, setReflectionSaving] = useState(false);
@@ -313,6 +314,14 @@ export default function Page() {
       setParticipantRoadmapGraph(d.graph_json || '{"nodes":[],"edges":[]}');
       setParticipantUnknownBacklinks(d.unknown_backlinks || []);
     }
+  }
+
+  async function openParticipantRoadmapMaterial(nodeId) {
+    if (String(nodeId).startsWith('c-')) return;
+    const res = await fetch(`${apiBase}/participant/roadmap/material?id=${nodeId}`, { credentials: 'include' });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return showMsg(d.error || 'Gagal buka materi roadmap', 'error');
+    setParticipantRoadmapMaterialDetail(d);
   }
 
   useEffect(() => {
@@ -2721,6 +2730,7 @@ export default function Page() {
                     <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))' }}>
                       <select className="nk-input-sm" value={participantRoadmapFilter.position_id} onChange={async e => {
                         const v = e.target.value;
+                        setParticipantRoadmapMaterialDetail(null);
                         setParticipantRoadmapFilter(f => ({ ...f, position_id: v }));
                         await loadParticipantRoadmapGraph(v, participantRoadmapFilter.mode || 'material');
                       }}>
@@ -2729,6 +2739,7 @@ export default function Page() {
                       </select>
                       <select className="nk-input-sm" value={participantRoadmapFilter.mode || 'material'} onChange={async e => {
                         const mode = e.target.value;
+                        setParticipantRoadmapMaterialDetail(null);
                         setParticipantRoadmapFilter(f => ({ ...f, mode }));
                         await loadParticipantRoadmapGraph(participantRoadmapFilter.position_id || '', mode);
                       }}>
@@ -2740,11 +2751,22 @@ export default function Page() {
 
                     <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
                       <div style={{ fontWeight:700, marginBottom:8 }}>Graph Materi (Backlink)</div>
-                      {(() => { const g = parseRoadmapGraph(participantRoadmapGraph); return g.error ? <div className="nk-empty" style={{ margin:0 }}>{g.error}</div> : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={() => {}} />; })()}
+                      {(() => { const g = parseRoadmapGraph(participantRoadmapGraph); return g.error ? <div className="nk-empty" style={{ margin:0 }}>{g.error}</div> : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={openParticipantRoadmapMaterial} />; })()}
                       {participantUnknownBacklinks.length > 0 && (
                         <div className="nk-empty" style={{ marginTop:8, color:'#fbbf24' }}>⚠️ Referensi belum ditemukan: {participantUnknownBacklinks.slice(0,8).join(', ')}{participantUnknownBacklinks.length > 8 ? ` (+${participantUnknownBacklinks.length - 8})` : ''}</div>
                       )}
                     </div>
+
+                    {participantRoadmapMaterialDetail && (
+                      <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12 }}>
+                        <div style={{ display:'flex', justifyContent:'space-between', gap:8, alignItems:'center', marginBottom:8 }}>
+                          <div style={{ fontWeight:700 }}>📘 Baca Materi</div>
+                          <span className="nk-badge">{participantRoadmapMaterialDetail.bloom_level || 'C2'}</span>
+                        </div>
+                        <div style={{ fontSize:16, fontWeight:700, marginBottom:8 }}>{participantRoadmapMaterialDetail.title}</div>
+                        <div style={{ whiteSpace:'pre-wrap', color:'#cbd5e1', lineHeight:1.7 }}>{participantRoadmapMaterialDetail.content || '-'}</div>
+                      </div>
+                    )}
                   </div>
                 </Section>
               </>

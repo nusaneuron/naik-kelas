@@ -253,6 +253,7 @@ func main() {
 	mux.HandleFunc("/participant/materials/complete", a.handleParticipantMaterialComplete)
 	mux.HandleFunc("/participant/roadmap/positions", a.handleParticipantRoadmapPositions)
 	mux.HandleFunc("/participant/roadmap/materials-graph", a.handleParticipantRoadmapMaterialsGraph)
+	mux.HandleFunc("/participant/roadmap/material", a.handleParticipantRoadmapMaterialDetail)
 
 	// Material Contributions
 	mux.HandleFunc("/participant/categories", a.handleParticipantCategories)
@@ -8022,6 +8023,42 @@ func (a *app) handleParticipantRoadmapMaterialsGraph(w http.ResponseWriter, r *h
 	for _, m := range materials { plain = append(plain, struct{ ID int64; Title, Content string }{ID: m.ID, Title: m.Title, Content: m.Content}) }
 	graphJSON, unknown := buildGraphFromRoadmapMaterials(plain)
 	writeJSON(w,http.StatusOK,map[string]any{"graph_json": graphJSON, "unknown_backlinks": unknown, "count": len(materials), "mode": "material"})
+}
+
+func (a *app) handleParticipantRoadmapMaterialDetail(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant", "admin", "super_admin")
+	if err != nil { writeJSON(w,http.StatusUnauthorized,map[string]string{"error":"unauthorized"}); return }
+	if r.Method != http.MethodGet { writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"}); return }
+	id, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("id")), 10, 64)
+	if id <= 0 { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"id wajib"}); return }
+
+	var competencyID, positionID, groupID int64
+	var title, content, bloom string
+	if err := a.db.QueryRowContext(r.Context(), `
+		SELECT rm.competency_id, rc.position_id, COALESCE(rp.group_id,0), rm.title, rm.content, COALESCE(rm.bloom_level,'C2')
+		FROM roadmap_materials rm
+		JOIN roadmap_competencies rc ON rc.id=rm.competency_id
+		JOIN roadmap_positions rp ON rp.id=rc.position_id
+		WHERE rm.id=$1
+	`, id).Scan(&competencyID, &positionID, &groupID, &title, &content, &bloom); err != nil {
+		writeJSON(w,http.StatusNotFound,map[string]string{"error":"materi tidak ditemukan"}); return
+	}
+
+	if u.Role != "super_admin" {
+		myGroup := a.getAdminGroupIDFromUser(r.Context(), u)
+		if groupID != 0 && (myGroup <= 0 || myGroup != groupID) {
+			writeJSON(w,http.StatusForbidden,map[string]string{"error":"materi tidak dapat diakses"}); return
+		}
+	}
+
+	writeJSON(w,http.StatusOK,map[string]any{
+		"id": id,
+		"competency_id": competencyID,
+		"position_id": positionID,
+		"title": title,
+		"content": content,
+		"bloom_level": bloom,
+	})
 }
 
 func (a *app) handleAdminRoadmapMaterialsGraph(w http.ResponseWriter, r *http.Request) {
