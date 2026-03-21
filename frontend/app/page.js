@@ -102,6 +102,7 @@ export default function Page() {
   const [noteForm, setNoteForm] = useState({ id: 0, category_id: '', title: '', content: '' });
   const [competencyForm, setCompetencyForm] = useState({ id: 0, position_id: '', code: '', name: '', description: '', is_active: true });
   const [roadmapCompetencies, setRoadmapCompetencies] = useState([]);
+  const [roadmapMenu, setRoadmapMenu] = useState('positions');
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewingContrib, setReviewingContrib] = useState(null);
   const [reviewAction, setReviewAction] = useState('');
@@ -4211,6 +4212,12 @@ export default function Page() {
               {adminSection === 'roadmap' && (
                 <>
                   <AdminSection title="🧭 Roadmap Jabatan">
+                    <div style={{ display:'flex', gap:8, marginBottom: 12, flexWrap:'wrap' }}>
+                      <button onClick={() => setRoadmapMenu('positions')} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'positions' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'positions' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'positions' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>👔 Jabatan</button>
+                      <button onClick={() => setRoadmapMenu('competencies')} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'competencies' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'competencies' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'competencies' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>🛠️ Kompetensi Teknis</button>
+                    </div>
+
+                    {roadmapMenu === 'positions' && <>
                     <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12 }}>
                       <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))' }}>
                         <input className="nk-input-sm" placeholder="Kode jabatan (contoh: CS-01)" value={positionForm.code || ''} onChange={e => setPositionForm(f => ({ ...f, code: e.target.value }))} />
@@ -4254,8 +4261,9 @@ export default function Page() {
                         </tbody>
                       </table>
                     </div>
+                    </>}
 
-                    <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12, marginTop: 14 }}>
+                    {roadmapMenu === 'competencies' && <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12, marginTop: 2 }}>
                       <div style={{ fontWeight:700, marginBottom:8 }}>Kompetensi Teknis per Jabatan</div>
                       <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))' }}>
                         <select className="nk-input-sm" value={competencyForm.position_id} onChange={async e => { const v=e.target.value; setCompetencyForm(f => ({ ...f, position_id: v })); await loadRoadmapCompetencies(v); }}>
@@ -4291,7 +4299,7 @@ export default function Page() {
                           </tbody>
                         </table>
                       </div>
-                    </div>
+                    </div>}
                   </AdminSection>
                 </>
               )}
