@@ -7736,13 +7736,31 @@ func (a *app) handleAdminRoadmapNotes(w http.ResponseWriter, r *http.Request) {
 		var positionID int64
 		_ = a.db.QueryRowContext(r.Context(), `SELECT position_id FROM roadmap_categories WHERE id=$1`, req.CategoryID).Scan(&positionID)
 		if admin.Role != "super_admin" && !a.canAccessRoadmapPosition(r.Context(), admin, positionID) { writeJSON(w,http.StatusForbidden,map[string]string{"error":"kategori di luar kelompok admin"}); return }
+		title := strings.TrimSpace(req.Title)
+		var savedID int64
+		var savedTitle, savedContent string
+		var savedAt time.Time
 		if req.ID > 0 {
-			_, err = a.db.ExecContext(r.Context(), `UPDATE roadmap_notes SET title=$1,content=$2,updated_by=$3,updated_at=NOW() WHERE id=$4 AND category_id=$5`, strings.TrimSpace(req.Title), req.Content, admin.ID, req.ID, req.CategoryID)
+			err = a.db.QueryRowContext(r.Context(), `
+				UPDATE roadmap_notes SET title=$1,content=$2,updated_by=$3,updated_at=NOW()
+				WHERE id=$4 AND category_id=$5
+				RETURNING id,title,content,updated_at
+			`, title, req.Content, admin.ID, req.ID, req.CategoryID).Scan(&savedID, &savedTitle, &savedContent, &savedAt)
 		} else {
-			_, err = a.db.ExecContext(r.Context(), `INSERT INTO roadmap_notes(category_id,title,content,created_by,updated_by) VALUES($1,$2,$3,$4,$4)`, req.CategoryID, strings.TrimSpace(req.Title), req.Content, admin.ID)
+			err = a.db.QueryRowContext(r.Context(), `
+				INSERT INTO roadmap_notes(category_id,title,content,created_by,updated_by)
+				VALUES($1,$2,$3,$4,$4)
+				RETURNING id,title,content,updated_at
+			`, req.CategoryID, title, req.Content, admin.ID).Scan(&savedID, &savedTitle, &savedContent, &savedAt)
 		}
-		if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal simpan catatan"}); return }
-		writeJSON(w,http.StatusOK,map[string]any{"ok":true}); return
+		if err != nil {
+			msg := "gagal simpan catatan"
+			if strings.Contains(strings.ToLower(err.Error()), "duplicate") {
+				msg = "judul catatan sudah ada di kategori ini"
+			}
+			writeJSON(w,http.StatusInternalServerError,map[string]string{"error": msg}); return
+		}
+		writeJSON(w,http.StatusOK,map[string]any{"ok":true, "item": map[string]any{"id": savedID, "title": savedTitle, "content": savedContent, "updated_at": savedAt.Format(time.RFC3339)}}); return
 	}
 	writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"})
 }

@@ -624,8 +624,14 @@ export default function Page() {
     const d = await res.json().catch(() => ({}));
     if (!res.ok) return showMsg(d.error || 'Gagal simpan catatan roadmap', 'error');
     showMsg('Catatan roadmap tersimpan ✅', 'success');
+    if (d.item) {
+      setRoadmapNotes(prev => {
+        const rest = prev.filter(x => x.id !== d.item.id);
+        return [d.item, ...rest];
+      });
+    }
     setNoteForm(f => ({ ...f, id: 0, title: '', content: '' }));
-    await loadRoadmapNotes(noteForm.category_id);
+    await loadRoadmapNotes(Number(noteForm.category_id));
   }
 
   function parseRoadmapGraph(raw) {
