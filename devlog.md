@@ -48,3 +48,26 @@
 ### Dampak
 - Fitur roadmap tidak lagi bisa diakses dari UI maupun endpoint publik aplikasi.
 - Data roadmap existing di database akan terhapus saat backend start setelah deploy.
+
+## 2026-03-21 — Roadmap Restart (Bertahap, v1 Jabatan)
+### Scope implementasi tahap awal
+- Mengaktifkan ulang roadmap dengan fokus **Roadmap Jabatan** dulu (tanpa kategori/catatan).
+- Menambahkan API CRUD admin untuk jabatan roadmap:
+  - `GET /admin/roadmap/positions`
+  - `POST /admin/roadmap/positions` (create/update/delete via `action: delete`)
+- Menambahkan field jabatan sesuai kebutuhan:
+  - `code` (kode jabatan, unik)
+  - `name` (nama jabatan)
+  - `description` (deskripsi jabatan)
+
+### Perubahan teknis
+- Backend:
+  - Registrasi route `/admin/roadmap/positions` di router.
+  - Migrasi startup membuat tabel `roadmap_positions` dengan kolom `code` (UNIQUE).
+  - Handler posisi diperbarui agar membaca/menyimpan `code` dan validasi duplikasi kode.
+  - Tabel roadmap lama (`roadmap_categories`, `roadmap_notes`, `category_roadmaps`) tetap di-drop (belum dipakai tahap ini).
+- Frontend:
+  - Menu admin `Roadmap Jabatan` diaktifkan lagi.
+  - Section roadmap admin disederhanakan jadi form + list CRUD jabatan saja.
+  - Form input: kode jabatan, nama jabatan, deskripsi jabatan.
+  - Tabel list menampilkan: kode, nama, deskripsi, update, aksi edit/hapus.

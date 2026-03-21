@@ -241,6 +241,7 @@ func main() {
 	// Learning Materials
 	mux.HandleFunc("/admin/materials", a.handleAdminMaterials)
 	mux.HandleFunc("/admin/materials/generate", a.handleAdminGenerateMaterial)
+	mux.HandleFunc("/admin/roadmap/positions", a.handleAdminRoadmapPositions)
 	mux.HandleFunc("/admin/tryout-configs", a.handleAdminTryoutConfigs)
 	mux.HandleFunc("/participant/materials", a.handleParticipantMaterials)
 	mux.HandleFunc("/participant/materials/complete", a.handleParticipantMaterialComplete)
@@ -903,10 +904,29 @@ func (a *app) initDB(ctx context.Context) error {
 		return err
 	}
 
-	// Roadmap feature removed: drop roadmap-related tables to prevent legacy conflicts
+	// Roadmap Jabatan (v1 restart): only positions CRUD for now
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS roadmap_positions (
+			id          BIGSERIAL PRIMARY KEY,
+			code        TEXT NOT NULL UNIQUE,
+			name        TEXT NOT NULL,
+			description TEXT NOT NULL DEFAULT '',
+			group_id    INT REFERENCES groups(id) ON DELETE SET NULL,
+			is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+			created_by  BIGINT REFERENCES users(id) ON DELETE SET NULL,
+			updated_by  BIGINT REFERENCES users(id) ON DELETE SET NULL,
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil { return err }
+	_, _ = a.db.ExecContext(ctx, `ALTER TABLE roadmap_positions ADD COLUMN IF NOT EXISTS code TEXT`)
+	_, _ = a.db.ExecContext(ctx, `UPDATE roadmap_positions SET code = CONCAT('POS-', id) WHERE COALESCE(TRIM(code), '') = ''`)
+	_, _ = a.db.ExecContext(ctx, `ALTER TABLE roadmap_positions ALTER COLUMN code SET NOT NULL`)
+	_, _ = a.db.ExecContext(ctx, `CREATE UNIQUE INDEX IF NOT EXISTS roadmap_positions_code_uniq ON roadmap_positions(code)`)
+	// Roadmap extensions from previous iterations are disabled for now
 	_, _ = a.db.ExecContext(ctx, `DROP TABLE IF EXISTS roadmap_notes CASCADE`)
 	_, _ = a.db.ExecContext(ctx, `DROP TABLE IF EXISTS roadmap_categories CASCADE`)
-	_, _ = a.db.ExecContext(ctx, `DROP TABLE IF EXISTS roadmap_positions CASCADE`)
 	_, _ = a.db.ExecContext(ctx, `DROP TABLE IF EXISTS category_roadmaps CASCADE`)
 
 	return nil
@@ -7519,11 +7539,12 @@ func (a *app) handleAdminRoadmapPositions(w http.ResponseWriter, r *http.Request
 	admin, err := a.requireRole(r.Context(), r, "admin", "super_admin")
 	if err != nil { writeJSON(w, http.StatusUnauthorized, map[string]string{"error":"unauthorized"}); return }
 	if r.Method == http.MethodGet {
-		rows, err := a.db.QueryContext(r.Context(), `SELECT id,name,description,COALESCE(group_id,0),is_active,updated_at FROM roadmap_positions ORDER BY updated_at DESC`)
+		rows, err := a.db.QueryContext(r.Context(), `SELECT id,code,name,description,COALESCE(group_id,0),is_active,updated_at FROM roadmap_positions ORDER BY updated_at DESC`)
 		if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]string{"error":"db error"}); return }
 		defer rows.Close()
 		type item struct {
 			ID          int64  `json:"id"`
+			Code        string `json:"code"`
 			Name        string `json:"name"`
 			Description string `json:"description"`
 			GroupID     int64  `json:"group_id"`
@@ -7533,7 +7554,7 @@ func (a *app) handleAdminRoadmapPositions(w http.ResponseWriter, r *http.Request
 		items := []item{}
 		for rows.Next() {
 			var it item; var t time.Time
-			if rows.Scan(&it.ID,&it.Name,&it.Description,&it.GroupID,&it.IsActive,&t)==nil {
+			if rows.Scan(&it.ID,&it.Code,&it.Name,&it.Description,&it.GroupID,&it.IsActive,&t)==nil {
 				if admin.Role != "super_admin" && !a.canAccessRoadmapPosition(r.Context(), admin, it.ID) { continue }
 				it.UpdatedAt = t.Format(time.RFC3339); items = append(items,it)
 			}
@@ -7543,6 +7564,7 @@ func (a *app) handleAdminRoadmapPositions(w http.ResponseWriter, r *http.Request
 	if r.Method == http.MethodPost {
 		var req struct {
 			ID          int64  `json:"id"`
+			Code        string `json:"code"`
 			Name        string `json:"name"`
 			Description string `json:"description"`
 			GroupID     int64  `json:"group_id"`
@@ -7560,7 +7582,9 @@ func (a *app) handleAdminRoadmapPositions(w http.ResponseWriter, r *http.Request
 			af, _ := res.RowsAffected(); if af == 0 { writeJSON(w,http.StatusNotFound,map[string]string{"error":"posisi roadmap tidak ditemukan"}); return }
 			writeJSON(w,http.StatusOK,map[string]any{"ok":true}); return
 		}
+		req.Code = strings.ToUpper(strings.TrimSpace(strings.ReplaceAll(req.Code, "\u00a0", " ")))
 		req.Name = strings.TrimSpace(strings.ReplaceAll(req.Name, "\u00a0", " "))
+		if req.Code == "" { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"kode jabatan wajib diisi"}); return }
 		if req.Name == "" { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"nama jabatan wajib diisi"}); return }
 		active := true; if req.IsActive != nil { active = *req.IsActive }
 		if admin.Role != "super_admin" {
@@ -7568,11 +7592,16 @@ func (a *app) handleAdminRoadmapPositions(w http.ResponseWriter, r *http.Request
 		}
 		if req.ID > 0 {
 			if !a.canAccessRoadmapPosition(r.Context(), admin, req.ID) { writeJSON(w,http.StatusForbidden,map[string]string{"error":"posisi di luar kelompok admin"}); return }
-			_, err = a.db.ExecContext(r.Context(), `UPDATE roadmap_positions SET name=$1,description=$2,group_id=NULLIF($3,0),is_active=$4,updated_by=$5,updated_at=NOW() WHERE id=$6`, req.Name, strings.TrimSpace(req.Description), req.GroupID, active, admin.ID, req.ID)
+			_, err = a.db.ExecContext(r.Context(), `UPDATE roadmap_positions SET code=$1,name=$2,description=$3,group_id=NULLIF($4,0),is_active=$5,updated_by=$6,updated_at=NOW() WHERE id=$7`, req.Code, req.Name, strings.TrimSpace(req.Description), req.GroupID, active, admin.ID, req.ID)
 		} else {
-			_, err = a.db.ExecContext(r.Context(), `INSERT INTO roadmap_positions(name,description,group_id,is_active,created_by,updated_by) VALUES($1,$2,NULLIF($3,0),$4,$5,$5)`, req.Name, strings.TrimSpace(req.Description), req.GroupID, active, admin.ID)
+			_, err = a.db.ExecContext(r.Context(), `INSERT INTO roadmap_positions(code,name,description,group_id,is_active,created_by,updated_by) VALUES($1,$2,$3,NULLIF($4,0),$5,$6,$6)`, req.Code, req.Name, strings.TrimSpace(req.Description), req.GroupID, active, admin.ID)
 		}
-		if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal simpan posisi"}); return }
+		if err != nil {
+			if strings.Contains(strings.ToLower(err.Error()), "unique") || strings.Contains(strings.ToLower(err.Error()), "duplicate") {
+				writeJSON(w,http.StatusBadRequest,map[string]string{"error":"kode jabatan sudah digunakan"}); return
+			}
+			writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal simpan posisi"}); return
+		}
 		writeJSON(w,http.StatusOK,map[string]any{"ok":true}); return
 	}
 	writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"})

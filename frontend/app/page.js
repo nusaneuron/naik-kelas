@@ -97,7 +97,7 @@ export default function Page() {
   const [positionGraph, setPositionGraph] = useState('{"nodes":[],"edges":[]}');
   const [positionUnknownBacklinks, setPositionUnknownBacklinks] = useState([]);
   const [positionGraphFilter, setPositionGraphFilter] = useState({ position_id: '', category_ids: [] });
-  const [positionForm, setPositionForm] = useState({ id: 0, name: '', description: '', group_id: '', is_active: true });
+  const [positionForm, setPositionForm] = useState({ id: 0, code: '', name: '', description: '', group_id: '', is_active: true });
   const [categoryForm, setCategoryForm] = useState({ id: 0, position_id: '', name: '', description: '', order_no: 0, is_active: true });
   const [noteForm, setNoteForm] = useState({ id: 0, category_id: '', title: '', content: '' });
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -590,12 +590,15 @@ export default function Page() {
   }
 
   async function saveRoadmapPosition() {
+    const normalizedCode = (positionForm.code || '').replace(/\u00A0/g, ' ').trim().toUpperCase();
     const normalizedName = (positionForm.name || '').replace(/\u00A0/g, ' ').trim();
+    if (!normalizedCode) return showMsg('Kode jabatan wajib diisi', 'error');
     if (!normalizedName) return showMsg('Nama jabatan wajib diisi', 'error');
     const res = await fetch(`${apiBase}/admin/roadmap/positions`, {
       method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id: Number(positionForm.id) || 0,
+        code: normalizedCode,
         name: normalizedName,
         description: positionForm.description || '',
         group_id: Number(positionForm.group_id || 0),
@@ -605,13 +608,9 @@ export default function Page() {
     const d = await res.json().catch(() => ({}));
     if (!res.ok) return showMsg(d.error || 'Gagal simpan jabatan roadmap', 'error');
     showMsg('Jabatan roadmap tersimpan ✅', 'success');
-    setPositionForm({ id: 0, name: '', description: '', group_id: '', is_active: true });
-    const [pRes, cRes] = await Promise.all([
-      fetch(`${apiBase}/admin/roadmap/positions`, { credentials: 'include' }),
-      fetch(`${apiBase}/admin/roadmap/categories`, { credentials: 'include' }),
-    ]);
+    setPositionForm({ id: 0, code: '', name: '', description: '', group_id: '', is_active: true });
+    const pRes = await fetch(`${apiBase}/admin/roadmap/positions`, { credentials: 'include' });
     if (pRes.ok) setRoadmapPositions((await pRes.json()).items || []);
-    if (cRes.ok) setRoadmapCategories((await cRes.json()).items || []);
   }
 
   async function deleteRoadmapCategory(id) {
@@ -801,12 +800,8 @@ export default function Page() {
     } else if (section === 'kontribusi') {
       await refreshAdminContributions();
     } else if (section === 'roadmap') {
-      const [pRes, cRes] = await Promise.all([
-        fetch(`${apiBase}/admin/roadmap/positions`, { credentials: 'include' }),
-        fetch(`${apiBase}/admin/roadmap/categories`, { credentials: 'include' }),
-      ]);
+      const pRes = await fetch(`${apiBase}/admin/roadmap/positions`, { credentials: 'include' });
       if (pRes.ok) setRoadmapPositions((await pRes.json()).items || []);
-      if (cRes.ok) setRoadmapCategories((await cRes.json()).items || []);
     } else if (section === 'ai') {
       const [res, pRes] = await Promise.all([
         fetch(`${apiBase}/admin/ai-settings`, { credentials: 'include' }),
@@ -2739,6 +2734,7 @@ export default function Page() {
                   ['bank', '📚', 'Bank Soal'],
                   ['tryout', '🎯', 'Tryout'],
                   ['materi', '📖', 'Materi'],
+                  ['roadmap', '🧭', 'Roadmap Jabatan'],
                   ['kontribusi', '💡', 'Kontribusi'],
                   ['redeem', '🎁', 'Redeem'],
                   ['refleksi', '📔', 'Refleksi'],
@@ -4169,189 +4165,41 @@ export default function Page() {
                 </>
               )}
 
-              {/* Admin — Roadmap Jabatan (Phase 1) */}
-              {false && (
+              {/* Admin — Roadmap Jabatan */}
+              {adminSection === 'roadmap' && (
                 <>
-                  <AdminSection title="🧭 Roadmap per Jabatan — Phase 1">
-                    <div style={{ display:'grid', gap: 14 }}>
-                      <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
-                        <div style={{ fontWeight:700, marginBottom:8 }}>1) Jabatan</div>
-                        <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(240px,1fr))' }}>
-                          <input className="nk-input-sm" placeholder="Nama jabatan" value={positionForm.name} onChange={e => setPositionForm(f => ({ ...f, name: e.target.value }))} onInput={e => setPositionForm(f => ({ ...f, name: e.target.value }))} />
-                          <select className="nk-input-sm" value={positionForm.group_id} onChange={e => setPositionForm(f => ({ ...f, group_id: e.target.value }))}>
-                            <option value="">Global / semua kelompok</option>
-                            {adminGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                          </select>
-                          <textarea className="nk-input-sm" placeholder="Deskripsi jabatan" value={positionForm.description} onChange={e => setPositionForm(f => ({ ...f, description: e.target.value }))} style={{ minHeight: 70, gridColumn:'1 / span 2' }} />
-                          <div style={{ gridColumn:'1 / span 2', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                            {!((positionForm.name || '').replace(/\u00A0/g, ' ').trim()) && <span style={{ fontSize:12, color:'#fca5a5' }}>⚠️ Nama jabatan wajib diisi</span>}
-                            <BtnSm color="purple" disabled={!((positionForm.name || '').replace(/\u00A0/g, ' ').trim())} onClick={saveRoadmapPosition}>💾 Simpan Jabatan</BtnSm>
-                          </div>
-                        </div>
-                        <div className="nk-table-wrap" style={{ marginTop:10 }}>
-                          <table className="nk-table">
-                            <thead><tr><th>Jabatan</th><th>Group</th><th>Aksi</th></tr></thead>
-                            <tbody>
-                              {roadmapPositions.map(p => (
-                                <tr key={p.id}>
-                                  <td>{p.name}</td>
-                                  <td>{p.group_id ? (adminGroups.find(g => g.id === p.group_id)?.name || `#${p.group_id}`) : 'Global'}</td>
-                                  <td style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                                    <BtnSm onClick={() => setPositionForm({ id: p.id, name: p.name || '', description: p.description || '', group_id: String(p.group_id || ''), is_active: !!p.is_active })}>Edit</BtnSm>
-                                    <BtnSm danger onClick={() => deleteRoadmapPosition(p.id)}>Hapus</BtnSm>
-                                  </td>
-                                </tr>
-                              ))}
-                              {roadmapPositions.length === 0 && <tr><td colSpan={3} className="nk-empty">Belum ada jabatan roadmap.</td></tr>}
-                            </tbody>
-                          </table>
+                  <AdminSection title="🧭 Roadmap Jabatan">
+                    <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12 }}>
+                      <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))' }}>
+                        <input className="nk-input-sm" placeholder="Kode jabatan (contoh: CS-01)" value={positionForm.code || ''} onChange={e => setPositionForm(f => ({ ...f, code: e.target.value }))} />
+                        <input className="nk-input-sm" placeholder="Nama jabatan" value={positionForm.name} onChange={e => setPositionForm(f => ({ ...f, name: e.target.value }))} />
+                        <textarea className="nk-input-sm" placeholder="Deskripsi jabatan" value={positionForm.description} onChange={e => setPositionForm(f => ({ ...f, description: e.target.value }))} style={{ minHeight: 70, gridColumn:'1 / -1' }} />
+                        <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'space-between', gap:8, flexWrap:'wrap' }}>
+                          <BtnSm onClick={() => setPositionForm({ id:0, code:'', name:'', description:'', group_id:'', is_active:true })}>Reset</BtnSm>
+                          <BtnSm color="purple" onClick={saveRoadmapPosition}>💾 Simpan Jabatan</BtnSm>
                         </div>
                       </div>
+                    </div>
 
-                      <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
-                        <div style={{ fontWeight:700, marginBottom:8 }}>2) Kategori per Jabatan</div>
-                        <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(240px,1fr))' }}>
-                          <select className="nk-input-sm" value={categoryForm.position_id} onChange={e => { const v=e.target.value; setCategoryForm(f => ({ ...f, position_id: v })); }}>
-                            <option value="">Pilih jabatan</option>
-                            {roadmapPositions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                          </select>
-                          <input className="nk-input-sm" placeholder="Nama kategori" value={categoryForm.name} onChange={e => setCategoryForm(f => ({ ...f, name: e.target.value }))} />
-                          <input className="nk-input-sm" placeholder="Urutan" type="number" value={categoryForm.order_no} onChange={e => setCategoryForm(f => ({ ...f, order_no: e.target.value }))} />
-                          <textarea className="nk-input-sm" placeholder="Deskripsi kategori" value={categoryForm.description} onChange={e => setCategoryForm(f => ({ ...f, description: e.target.value }))} style={{ minHeight: 70, gridColumn:'1 / span 2' }} />
-                          <div style={{ gridColumn:'1 / span 2', display:'flex', justifyContent:'flex-end' }}><BtnSm color="purple" onClick={saveRoadmapCategory}>💾 Simpan Kategori</BtnSm></div>
-                        </div>
-                        <div className="nk-table-wrap" style={{ marginTop:10 }}>
-                          <table className="nk-table">
-                            <thead><tr><th>Jabatan</th><th>Kategori</th><th>Urutan</th><th>Aksi</th></tr></thead>
-                            <tbody>
-                              {roadmapCategories.map(c => (
-                                <tr key={c.id}>
-                                  <td>{c.position_name}</td>
-                                  <td>{c.name}</td>
-                                  <td>{c.order_no}</td>
-                                  <td style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                                    <BtnSm onClick={() => setCategoryForm({ id: c.id, position_id: String(c.position_id), name: c.name || '', description: c.description || '', order_no: c.order_no || 0, is_active: !!c.is_active })}>Edit</BtnSm>
-                                    <BtnSm danger onClick={() => deleteRoadmapCategory(c.id)}>Hapus</BtnSm>
-                                  </td>
-                                </tr>
-                              ))}
-                              {roadmapCategories.length === 0 && <tr><td colSpan={4} className="nk-empty">Belum ada kategori roadmap.</td></tr>}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-
-                      <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
-                        <div style={{ fontWeight:700, marginBottom:8 }}>3) Catatan per Kategori</div>
-                        {(() => {
-                          const g = parseRoadmapGraph(roadmapGraph);
-                          return (
-                            <div style={{ marginBottom: 10 }}>
-                              {g.error ? <div className="nk-empty" style={{ margin:0, color:'#fca5a5' }}>{g.error}</div> : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={() => {}} />}
-                              {roadmapUnknownBacklinks.length > 0 && (
-                                <div className="nk-empty" style={{ marginTop:8, color:'#fbbf24' }}>
-                                  <div style={{ marginBottom: 6 }}>⚠️ Backlink belum ketemu. Tap untuk jadikan judul catatan:</div>
-                                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                                    {roadmapUnknownBacklinks.slice(0, 12).map((x, i) => (
-                                      <button key={i} onClick={() => setNoteForm(f => ({ ...f, title: x }))}
-                                        style={{ border:'1px solid #854d0e', background:'rgba(251,191,36,0.12)', color:'#fcd34d', borderRadius: 999, padding:'4px 10px', fontSize:11, cursor:'pointer' }}>
-                                        + {x}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()}
-                        <div style={{ display:'grid', gap:8 }}>
-                          <select className="nk-input-sm" value={noteForm.category_id} onChange={e => { const v=e.target.value; setNoteForm(f => ({ ...f, category_id: v })); loadRoadmapNotes(v); }}>
-                            <option value="">Pilih kategori roadmap</option>
-                            {roadmapCategories.map(c => <option key={c.id} value={c.id}>{c.position_name} • {c.name}</option>)}
-                          </select>
-                          <input className="nk-input-sm" placeholder="Judul catatan (unik per kategori)" value={noteForm.title} onChange={e => setNoteForm(f => ({ ...f, title: e.target.value }))} />
-                          <textarea className="nk-input-sm" placeholder="Isi catatan... boleh pakai backlink [[Judul Catatan Lain]]" value={noteForm.content} onChange={e => setNoteForm(f => ({ ...f, content: e.target.value }))} style={{ minHeight: 100 }} />
-                          <div style={{ display:'flex', justifyContent:'space-between', gap:8, flexWrap:'wrap' }}>
-                            <BtnSm onClick={() => setNoteForm(f => ({ ...f, id: 0, title:'', content:'' }))}>Reset Catatan</BtnSm>
-                            <BtnSm color="purple" onClick={saveRoadmapNote}>💾 Simpan Catatan</BtnSm>
-                          </div>
-                        </div>
-
-                        <div className="nk-table-wrap" style={{ marginTop: 10 }}>
-                          <table className="nk-table">
-                            <thead><tr><th>Judul</th><th>Isi</th><th>Update</th><th>Aksi</th></tr></thead>
-                            <tbody>
-                              {roadmapNotes.map(n => (
-                                <tr key={n.id}>
-                                  <td>{n.title}</td>
-                                  <td style={{ maxWidth: 280, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{(n.content||'').slice(0,140)}{(n.content||'').length>140?'...':''}</td>
-                                  <td style={{ fontSize:12, color:'#94a3b8' }}>{new Date(n.updated_at).toLocaleString('id-ID')}</td>
-                                  <td style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                                    <BtnSm onClick={() => setNoteForm(f => ({ ...f, id: n.id, title: n.title || '', content: n.content || '' }))}>Edit</BtnSm>
-                                    <BtnSm danger onClick={() => deleteRoadmapNote(n.id)}>Hapus</BtnSm>
-                                  </td>
-                                </tr>
-                              ))}
-                              {roadmapNotes.length === 0 && <tr><td colSpan={4} className="nk-empty">Belum ada catatan roadmap.</td></tr>}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-
-                      <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
-                        <div style={{ fontWeight:700, marginBottom:8 }}>4) Graph Jabatan (Gabungan Kategori)</div>
-                        <div style={{ display:'grid', gap:8 }}>
-                          <select className="nk-input-sm" value={positionGraphFilter.position_id} onChange={e => {
-                            const v = e.target.value;
-                            setPositionGraphFilter({ position_id: v, category_ids: [] });
-                            loadPositionGraph(v, []);
-                          }}>
-                            <option value="">Pilih jabatan untuk graph gabungan</option>
-                            {roadmapPositions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                          </select>
-
-                          <div style={{ display:'grid', gap:6 }}>
-                            <div style={{ fontSize:12, color:'#94a3b8' }}>Pilih kategori yang ingin digabungkan:</div>
-                            <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                              {roadmapCategories.filter(c => String(c.position_id) === String(positionGraphFilter.position_id)).map(c => {
-                                const checked = positionGraphFilter.category_ids.includes(c.id);
-                                return (
-                                  <label key={c.id} style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:'#cbd5e1', border:'1px solid #1e2d45', borderRadius:8, padding:'4px 8px' }}>
-                                    <input type="checkbox" checked={checked} onChange={e => {
-                                      const next = e.target.checked
-                                        ? [...positionGraphFilter.category_ids, c.id]
-                                        : positionGraphFilter.category_ids.filter(x => x !== c.id);
-                                      setPositionGraphFilter(f => ({ ...f, category_ids: next }));
-                                      loadPositionGraph(positionGraphFilter.position_id, next);
-                                    }} />
-                                    {c.name}
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          </div>
-
-                          {(() => {
-                            const g = parseRoadmapGraph(positionGraph);
-                            return g.error
-                              ? <div className="nk-empty" style={{ margin:0, color:'#fca5a5' }}>{g.error}</div>
-                              : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={() => {}} />;
-                          })()}
-                          {positionUnknownBacklinks.length > 0 && (
-                            <div className="nk-empty" style={{ marginTop:8, color:'#fbbf24' }}>
-                              <div style={{ marginBottom: 6 }}>⚠️ Backlink belum ketemu (gabungan). Tap untuk isi judul catatan:</div>
-                              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                                {positionUnknownBacklinks.slice(0, 12).map((x, i) => (
-                                  <button key={i} onClick={() => setNoteForm(f => ({ ...f, title: x }))}
-                                    style={{ border:'1px solid #854d0e', background:'rgba(251,191,36,0.12)', color:'#fcd34d', borderRadius: 999, padding:'4px 10px', fontSize:11, cursor:'pointer' }}>
-                                    + {x}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                    <div className="nk-table-wrap" style={{ marginTop: 12 }}>
+                      <table className="nk-table">
+                        <thead><tr><th>Kode</th><th>Nama</th><th>Deskripsi</th><th>Update</th><th>Aksi</th></tr></thead>
+                        <tbody>
+                          {roadmapPositions.map(p => (
+                            <tr key={p.id}>
+                              <td style={{ fontWeight:700 }}>{p.code}</td>
+                              <td>{p.name}</td>
+                              <td style={{ maxWidth: 320, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{p.description || '-'}</td>
+                              <td style={{ fontSize:12, color:'#94a3b8' }}>{p.updated_at ? new Date(p.updated_at).toLocaleString('id-ID') : '-'}</td>
+                              <td style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                                <BtnSm onClick={() => setPositionForm({ id: p.id, code: p.code || '', name: p.name || '', description: p.description || '', group_id: String(p.group_id || ''), is_active: !!p.is_active })}>Edit</BtnSm>
+                                <BtnSm danger onClick={() => deleteRoadmapPosition(p.id)}>Hapus</BtnSm>
+                              </td>
+                            </tr>
+                          ))}
+                          {roadmapPositions.length === 0 && <tr><td colSpan={5} className="nk-empty">Belum ada jabatan roadmap.</td></tr>}
+                        </tbody>
+                      </table>
                     </div>
                   </AdminSection>
                 </>
