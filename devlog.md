@@ -71,3 +71,17 @@
   - Section roadmap admin disederhanakan jadi form + list CRUD jabatan saja.
   - Form input: kode jabatan, nama jabatan, deskripsi jabatan.
   - Tabel list menampilkan: kode, nama, deskripsi, update, aksi edit/hapus.
+
+## 2026-03-21 — Roadmap Restart (Tahap Kompetensi Teknis)
+### Scope
+- Menambahkan CRUD **Kompetensi Teknis** yang terhubung ke Jabatan roadmap.
+
+### Perubahan
+- Backend:
+  - Tambah tabel `roadmap_competencies` (`position_id`, `code`, `name`, `description`) dengan unique `(position_id, code)`.
+  - Tambah endpoint admin: `GET/POST /admin/roadmap/competencies`.
+  - Validasi akses tetap mengikuti scope jabatan/kelompok admin.
+- Frontend:
+  - Di section Roadmap Jabatan ditambahkan blok "Kompetensi Teknis per Jabatan".
+  - Form input: pilih jabatan, kode kompetensi, nama kompetensi, deskripsi kompetensi.
+  - Tabel kompetensi per jabatan + aksi edit/hapus.

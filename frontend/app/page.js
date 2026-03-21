@@ -100,6 +100,8 @@ export default function Page() {
   const [positionForm, setPositionForm] = useState({ id: 0, code: '', name: '', description: '', group_id: '', is_active: true });
   const [categoryForm, setCategoryForm] = useState({ id: 0, position_id: '', name: '', description: '', order_no: 0, is_active: true });
   const [noteForm, setNoteForm] = useState({ id: 0, category_id: '', title: '', content: '' });
+  const [competencyForm, setCompetencyForm] = useState({ id: 0, position_id: '', code: '', name: '', description: '', is_active: true });
+  const [roadmapCompetencies, setRoadmapCompetencies] = useState([]);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewingContrib, setReviewingContrib] = useState(null);
   const [reviewAction, setReviewAction] = useState('');
@@ -611,6 +613,46 @@ export default function Page() {
     setPositionForm({ id: 0, code: '', name: '', description: '', group_id: '', is_active: true });
     const pRes = await fetch(`${apiBase}/admin/roadmap/positions`, { credentials: 'include' });
     if (pRes.ok) setRoadmapPositions((await pRes.json()).items || []);
+  }
+
+  async function loadRoadmapCompetencies(positionId) {
+    if (!positionId) return setRoadmapCompetencies([]);
+    const res = await fetch(`${apiBase}/admin/roadmap/competencies?position_id=${positionId}`, { credentials: 'include' });
+    if (res.ok) setRoadmapCompetencies((await res.json()).items || []);
+  }
+
+  async function saveRoadmapCompetency() {
+    if (!competencyForm.position_id) return showMsg('Jabatan wajib dipilih', 'error');
+    if (!(competencyForm.code || '').trim()) return showMsg('Kode kompetensi wajib diisi', 'error');
+    if (!(competencyForm.name || '').trim()) return showMsg('Nama kompetensi wajib diisi', 'error');
+    const res = await fetch(`${apiBase}/admin/roadmap/competencies`, {
+      method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        id: Number(competencyForm.id) || 0,
+        position_id: Number(competencyForm.position_id),
+        code: (competencyForm.code || '').trim().toUpperCase(),
+        name: (competencyForm.name || '').trim(),
+        description: competencyForm.description || '',
+        is_active: !!competencyForm.is_active,
+      })
+    });
+    const d = await res.json().catch(()=>({}));
+    if (!res.ok) return showMsg(d.error || 'Gagal simpan kompetensi teknis', 'error');
+    showMsg('Kompetensi teknis tersimpan ✅', 'success');
+    const keepPosition = competencyForm.position_id;
+    setCompetencyForm({ id: 0, position_id: keepPosition, code: '', name: '', description: '', is_active: true });
+    await loadRoadmapCompetencies(Number(keepPosition));
+  }
+
+  async function deleteRoadmapCompetency(id) {
+    if (!confirm('Hapus kompetensi teknis ini?')) return;
+    const res = await fetch(`${apiBase}/admin/roadmap/competencies`, {
+      method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'delete', id })
+    });
+    const d = await res.json().catch(()=>({}));
+    if (!res.ok) return showMsg(d.error || 'Gagal hapus kompetensi teknis', 'error');
+    showMsg('Kompetensi teknis dihapus ✅', 'success');
+    if (competencyForm.position_id) await loadRoadmapCompetencies(Number(competencyForm.position_id));
   }
 
   async function deleteRoadmapCategory(id) {
@@ -4203,7 +4245,7 @@ export default function Page() {
                               <td style={{ maxWidth: 320, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{p.description || '-'}</td>
                               <td style={{ fontSize:12, color:'#94a3b8' }}>{p.updated_at ? new Date(p.updated_at).toLocaleString('id-ID') : '-'}</td>
                               <td style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                                <BtnSm onClick={() => setPositionForm({ id: p.id, code: p.code || '', name: p.name || '', description: p.description || '', group_id: String(p.group_id || ''), is_active: !!p.is_active })}>Edit</BtnSm>
+                                <BtnSm onClick={async () => { setPositionForm({ id: p.id, code: p.code || '', name: p.name || '', description: p.description || '', group_id: String(p.group_id || ''), is_active: !!p.is_active }); setCompetencyForm(f => ({ ...f, position_id: String(p.id) })); await loadRoadmapCompetencies(p.id); }}>Edit</BtnSm>
                                 <BtnSm danger onClick={() => deleteRoadmapPosition(p.id)}>Hapus</BtnSm>
                               </td>
                             </tr>
@@ -4211,6 +4253,44 @@ export default function Page() {
                           {roadmapPositions.length === 0 && <tr><td colSpan={6} className="nk-empty">Belum ada jabatan roadmap.</td></tr>}
                         </tbody>
                       </table>
+                    </div>
+
+                    <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12, marginTop: 14 }}>
+                      <div style={{ fontWeight:700, marginBottom:8 }}>Kompetensi Teknis per Jabatan</div>
+                      <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))' }}>
+                        <select className="nk-input-sm" value={competencyForm.position_id} onChange={async e => { const v=e.target.value; setCompetencyForm(f => ({ ...f, position_id: v })); await loadRoadmapCompetencies(v); }}>
+                          <option value="">Pilih jabatan</option>
+                          {roadmapPositions.map(p => <option key={p.id} value={p.id}>{p.code} • {p.name}</option>)}
+                        </select>
+                        <input className="nk-input-sm" placeholder="Kode kompetensi" value={competencyForm.code} onChange={e => setCompetencyForm(f => ({ ...f, code: e.target.value }))} />
+                        <input className="nk-input-sm" placeholder="Nama kompetensi" value={competencyForm.name} onChange={e => setCompetencyForm(f => ({ ...f, name: e.target.value }))} />
+                        <textarea className="nk-input-sm" placeholder="Deskripsi kompetensi" value={competencyForm.description} onChange={e => setCompetencyForm(f => ({ ...f, description: e.target.value }))} style={{ minHeight: 70, gridColumn:'1 / -1' }} />
+                        <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'space-between', gap:8, flexWrap:'wrap' }}>
+                          <BtnSm onClick={() => setCompetencyForm(f => ({ ...f, id:0, code:'', name:'', description:'' }))}>Reset</BtnSm>
+                          <BtnSm color="purple" onClick={saveRoadmapCompetency}>💾 Simpan Kompetensi</BtnSm>
+                        </div>
+                      </div>
+
+                      <div className="nk-table-wrap" style={{ marginTop: 12 }}>
+                        <table className="nk-table">
+                          <thead><tr><th>Kode</th><th>Nama</th><th>Deskripsi</th><th>Update</th><th>Aksi</th></tr></thead>
+                          <tbody>
+                            {roadmapCompetencies.map(c => (
+                              <tr key={c.id}>
+                                <td style={{ fontWeight:700 }}>{c.code}</td>
+                                <td>{c.name}</td>
+                                <td style={{ maxWidth: 320, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{c.description || '-'}</td>
+                                <td style={{ fontSize:12, color:'#94a3b8' }}>{c.updated_at ? new Date(c.updated_at).toLocaleString('id-ID') : '-'}</td>
+                                <td style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                                  <BtnSm onClick={() => setCompetencyForm({ id:c.id, position_id:String(c.position_id), code:c.code || '', name:c.name || '', description:c.description || '', is_active: !!c.is_active })}>Edit</BtnSm>
+                                  <BtnSm danger onClick={() => deleteRoadmapCompetency(c.id)}>Hapus</BtnSm>
+                                </td>
+                              </tr>
+                            ))}
+                            {roadmapCompetencies.length === 0 && <tr><td colSpan={5} className="nk-empty">Belum ada kompetensi teknis.</td></tr>}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   </AdminSection>
                 </>
