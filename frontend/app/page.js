@@ -82,6 +82,12 @@ export default function Page() {
   // Admin Kontribusi
   const [adminContributions, setAdminContributions] = useState([]);
   const [adminContribFilter, setAdminContribFilter] = useState('pending');
+  const [roadmapPositions, setRoadmapPositions] = useState([]);
+  const [roadmapCategories, setRoadmapCategories] = useState([]);
+  const [roadmapNotes, setRoadmapNotes] = useState([]);
+  const [positionForm, setPositionForm] = useState({ id: 0, name: '', description: '', group_id: '', is_active: true });
+  const [categoryForm, setCategoryForm] = useState({ id: 0, position_id: '', name: '', description: '', order_no: 0, is_active: true });
+  const [noteForm, setNoteForm] = useState({ id: 0, category_id: '', title: '', content: '' });
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewingContrib, setReviewingContrib] = useState(null);
   const [reviewAction, setReviewAction] = useState('');
@@ -525,6 +531,51 @@ export default function Page() {
     }
   }
 
+  async function saveRoadmapPosition() {
+    if (!positionForm.name.trim()) return showMsg('Nama jabatan wajib diisi', 'error');
+    const res = await fetch(`${apiBase}/admin/roadmap/positions`, {
+      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...positionForm, group_id: Number(positionForm.group_id || 0) })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return showMsg(d.error || 'Gagal simpan jabatan roadmap', 'error');
+    showMsg('Jabatan roadmap tersimpan ✅', 'success');
+    setPositionForm({ id: 0, name: '', description: '', group_id: '', is_active: true });
+    await loadAdminSection('roadmap');
+  }
+
+  async function saveRoadmapCategory() {
+    if (!categoryForm.position_id || !categoryForm.name.trim()) return showMsg('Posisi & nama kategori wajib diisi', 'error');
+    const res = await fetch(`${apiBase}/admin/roadmap/categories`, {
+      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...categoryForm, position_id: Number(categoryForm.position_id), order_no: Number(categoryForm.order_no || 0) })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return showMsg(d.error || 'Gagal simpan kategori roadmap', 'error');
+    showMsg('Kategori roadmap tersimpan ✅', 'success');
+    setCategoryForm({ id: 0, position_id: categoryForm.position_id, name: '', description: '', order_no: 0, is_active: true });
+    await loadAdminSection('roadmap');
+  }
+
+  async function loadRoadmapNotes(categoryId) {
+    if (!categoryId) return setRoadmapNotes([]);
+    const res = await fetch(`${apiBase}/admin/roadmap/notes?category_id=${categoryId}`, { credentials: 'include' });
+    if (res.ok) setRoadmapNotes((await res.json()).items || []);
+  }
+
+  async function saveRoadmapNote() {
+    if (!noteForm.category_id || !noteForm.title.trim()) return showMsg('Kategori & judul catatan wajib diisi', 'error');
+    const res = await fetch(`${apiBase}/admin/roadmap/notes`, {
+      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...noteForm, category_id: Number(noteForm.category_id) })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return showMsg(d.error || 'Gagal simpan catatan roadmap', 'error');
+    showMsg('Catatan roadmap tersimpan ✅', 'success');
+    setNoteForm(f => ({ ...f, id: 0, title: '', content: '' }));
+    await loadRoadmapNotes(noteForm.category_id);
+  }
+
   async function loadAdmin() {
     // Critical admin data — participants, categories, questions
     const [pRes, cRes, qRes] = await Promise.all([
@@ -607,6 +658,13 @@ export default function Page() {
       if (res.ok) setTryoutConfigs((await res.json()).configs || []);
     } else if (section === 'kontribusi') {
       await refreshAdminContributions();
+    } else if (section === 'roadmap') {
+      const [pRes, cRes] = await Promise.all([
+        fetch(`${apiBase}/admin/roadmap/positions`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/roadmap/categories`, { credentials: 'include' }),
+      ]);
+      if (pRes.ok) setRoadmapPositions((await pRes.json()).items || []);
+      if (cRes.ok) setRoadmapCategories((await cRes.json()).items || []);
     } else if (section === 'ai') {
       const [res, pRes] = await Promise.all([
         fetch(`${apiBase}/admin/ai-settings`, { credentials: 'include' }),
@@ -2476,6 +2534,7 @@ export default function Page() {
                   ['bank', '📚', 'Bank Soal'],
                   ['tryout', '🎯', 'Tryout'],
                   ['materi', '📖', 'Materi'],
+                  ['roadmap', '🧭', 'Roadmap Jabatan'],
                   ['kontribusi', '💡', 'Kontribusi'],
                   ['redeem', '🎁', 'Redeem'],
                   ['refleksi', '📔', 'Refleksi'],
@@ -3902,6 +3961,75 @@ export default function Page() {
                     }).length === 0 && (
                       <p style={{ fontSize: 13, color: '#64748b' }}>Belum ada materi. Tambahkan di atas!</p>
                     )}
+                  </AdminSection>
+                </>
+              )}
+
+              {/* Admin — Roadmap Jabatan (Phase 1) */}
+              {adminSection === 'roadmap' && (
+                <>
+                  <AdminSection title="🧭 Roadmap per Jabatan — Phase 1">
+                    <div style={{ display:'grid', gap: 14 }}>
+                      <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
+                        <div style={{ fontWeight:700, marginBottom:8 }}>1) Jabatan</div>
+                        <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(240px,1fr))' }}>
+                          <input className="nk-input-sm" placeholder="Nama jabatan" value={positionForm.name} onChange={e => setPositionForm(f => ({ ...f, name: e.target.value }))} />
+                          <select className="nk-input-sm" value={positionForm.group_id} onChange={e => setPositionForm(f => ({ ...f, group_id: e.target.value }))}>
+                            <option value="">Global / semua kelompok</option>
+                            {adminGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                          </select>
+                          <textarea className="nk-input-sm" placeholder="Deskripsi jabatan" value={positionForm.description} onChange={e => setPositionForm(f => ({ ...f, description: e.target.value }))} style={{ minHeight: 70, gridColumn:'1 / span 2' }} />
+                          <div style={{ gridColumn:'1 / span 2', display:'flex', justifyContent:'flex-end' }}><BtnSm color="purple" onClick={saveRoadmapPosition}>💾 Simpan Jabatan</BtnSm></div>
+                        </div>
+                      </div>
+
+                      <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
+                        <div style={{ fontWeight:700, marginBottom:8 }}>2) Kategori per Jabatan</div>
+                        <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(240px,1fr))' }}>
+                          <select className="nk-input-sm" value={categoryForm.position_id} onChange={e => { const v=e.target.value; setCategoryForm(f => ({ ...f, position_id: v })); }}>
+                            <option value="">Pilih jabatan</option>
+                            {roadmapPositions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          </select>
+                          <input className="nk-input-sm" placeholder="Nama kategori" value={categoryForm.name} onChange={e => setCategoryForm(f => ({ ...f, name: e.target.value }))} />
+                          <input className="nk-input-sm" placeholder="Urutan" type="number" value={categoryForm.order_no} onChange={e => setCategoryForm(f => ({ ...f, order_no: e.target.value }))} />
+                          <textarea className="nk-input-sm" placeholder="Deskripsi kategori" value={categoryForm.description} onChange={e => setCategoryForm(f => ({ ...f, description: e.target.value }))} style={{ minHeight: 70, gridColumn:'1 / span 2' }} />
+                          <div style={{ gridColumn:'1 / span 2', display:'flex', justifyContent:'flex-end' }}><BtnSm color="purple" onClick={saveRoadmapCategory}>💾 Simpan Kategori</BtnSm></div>
+                        </div>
+                      </div>
+
+                      <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
+                        <div style={{ fontWeight:700, marginBottom:8 }}>3) Catatan per Kategori</div>
+                        <div style={{ display:'grid', gap:8 }}>
+                          <select className="nk-input-sm" value={noteForm.category_id} onChange={e => { const v=e.target.value; setNoteForm(f => ({ ...f, category_id: v })); loadRoadmapNotes(v); }}>
+                            <option value="">Pilih kategori roadmap</option>
+                            {roadmapCategories.map(c => <option key={c.id} value={c.id}>{c.position_name} • {c.name}</option>)}
+                          </select>
+                          <input className="nk-input-sm" placeholder="Judul catatan (unik per kategori)" value={noteForm.title} onChange={e => setNoteForm(f => ({ ...f, title: e.target.value }))} />
+                          <textarea className="nk-input-sm" placeholder="Isi catatan... boleh pakai backlink [[Judul Catatan Lain]]" value={noteForm.content} onChange={e => setNoteForm(f => ({ ...f, content: e.target.value }))} style={{ minHeight: 100 }} />
+                          <div style={{ display:'flex', justifyContent:'space-between', gap:8, flexWrap:'wrap' }}>
+                            <BtnSm onClick={() => setNoteForm(f => ({ ...f, id: 0, title:'', content:'' }))}>Reset Catatan</BtnSm>
+                            <BtnSm color="purple" onClick={saveRoadmapNote}>💾 Simpan Catatan</BtnSm>
+                          </div>
+                        </div>
+
+                        <div className="nk-table-wrap" style={{ marginTop: 10 }}>
+                          <table className="nk-table">
+                            <thead><tr><th>Judul</th><th>Isi</th><th>Update</th><th>Aksi</th></tr></thead>
+                            <tbody>
+                              {roadmapNotes.map(n => (
+                                <tr key={n.id}>
+                                  <td>{n.title}</td>
+                                  <td style={{ maxWidth: 280, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{(n.content||'').slice(0,140)}{(n.content||'').length>140?'...':''}</td>
+                                  <td style={{ fontSize:12, color:'#94a3b8' }}>{new Date(n.updated_at).toLocaleString('id-ID')}</td>
+                                  <td><BtnSm onClick={() => setNoteForm(f => ({ ...f, id: n.id, title: n.title || '', content: n.content || '' }))}>Edit</BtnSm></td>
+                                </tr>
+                              ))}
+                              {roadmapNotes.length === 0 && <tr><td colSpan={4} className="nk-empty">Belum ada catatan roadmap.</td></tr>}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
                   </AdminSection>
                 </>
               )}

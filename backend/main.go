@@ -241,6 +241,9 @@ func main() {
 	// Learning Materials
 	mux.HandleFunc("/admin/materials", a.handleAdminMaterials)
 	mux.HandleFunc("/admin/materials/generate", a.handleAdminGenerateMaterial)
+	mux.HandleFunc("/admin/roadmap/positions", a.handleAdminRoadmapPositions)
+	mux.HandleFunc("/admin/roadmap/categories", a.handleAdminRoadmapCategories)
+	mux.HandleFunc("/admin/roadmap/notes", a.handleAdminRoadmapNotes)
 	mux.HandleFunc("/admin/tryout-configs", a.handleAdminTryoutConfigs)
 	mux.HandleFunc("/participant/materials", a.handleParticipantMaterials)
 	mux.HandleFunc("/participant/materials/complete", a.handleParticipantMaterialComplete)
@@ -897,6 +900,58 @@ func (a *app) initDB(ctx context.Context) error {
 			reflected_date DATE NOT NULL DEFAULT CURRENT_DATE,
 			created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			UNIQUE(user_id, reflected_date)
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	// Roadmap per jabatan (Phase 1)
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS roadmap_positions (
+			id          BIGSERIAL PRIMARY KEY,
+			name        TEXT NOT NULL,
+			description TEXT NOT NULL DEFAULT '',
+			group_id    INT REFERENCES groups(id) ON DELETE SET NULL,
+			is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+			created_by  BIGINT REFERENCES users(id) ON DELETE SET NULL,
+			updated_by  BIGINT REFERENCES users(id) ON DELETE SET NULL,
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS roadmap_categories (
+			id          BIGSERIAL PRIMARY KEY,
+			position_id BIGINT NOT NULL REFERENCES roadmap_positions(id) ON DELETE CASCADE,
+			name        TEXT NOT NULL,
+			description TEXT NOT NULL DEFAULT '',
+			order_no    INT NOT NULL DEFAULT 0,
+			is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+			created_by  BIGINT REFERENCES users(id) ON DELETE SET NULL,
+			updated_by  BIGINT REFERENCES users(id) ON DELETE SET NULL,
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE(position_id, name)
+		)
+	`)
+	if err != nil {
+		return err
+	}
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS roadmap_notes (
+			id          BIGSERIAL PRIMARY KEY,
+			category_id BIGINT NOT NULL REFERENCES roadmap_categories(id) ON DELETE CASCADE,
+			title       TEXT NOT NULL,
+			content     TEXT NOT NULL DEFAULT '',
+			created_by  BIGINT REFERENCES users(id) ON DELETE SET NULL,
+			updated_by  BIGINT REFERENCES users(id) ON DELETE SET NULL,
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE(category_id, title)
 		)
 	`)
 	if err != nil {
@@ -7492,6 +7547,128 @@ func (a *app) handleParticipantReflections(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+}
+
+// ── Roadmap per Jabatan (Phase 1) ──────────────────────────────────────────
+
+func (a *app) canAccessRoadmapPosition(ctx context.Context, admin authUser, positionID int64) bool {
+	if admin.Role == "super_admin" {
+		return true
+	}
+	var adminGroup, posGroup sql.NullInt64
+	_ = a.db.QueryRowContext(ctx, `SELECT group_id FROM participant_profiles WHERE user_id=$1`, admin.ID).Scan(&adminGroup)
+	_ = a.db.QueryRowContext(ctx, `SELECT group_id FROM roadmap_positions WHERE id=$1`, positionID).Scan(&posGroup)
+	if !adminGroup.Valid && !posGroup.Valid {
+		return true
+	}
+	return adminGroup.Valid && posGroup.Valid && adminGroup.Int64 == posGroup.Int64
+}
+
+func (a *app) handleAdminRoadmapPositions(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.requireRole(r.Context(), r, "admin", "super_admin")
+	if err != nil { writeJSON(w, http.StatusUnauthorized, map[string]string{"error":"unauthorized"}); return }
+	if r.Method == http.MethodGet {
+		rows, err := a.db.QueryContext(r.Context(), `SELECT id,name,description,COALESCE(group_id,0),is_active,updated_at FROM roadmap_positions ORDER BY updated_at DESC`)
+		if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]string{"error":"db error"}); return }
+		defer rows.Close()
+		type item struct { ID int64 `json:"id"`; Name, Description string `json:"name","description"`; GroupID int64 `json:"group_id"`; IsActive bool `json:"is_active"`; UpdatedAt string `json:"updated_at"` }
+		items := []item{}
+		for rows.Next() {
+			var it item; var t time.Time
+			if rows.Scan(&it.ID,&it.Name,&it.Description,&it.GroupID,&it.IsActive,&t)==nil {
+				if admin.Role != "super_admin" && !a.canAccessRoadmapPosition(r.Context(), admin, it.ID) { continue }
+				it.UpdatedAt = t.Format(time.RFC3339); items = append(items,it)
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items":items}); return
+	}
+	if r.Method == http.MethodPost {
+		var req struct { ID int64 `json:"id"`; Name, Description string `json:"name","description"`; GroupID int64 `json:"group_id"`; IsActive *bool `json:"is_active"` }
+		if json.NewDecoder(r.Body).Decode(&req)!=nil || strings.TrimSpace(req.Name)=="" { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"name wajib diisi"}); return }
+		active := true; if req.IsActive != nil { active = *req.IsActive }
+		if admin.Role != "super_admin" {
+			req.GroupID = a.getAdminGroupIDFromUser(r.Context(), admin)
+		}
+		if req.ID > 0 {
+			if !a.canAccessRoadmapPosition(r.Context(), admin, req.ID) { writeJSON(w,http.StatusForbidden,map[string]string{"error":"posisi di luar kelompok admin"}); return }
+			_, err = a.db.ExecContext(r.Context(), `UPDATE roadmap_positions SET name=$1,description=$2,group_id=NULLIF($3,0),is_active=$4,updated_by=$5,updated_at=NOW() WHERE id=$6`, strings.TrimSpace(req.Name), strings.TrimSpace(req.Description), req.GroupID, active, admin.ID, req.ID)
+		} else {
+			_, err = a.db.ExecContext(r.Context(), `INSERT INTO roadmap_positions(name,description,group_id,is_active,created_by,updated_by) VALUES($1,$2,NULLIF($3,0),$4,$5,$5)`, strings.TrimSpace(req.Name), strings.TrimSpace(req.Description), req.GroupID, active, admin.ID)
+		}
+		if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal simpan posisi"}); return }
+		writeJSON(w,http.StatusOK,map[string]any{"ok":true}); return
+	}
+	writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"})
+}
+
+func (a *app) handleAdminRoadmapCategories(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.requireRole(r.Context(), r, "admin", "super_admin")
+	if err != nil { writeJSON(w,http.StatusUnauthorized,map[string]string{"error":"unauthorized"}); return }
+	if r.Method == http.MethodGet {
+		positionID, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("position_id")), 10, 64)
+		q := `SELECT rc.id,rc.position_id,rp.name,rc.name,rc.description,rc.order_no,rc.is_active,rc.updated_at FROM roadmap_categories rc JOIN roadmap_positions rp ON rp.id=rc.position_id`
+		args := []any{}
+		if positionID > 0 { q += ` WHERE rc.position_id=$1`; args = append(args, positionID) }
+		q += ` ORDER BY rc.order_no ASC, rc.updated_at DESC`
+		rows, err := a.db.QueryContext(r.Context(), q, args...)
+		if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"db error"}); return }
+		defer rows.Close()
+		type item struct { ID, PositionID int64 `json:"id","position_id"`; PositionName, Name, Description string `json:"position_name","name","description"`; OrderNo int `json:"order_no"`; IsActive bool `json:"is_active"`; UpdatedAt string `json:"updated_at"` }
+		items := []item{}
+		for rows.Next() { var it item; var t time.Time; if rows.Scan(&it.ID,&it.PositionID,&it.PositionName,&it.Name,&it.Description,&it.OrderNo,&it.IsActive,&t)==nil {
+			if admin.Role != "super_admin" && !a.canAccessRoadmapPosition(r.Context(), admin, it.PositionID) { continue }
+			it.UpdatedAt=t.Format(time.RFC3339); items = append(items,it)
+		}}
+		writeJSON(w,http.StatusOK,map[string]any{"items":items}); return
+	}
+	if r.Method == http.MethodPost {
+		var req struct { ID, PositionID int64 `json:"id","position_id"`; Name, Description string `json:"name","description"`; OrderNo int `json:"order_no"`; IsActive *bool `json:"is_active"` }
+		if json.NewDecoder(r.Body).Decode(&req)!=nil || req.PositionID<=0 || strings.TrimSpace(req.Name)=="" { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"position_id dan name wajib"}); return }
+		if admin.Role != "super_admin" && !a.canAccessRoadmapPosition(r.Context(), admin, req.PositionID) { writeJSON(w,http.StatusForbidden,map[string]string{"error":"posisi di luar kelompok admin"}); return }
+		active := true; if req.IsActive!=nil { active = *req.IsActive }
+		if req.ID > 0 {
+			_, err = a.db.ExecContext(r.Context(), `UPDATE roadmap_categories SET position_id=$1,name=$2,description=$3,order_no=$4,is_active=$5,updated_by=$6,updated_at=NOW() WHERE id=$7`, req.PositionID, strings.TrimSpace(req.Name), strings.TrimSpace(req.Description), req.OrderNo, active, admin.ID, req.ID)
+		} else {
+			_, err = a.db.ExecContext(r.Context(), `INSERT INTO roadmap_categories(position_id,name,description,order_no,is_active,created_by,updated_by) VALUES($1,$2,$3,$4,$5,$6,$6)`, req.PositionID, strings.TrimSpace(req.Name), strings.TrimSpace(req.Description), req.OrderNo, active, admin.ID)
+		}
+		if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal simpan kategori"}); return }
+		writeJSON(w,http.StatusOK,map[string]any{"ok":true}); return
+	}
+	writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"})
+}
+
+func (a *app) handleAdminRoadmapNotes(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.requireRole(r.Context(), r, "admin", "super_admin")
+	if err != nil { writeJSON(w,http.StatusUnauthorized,map[string]string{"error":"unauthorized"}); return }
+	if r.Method == http.MethodGet {
+		categoryID, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("category_id")), 10, 64)
+		if categoryID <= 0 { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"category_id wajib"}); return }
+		var positionID int64
+		_ = a.db.QueryRowContext(r.Context(), `SELECT position_id FROM roadmap_categories WHERE id=$1`, categoryID).Scan(&positionID)
+		if admin.Role != "super_admin" && !a.canAccessRoadmapPosition(r.Context(), admin, positionID) { writeJSON(w,http.StatusForbidden,map[string]string{"error":"kategori di luar kelompok admin"}); return }
+		rows, err := a.db.QueryContext(r.Context(), `SELECT id,title,content,updated_at FROM roadmap_notes WHERE category_id=$1 ORDER BY updated_at DESC`, categoryID)
+		if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"db error"}); return }
+		defer rows.Close()
+		type item struct { ID int64 `json:"id"`; Title, Content, UpdatedAt string `json:"title","content","updated_at"` }
+		items := []item{}
+		for rows.Next() { var it item; var t time.Time; if rows.Scan(&it.ID,&it.Title,&it.Content,&t)==nil { it.UpdatedAt=t.Format(time.RFC3339); items=append(items,it) }}
+		writeJSON(w,http.StatusOK,map[string]any{"items":items}); return
+	}
+	if r.Method == http.MethodPost {
+		var req struct { ID, CategoryID int64 `json:"id","category_id"`; Title, Content string `json:"title","content"` }
+		if json.NewDecoder(r.Body).Decode(&req)!=nil || req.CategoryID<=0 || strings.TrimSpace(req.Title)=="" { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"category_id dan title wajib"}); return }
+		var positionID int64
+		_ = a.db.QueryRowContext(r.Context(), `SELECT position_id FROM roadmap_categories WHERE id=$1`, req.CategoryID).Scan(&positionID)
+		if admin.Role != "super_admin" && !a.canAccessRoadmapPosition(r.Context(), admin, positionID) { writeJSON(w,http.StatusForbidden,map[string]string{"error":"kategori di luar kelompok admin"}); return }
+		if req.ID > 0 {
+			_, err = a.db.ExecContext(r.Context(), `UPDATE roadmap_notes SET title=$1,content=$2,updated_by=$3,updated_at=NOW() WHERE id=$4 AND category_id=$5`, strings.TrimSpace(req.Title), req.Content, admin.ID, req.ID, req.CategoryID)
+		} else {
+			_, err = a.db.ExecContext(r.Context(), `INSERT INTO roadmap_notes(category_id,title,content,created_by,updated_by) VALUES($1,$2,$3,$4,$4)`, req.CategoryID, strings.TrimSpace(req.Title), req.Content, admin.ID)
+		}
+		if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal simpan catatan"}); return }
+		writeJSON(w,http.StatusOK,map[string]any{"ok":true}); return
+	}
+	writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"})
 }
 
 // ── Refleksi: Agregat Admin ─────────────────────────────────────────────────
