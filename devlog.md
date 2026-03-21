@@ -17,3 +17,20 @@
 
 ### Next Step
 - Mulai implementasi Phase 1: desain tabel + CRUD admin jabatan/kategori/catatan.
+
+## 2026-03-21 — Stabilization Patch Lanjutan
+### Masalah
+- Simpan catatan roadmap tetap gagal di beberapa environment walau patch kompatibilitas legacy sudah ditambahkan.
+- Dugaan kuat bentrok skema lama (`roadmap_id` + tabel legacy) dengan model baru (`category_id`).
+
+### Perubahan
+- Membersihkan skema legacy saat startup migrasi:
+  - `DROP TABLE IF EXISTS category_roadmaps CASCADE`
+  - `ALTER TABLE roadmap_notes DROP COLUMN IF EXISTS roadmap_id`
+- Menyederhanakan jalur simpan catatan agar hanya memakai skema baru:
+  - `INSERT/UPDATE roadmap_notes` berbasis `category_id`
+  - Menghapus fallback insert/update berbasis `roadmap_id` pada handler save.
+
+### Catatan Deploy
+- Wajib redeploy backend agar cleanup migrasi dijalankan di database target.
+- Setelah deploy, uji ulang create/update catatan roadmap pada kategori yang sama.
