@@ -7577,7 +7577,14 @@ func (a *app) handleAdminRoadmapPositions(w http.ResponseWriter, r *http.Request
 		rows, err := a.db.QueryContext(r.Context(), `SELECT id,name,description,COALESCE(group_id,0),is_active,updated_at FROM roadmap_positions ORDER BY updated_at DESC`)
 		if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]string{"error":"db error"}); return }
 		defer rows.Close()
-		type item struct { ID int64 `json:"id"`; Name, Description string `json:"name","description"`; GroupID int64 `json:"group_id"`; IsActive bool `json:"is_active"`; UpdatedAt string `json:"updated_at"` }
+		type item struct {
+			ID          int64  `json:"id"`
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			GroupID     int64  `json:"group_id"`
+			IsActive    bool   `json:"is_active"`
+			UpdatedAt   string `json:"updated_at"`
+		}
 		items := []item{}
 		for rows.Next() {
 			var it item; var t time.Time
@@ -7589,7 +7596,13 @@ func (a *app) handleAdminRoadmapPositions(w http.ResponseWriter, r *http.Request
 		writeJSON(w, http.StatusOK, map[string]any{"items":items}); return
 	}
 	if r.Method == http.MethodPost {
-		var req struct { ID int64 `json:"id"`; Name, Description string `json:"name","description"`; GroupID int64 `json:"group_id"`; IsActive *bool `json:"is_active"` }
+		var req struct {
+			ID          int64  `json:"id"`
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			GroupID     int64  `json:"group_id"`
+			IsActive    *bool  `json:"is_active"`
+		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeJSON(w,http.StatusBadRequest,map[string]string{"error":"payload tidak valid: " + err.Error()}); return
 		}
@@ -7623,7 +7636,16 @@ func (a *app) handleAdminRoadmapCategories(w http.ResponseWriter, r *http.Reques
 		rows, err := a.db.QueryContext(r.Context(), q, args...)
 		if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"db error"}); return }
 		defer rows.Close()
-		type item struct { ID, PositionID int64 `json:"id","position_id"`; PositionName, Name, Description string `json:"position_name","name","description"`; OrderNo int `json:"order_no"`; IsActive bool `json:"is_active"`; UpdatedAt string `json:"updated_at"` }
+		type item struct {
+			ID           int64  `json:"id"`
+			PositionID   int64  `json:"position_id"`
+			PositionName string `json:"position_name"`
+			Name         string `json:"name"`
+			Description  string `json:"description"`
+			OrderNo      int    `json:"order_no"`
+			IsActive     bool   `json:"is_active"`
+			UpdatedAt    string `json:"updated_at"`
+		}
 		items := []item{}
 		for rows.Next() { var it item; var t time.Time; if rows.Scan(&it.ID,&it.PositionID,&it.PositionName,&it.Name,&it.Description,&it.OrderNo,&it.IsActive,&t)==nil {
 			if admin.Role != "super_admin" && !a.canAccessRoadmapPosition(r.Context(), admin, it.PositionID) { continue }
@@ -7632,7 +7654,14 @@ func (a *app) handleAdminRoadmapCategories(w http.ResponseWriter, r *http.Reques
 		writeJSON(w,http.StatusOK,map[string]any{"items":items}); return
 	}
 	if r.Method == http.MethodPost {
-		var req struct { ID, PositionID int64 `json:"id","position_id"`; Name, Description string `json:"name","description"`; OrderNo int `json:"order_no"`; IsActive *bool `json:"is_active"` }
+		var req struct {
+			ID          int64  `json:"id"`
+			PositionID  int64  `json:"position_id"`
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			OrderNo     int    `json:"order_no"`
+			IsActive    *bool  `json:"is_active"`
+		}
 		if json.NewDecoder(r.Body).Decode(&req)!=nil || req.PositionID<=0 || strings.TrimSpace(req.Name)=="" { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"position_id dan name wajib"}); return }
 		if admin.Role != "super_admin" && !a.canAccessRoadmapPosition(r.Context(), admin, req.PositionID) { writeJSON(w,http.StatusForbidden,map[string]string{"error":"posisi di luar kelompok admin"}); return }
 		active := true; if req.IsActive!=nil { active = *req.IsActive }
@@ -7686,13 +7715,23 @@ func (a *app) handleAdminRoadmapNotes(w http.ResponseWriter, r *http.Request) {
 		rows, err := a.db.QueryContext(r.Context(), `SELECT id,title,content,updated_at FROM roadmap_notes WHERE category_id=$1 ORDER BY updated_at DESC`, categoryID)
 		if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"db error"}); return }
 		defer rows.Close()
-		type item struct { ID int64 `json:"id"`; Title, Content, UpdatedAt string `json:"title","content","updated_at"` }
+		type item struct {
+			ID        int64  `json:"id"`
+			Title     string `json:"title"`
+			Content   string `json:"content"`
+			UpdatedAt string `json:"updated_at"`
+		}
 		items := []item{}
 		for rows.Next() { var it item; var t time.Time; if rows.Scan(&it.ID,&it.Title,&it.Content,&t)==nil { it.UpdatedAt=t.Format(time.RFC3339); items=append(items,it) }}
 		writeJSON(w,http.StatusOK,map[string]any{"items":items}); return
 	}
 	if r.Method == http.MethodPost {
-		var req struct { ID, CategoryID int64 `json:"id","category_id"`; Title, Content string `json:"title","content"` }
+		var req struct {
+			ID         int64  `json:"id"`
+			CategoryID int64  `json:"category_id"`
+			Title      string `json:"title"`
+			Content    string `json:"content"`
+		}
 		if json.NewDecoder(r.Body).Decode(&req)!=nil || req.CategoryID<=0 || strings.TrimSpace(req.Title)=="" { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"category_id dan title wajib"}); return }
 		var positionID int64
 		_ = a.db.QueryRowContext(r.Context(), `SELECT position_id FROM roadmap_categories WHERE id=$1`, req.CategoryID).Scan(&positionID)
