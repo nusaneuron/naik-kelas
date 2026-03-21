@@ -83,6 +83,7 @@ export default function Page() {
   const [adminContributions, setAdminContributions] = useState([]);
   const [adminContribFilter, setAdminContribFilter] = useState('pending');
   const [adminRoadmaps, setAdminRoadmaps] = useState([]);
+  const [roadmapSourceText, setRoadmapSourceText] = useState('');
   const [roadmapForm, setRoadmapForm] = useState({ id: 0, category_id: '', title: '', description: '', graph_json: '{"nodes":[],"edges":[]}', is_published: false });
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewingContrib, setReviewingContrib] = useState(null);
@@ -546,6 +547,18 @@ export default function Page() {
     setRoadmapForm({ id: 0, category_id: '', title: '', description: '', graph_json: '{"nodes":[],"edges":[]}', is_published: false });
     const rf = await fetch(`${apiBase}/admin/roadmaps`, { credentials: 'include' });
     if (rf.ok) setAdminRoadmaps((await rf.json()).items || []);
+  }
+
+  async function generateRoadmapFromText() {
+    if (!roadmapSourceText.trim()) return showMsg('Isi kumpulan teks dulu untuk generate graph', 'error');
+    const res = await fetch(`${apiBase}/admin/roadmaps/generate`, {
+      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_text: roadmapSourceText.trim() })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return showMsg(d.error || 'Gagal generate roadmap', 'error');
+    setRoadmapForm(f => ({ ...f, graph_json: d.graph_json || '{"nodes":[],"edges":[]}' }));
+    showMsg('Graph berhasil digenerate dari teks ✅', 'success');
   }
 
   function parseRoadmapGraph(raw) {
@@ -3956,6 +3969,10 @@ export default function Page() {
                         </select>
                         <input className="nk-input-sm" placeholder="Judul roadmap" value={roadmapForm.title} onChange={e => setRoadmapForm(f => ({ ...f, title: e.target.value }))} />
                         <textarea className="nk-input-sm" placeholder="Deskripsi singkat" value={roadmapForm.description} onChange={e => setRoadmapForm(f => ({ ...f, description: e.target.value }))} style={{ minHeight: 74, gridColumn:'1 / span 2' }} />
+                        <textarea className="nk-input-sm" placeholder="Kumpulan teks (satu poin per baris / kalimat) untuk generate otomatis" value={roadmapSourceText} onChange={e => setRoadmapSourceText(e.target.value)} style={{ minHeight: 100, gridColumn:'1 / span 2' }} />
+                        <div style={{ gridColumn:'1 / span 2', display:'flex', justifyContent:'flex-end' }}>
+                          <BtnSm color="purple" onClick={generateRoadmapFromText}>✨ Generate dari Teks</BtnSm>
+                        </div>
                         <textarea className="nk-input-sm" placeholder='Graph JSON, contoh: {"nodes":[],"edges":[]}' value={roadmapForm.graph_json} onChange={e => setRoadmapForm(f => ({ ...f, graph_json: e.target.value }))} style={{ minHeight: 110, gridColumn:'1 / span 2', fontFamily:'monospace' }} />
                         {(() => {
                           const g = parseRoadmapGraph(roadmapForm.graph_json);
