@@ -4169,7 +4169,17 @@ export default function Page() {
                             <div style={{ marginBottom: 10 }}>
                               {g.error ? <div className="nk-empty" style={{ margin:0, color:'#fca5a5' }}>{g.error}</div> : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={() => {}} />}
                               {roadmapUnknownBacklinks.length > 0 && (
-                                <div className="nk-empty" style={{ marginTop:8, color:'#fbbf24' }}>⚠️ Backlink belum ketemu: {roadmapUnknownBacklinks.slice(0,6).join(', ')}{roadmapUnknownBacklinks.length > 6 ? ` (+${roadmapUnknownBacklinks.length - 6})` : ''}</div>
+                                <div className="nk-empty" style={{ marginTop:8, color:'#fbbf24' }}>
+                                  <div style={{ marginBottom: 6 }}>⚠️ Backlink belum ketemu. Tap untuk jadikan judul catatan:</div>
+                                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                                    {roadmapUnknownBacklinks.slice(0, 12).map((x, i) => (
+                                      <button key={i} onClick={() => setNoteForm(f => ({ ...f, title: x }))}
+                                        style={{ border:'1px solid #854d0e', background:'rgba(251,191,36,0.12)', color:'#fcd34d', borderRadius: 999, padding:'4px 10px', fontSize:11, cursor:'pointer' }}>
+                                        + {x}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
                               )}
                             </div>
                           );
@@ -4245,7 +4255,17 @@ export default function Page() {
                               : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={() => {}} />;
                           })()}
                           {positionUnknownBacklinks.length > 0 && (
-                            <div className="nk-empty" style={{ marginTop:8, color:'#fbbf24' }}>⚠️ Backlink belum ketemu: {positionUnknownBacklinks.slice(0,8).join(', ')}{positionUnknownBacklinks.length > 8 ? ` (+${positionUnknownBacklinks.length - 8})` : ''}</div>
+                            <div className="nk-empty" style={{ marginTop:8, color:'#fbbf24' }}>
+                              <div style={{ marginBottom: 6 }}>⚠️ Backlink belum ketemu (gabungan). Tap untuk isi judul catatan:</div>
+                              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                                {positionUnknownBacklinks.slice(0, 12).map((x, i) => (
+                                  <button key={i} onClick={() => setNoteForm(f => ({ ...f, title: x }))}
+                                    style={{ border:'1px solid #854d0e', background:'rgba(251,191,36,0.12)', color:'#fcd34d', borderRadius: 999, padding:'4px 10px', fontSize:11, cursor:'pointer' }}>
+                                    + {x}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
                           )}
                         </div>
                       </div>
