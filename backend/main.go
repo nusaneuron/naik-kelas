@@ -7722,6 +7722,46 @@ func extractBacklinks(s string) []string {
 	return out
 }
 
+func (a *app) hasRoadmapNotesRoadmapIDColumn(ctx context.Context) bool {
+	var exists bool
+	_ = a.db.QueryRowContext(ctx, `SELECT EXISTS(
+		SELECT 1 FROM information_schema.columns
+		WHERE table_schema='public' AND table_name='roadmap_notes' AND column_name='roadmap_id'
+	)`).Scan(&exists)
+	return exists
+}
+
+func (a *app) ensureLegacyRoadmapID(ctx context.Context, categoryID int64, adminID int64) (int64, error) {
+	_, _ = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS category_roadmaps (
+			id            BIGSERIAL PRIMARY KEY,
+			category_id   INT NOT NULL,
+			title         TEXT NOT NULL,
+			description   TEXT NOT NULL DEFAULT '',
+			graph_json    TEXT NOT NULL DEFAULT '{"nodes":[],"edges":[]}',
+			is_published  BOOLEAN NOT NULL DEFAULT FALSE,
+			created_by    BIGINT REFERENCES users(id) ON DELETE SET NULL,
+			updated_by    BIGINT REFERENCES users(id) ON DELETE SET NULL,
+			created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	var id int64
+	err := a.db.QueryRowContext(ctx, `SELECT id FROM category_roadmaps WHERE category_id=$1 ORDER BY id DESC LIMIT 1`, categoryID).Scan(&id)
+	if err == nil && id > 0 {
+		return id, nil
+	}
+	err = a.db.QueryRowContext(ctx, `
+		INSERT INTO category_roadmaps(category_id, title, description, graph_json, is_published, created_by, updated_by)
+		VALUES($1,$2,'','{"nodes":[],"edges":[]}',FALSE,$3,$3)
+		RETURNING id
+	`, categoryID, fmt.Sprintf("Roadmap Kategori %d", categoryID), adminID).Scan(&id)
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
 func (a *app) handleAdminRoadmapNotes(w http.ResponseWriter, r *http.Request) {
 	admin, err := a.requireRole(r.Context(), r, "admin", "super_admin")
 	if err != nil { writeJSON(w,http.StatusUnauthorized,map[string]string{"error":"unauthorized"}); return }
@@ -7759,18 +7799,39 @@ func (a *app) handleAdminRoadmapNotes(w http.ResponseWriter, r *http.Request) {
 		var savedID int64
 		var savedTitle, savedContent string
 		var savedAt time.Time
+		hasLegacyRoadmapID := a.hasRoadmapNotesRoadmapIDColumn(r.Context())
+		legacyRoadmapID := int64(0)
+		if hasLegacyRoadmapID {
+			legacyRoadmapID, _ = a.ensureLegacyRoadmapID(r.Context(), req.CategoryID, admin.ID)
+		}
 		if req.ID > 0 {
-			err = a.db.QueryRowContext(r.Context(), `
-				UPDATE roadmap_notes SET title=$1,content=$2,updated_by=$3,updated_at=NOW()
-				WHERE id=$4 AND category_id=$5
-				RETURNING id,title,content,updated_at
-			`, title, req.Content, admin.ID, req.ID, req.CategoryID).Scan(&savedID, &savedTitle, &savedContent, &savedAt)
+			if hasLegacyRoadmapID && legacyRoadmapID > 0 {
+				err = a.db.QueryRowContext(r.Context(), `
+					UPDATE roadmap_notes SET roadmap_id=$1, category_id=$2, title=$3, content=$4, updated_by=$5, updated_at=NOW()
+					WHERE id=$6 AND category_id=$2
+					RETURNING id,title,content,updated_at
+				`, legacyRoadmapID, req.CategoryID, title, req.Content, admin.ID, req.ID).Scan(&savedID, &savedTitle, &savedContent, &savedAt)
+			} else {
+				err = a.db.QueryRowContext(r.Context(), `
+					UPDATE roadmap_notes SET title=$1,content=$2,updated_by=$3,updated_at=NOW()
+					WHERE id=$4 AND category_id=$5
+					RETURNING id,title,content,updated_at
+				`, title, req.Content, admin.ID, req.ID, req.CategoryID).Scan(&savedID, &savedTitle, &savedContent, &savedAt)
+			}
 		} else {
-			err = a.db.QueryRowContext(r.Context(), `
-				INSERT INTO roadmap_notes(category_id,title,content,created_by,updated_by)
-				VALUES($1,$2,$3,$4,$4)
-				RETURNING id,title,content,updated_at
-			`, req.CategoryID, title, req.Content, admin.ID).Scan(&savedID, &savedTitle, &savedContent, &savedAt)
+			if hasLegacyRoadmapID && legacyRoadmapID > 0 {
+				err = a.db.QueryRowContext(r.Context(), `
+					INSERT INTO roadmap_notes(roadmap_id, category_id, title, content, created_by, updated_by)
+					VALUES($1,$2,$3,$4,$5,$5)
+					RETURNING id,title,content,updated_at
+				`, legacyRoadmapID, req.CategoryID, title, req.Content, admin.ID).Scan(&savedID, &savedTitle, &savedContent, &savedAt)
+			} else {
+				err = a.db.QueryRowContext(r.Context(), `
+					INSERT INTO roadmap_notes(category_id,title,content,created_by,updated_by)
+					VALUES($1,$2,$3,$4,$4)
+					RETURNING id,title,content,updated_at
+				`, req.CategoryID, title, req.Content, admin.ID).Scan(&savedID, &savedTitle, &savedContent, &savedAt)
+			}
 		}
 		if err != nil {
 			msg := "gagal simpan catatan"
