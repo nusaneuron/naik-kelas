@@ -4037,7 +4037,7 @@ export default function Page() {
                         </div>
                       </div>
 
-                      <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10, overflow: 'hidden' }}>
+                      <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
                         <div style={{ fontWeight:700, marginBottom:8 }}>📝 Catatan Roadmap (khusus roadmap ini)</div>
                         {!roadmapForm.id ? (
                           <div className="nk-empty" style={{ margin:0 }}>Simpan dulu roadmap, lalu tambah catatan roadmap dengan backlink [[Judul Catatan]].</div>
@@ -4078,8 +4078,8 @@ export default function Page() {
                         )}
                       </div>
 
-                      <div className="nk-table-wrap">
-                        <table className="nk-table">
+                      <div className="nk-table-wrap" style={{ overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
+                        <table className="nk-table" style={{ minWidth: 640 }}>
                           <thead><tr><th>Kategori</th><th>Judul</th><th>Status</th><th>Update</th><th>Aksi</th></tr></thead>
                           <tbody>
                             {adminRoadmaps.map(r => (
