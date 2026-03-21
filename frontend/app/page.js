@@ -86,6 +86,8 @@ export default function Page() {
   const [roadmapCategories, setRoadmapCategories] = useState([]);
   const [roadmapNotes, setRoadmapNotes] = useState([]);
   const [roadmapGraph, setRoadmapGraph] = useState('{"nodes":[],"edges":[]}');
+  const [positionGraph, setPositionGraph] = useState('{"nodes":[],"edges":[]}');
+  const [positionGraphFilter, setPositionGraphFilter] = useState({ position_id: '', category_ids: [] });
   const [positionForm, setPositionForm] = useState({ id: 0, name: '', description: '', group_id: '', is_active: true });
   const [categoryForm, setCategoryForm] = useState({ id: 0, position_id: '', name: '', description: '', order_no: 0, is_active: true });
   const [noteForm, setNoteForm] = useState({ id: 0, category_id: '', title: '', content: '' });
@@ -596,6 +598,14 @@ export default function Page() {
     } catch {
       return { nodes: [], edges: [], error: 'Graph JSON tidak valid.' };
     }
+  }
+
+  async function loadPositionGraph(positionId, categoryIds = []) {
+    if (!positionId) return setPositionGraph('{"nodes":[],"edges":[]}');
+    const qs = new URLSearchParams({ position_id: String(positionId) });
+    if (categoryIds.length) qs.set('category_ids', categoryIds.join(','));
+    const res = await fetch(`${apiBase}/admin/roadmap/position-graph?${qs.toString()}`, { credentials: 'include' });
+    if (res.ok) setPositionGraph((await res.json()).graph_json || '{"nodes":[],"edges":[]}');
   }
 
   async function loadAdmin() {
@@ -4060,6 +4070,48 @@ export default function Page() {
                               {roadmapNotes.length === 0 && <tr><td colSpan={4} className="nk-empty">Belum ada catatan roadmap.</td></tr>}
                             </tbody>
                           </table>
+                        </div>
+                      </div>
+
+                      <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
+                        <div style={{ fontWeight:700, marginBottom:8 }}>4) Graph Jabatan (Gabungan Kategori)</div>
+                        <div style={{ display:'grid', gap:8 }}>
+                          <select className="nk-input-sm" value={positionGraphFilter.position_id} onChange={e => {
+                            const v = e.target.value;
+                            setPositionGraphFilter({ position_id: v, category_ids: [] });
+                            loadPositionGraph(v, []);
+                          }}>
+                            <option value="">Pilih jabatan untuk graph gabungan</option>
+                            {roadmapPositions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          </select>
+
+                          <div style={{ display:'grid', gap:6 }}>
+                            <div style={{ fontSize:12, color:'#94a3b8' }}>Pilih kategori yang ingin digabungkan:</div>
+                            <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                              {roadmapCategories.filter(c => String(c.position_id) === String(positionGraphFilter.position_id)).map(c => {
+                                const checked = positionGraphFilter.category_ids.includes(c.id);
+                                return (
+                                  <label key={c.id} style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:'#cbd5e1', border:'1px solid #1e2d45', borderRadius:8, padding:'4px 8px' }}>
+                                    <input type="checkbox" checked={checked} onChange={e => {
+                                      const next = e.target.checked
+                                        ? [...positionGraphFilter.category_ids, c.id]
+                                        : positionGraphFilter.category_ids.filter(x => x !== c.id);
+                                      setPositionGraphFilter(f => ({ ...f, category_ids: next }));
+                                      loadPositionGraph(positionGraphFilter.position_id, next);
+                                    }} />
+                                    {c.name}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {(() => {
+                            const g = parseRoadmapGraph(positionGraph);
+                            return g.error
+                              ? <div className="nk-empty" style={{ margin:0, color:'#fca5a5' }}>{g.error}</div>
+                              : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={() => {}} />;
+                          })()}
                         </div>
                       </div>
                     </div>
