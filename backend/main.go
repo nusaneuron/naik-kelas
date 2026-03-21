@@ -963,6 +963,25 @@ func (a *app) initDB(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// Backward-compat migration for older roadmap_notes schema
+	_, _ = a.db.ExecContext(ctx, `ALTER TABLE roadmap_notes ADD COLUMN IF NOT EXISTS category_id BIGINT`)
+	_, _ = a.db.ExecContext(ctx, `DO $$
+	BEGIN
+		IF EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_name='roadmap_notes' AND column_name='roadmap_id'
+		) THEN
+			ALTER TABLE roadmap_notes ALTER COLUMN roadmap_id DROP NOT NULL;
+		END IF;
+	END $$;`)
+	_, _ = a.db.ExecContext(ctx, `DO $$
+	BEGIN
+		IF NOT EXISTS (
+			SELECT 1 FROM pg_indexes WHERE schemaname='public' AND indexname='roadmap_notes_category_title_uniq'
+		) THEN
+			CREATE UNIQUE INDEX roadmap_notes_category_title_uniq ON roadmap_notes(category_id, title);
+		END IF;
+	END $$;`)
 
 	return nil
 }
@@ -7755,10 +7774,13 @@ func (a *app) handleAdminRoadmapNotes(w http.ResponseWriter, r *http.Request) {
 		}
 		if err != nil {
 			msg := "gagal simpan catatan"
-			if strings.Contains(strings.ToLower(err.Error()), "duplicate") {
+			errText := strings.ToLower(err.Error())
+			if strings.Contains(errText, "duplicate") || strings.Contains(errText, "unique") {
 				msg = "judul catatan sudah ada di kategori ini"
+			} else if strings.Contains(errText, "roadmap_id") {
+				msg = "struktur tabel roadmap_notes lama terdeteksi; coba redeploy backend sekali lagi"
 			}
-			writeJSON(w,http.StatusInternalServerError,map[string]string{"error": msg}); return
+			writeJSON(w,http.StatusInternalServerError,map[string]string{"error": msg, "detail": err.Error()}); return
 		}
 		writeJSON(w,http.StatusOK,map[string]any{"ok":true, "item": map[string]any{"id": savedID, "title": savedTitle, "content": savedContent, "updated_at": savedAt.Format(time.RFC3339)}}); return
 	}
