@@ -617,8 +617,8 @@ export default function Page() {
   }
 
   async function loadRoadmapCompetencies(positionId) {
-    if (!positionId) return setRoadmapCompetencies([]);
-    const res = await fetch(`${apiBase}/admin/roadmap/competencies?position_id=${positionId}`, { credentials: 'include' });
+    const qs = positionId ? `?position_id=${positionId}` : '';
+    const res = await fetch(`${apiBase}/admin/roadmap/competencies${qs}`, { credentials: 'include' });
     if (res.ok) setRoadmapCompetencies((await res.json()).items || []);
   }
 
@@ -843,8 +843,12 @@ export default function Page() {
     } else if (section === 'kontribusi') {
       await refreshAdminContributions();
     } else if (section === 'roadmap') {
-      const pRes = await fetch(`${apiBase}/admin/roadmap/positions`, { credentials: 'include' });
+      const [pRes, kRes] = await Promise.all([
+        fetch(`${apiBase}/admin/roadmap/positions`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/roadmap/competencies`, { credentials: 'include' }),
+      ]);
       if (pRes.ok) setRoadmapPositions((await pRes.json()).items || []);
+      if (kRes.ok) setRoadmapCompetencies((await kRes.json()).items || []);
     } else if (section === 'ai') {
       const [res, pRes] = await Promise.all([
         fetch(`${apiBase}/admin/ai-settings`, { credentials: 'include' }),
@@ -4214,7 +4218,7 @@ export default function Page() {
                   <AdminSection title="🧭 Roadmap Jabatan">
                     <div style={{ display:'flex', gap:8, marginBottom: 12, flexWrap:'wrap' }}>
                       <button onClick={() => setRoadmapMenu('positions')} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'positions' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'positions' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'positions' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>👔 Jabatan</button>
-                      <button onClick={() => setRoadmapMenu('competencies')} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'competencies' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'competencies' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'competencies' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>🛠️ Kompetensi Teknis</button>
+                      <button onClick={async () => { setRoadmapMenu('competencies'); await loadRoadmapCompetencies(competencyForm.position_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'competencies' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'competencies' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'competencies' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>🛠️ Kompetensi Teknis</button>
                     </div>
 
                     {roadmapMenu === 'positions' && <>
@@ -4281,10 +4285,11 @@ export default function Page() {
 
                       <div className="nk-table-wrap" style={{ marginTop: 12 }}>
                         <table className="nk-table">
-                          <thead><tr><th>Kode</th><th>Nama</th><th>Deskripsi</th><th>Update</th><th>Aksi</th></tr></thead>
+                          <thead><tr><th>Jabatan</th><th>Kode</th><th>Nama</th><th>Deskripsi</th><th>Update</th><th>Aksi</th></tr></thead>
                           <tbody>
                             {roadmapCompetencies.map(c => (
                               <tr key={c.id}>
+                                <td>{roadmapPositions.find(p => String(p.id) === String(c.position_id))?.name || `#${c.position_id}`}</td>
                                 <td style={{ fontWeight:700 }}>{c.code}</td>
                                 <td>{c.name}</td>
                                 <td style={{ maxWidth: 320, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{c.description || '-'}</td>
@@ -4295,7 +4300,7 @@ export default function Page() {
                                 </td>
                               </tr>
                             ))}
-                            {roadmapCompetencies.length === 0 && <tr><td colSpan={5} className="nk-empty">Belum ada kompetensi teknis.</td></tr>}
+                            {roadmapCompetencies.length === 0 && <tr><td colSpan={6} className="nk-empty">Belum ada kompetensi teknis.</td></tr>}
                           </tbody>
                         </table>
                       </div>
