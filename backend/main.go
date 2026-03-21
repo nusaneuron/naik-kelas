@@ -7002,25 +7002,52 @@ func (a *app) handleAdminGenerateRoadmapMaterial(w http.ResponseWriter, r *http.
 	_ = admin
 	if r.Method != http.MethodPost { writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error":"method not allowed"}); return }
 	var req struct {
-		CompetencyID int64  `json:"competency_id"`
-		Title        string `json:"title"`
-		Brief        string `json:"brief"`
+		CompetencyID        int64  `json:"competency_id"`
+		Title               string `json:"title"`
+		Brief               string `json:"brief"`
+		TargetUser          string `json:"target_user"`
+		LearningObjectives  string `json:"learning_objectives"`
+		Style               string `json:"style"`
 	}
 	if json.NewDecoder(r.Body).Decode(&req) != nil || strings.TrimSpace(req.Title) == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error":"judul materi wajib diisi"}); return
 	}
-	systemPrompt := `Kamu adalah asisten penyusun materi roadmap kompetensi dalam Bahasa Indonesia.
-Tulis materi ringkas, praktis, dan siap pakai.
-Format output: markdown biasa (tanpa JSON), dengan struktur:
-## Tujuan
-## Ringkasan Konsep
-## Langkah Praktis
-## Contoh Penerapan
-## Checklist
-Gunakan gaya bahasa jelas dan to the point.`
-	userPrompt := fmt.Sprintf("Buat draft materi dengan judul: %q", strings.TrimSpace(req.Title))
+	style := strings.TrimSpace(strings.ToLower(req.Style))
+	if style == "" { style = "ringkas" }
+	targetUser := strings.TrimSpace(req.TargetUser)
+	if targetUser == "" { targetUser = "staff" }
+	objectives := strings.TrimSpace(req.LearningObjectives)
+	if objectives == "" { objectives = "Memahami konsep dan mampu menerapkannya dalam pekerjaan sehari-hari." }
+
+	systemPrompt := `Anda adalah seorang ahli di bidang topik pembelajaran dengan pengalaman profesional.
+Tugas Anda adalah membuat materi pembelajaran yang komprehensif dan mudah dipahami untuk platform internal perusahaan.
+Gunakan Bahasa Indonesia.
+
+Instruksi wajib:
+- Jelaskan bertahap dari dasar ke lanjutan
+- Bahasa sederhana, jelas, tidak bertele-tele
+- Sertakan contoh nyata dunia kerja
+- Berikan insight praktis yang langsung bisa diterapkan
+- Hindari penjelasan terlalu teoritis
+
+Struktur output wajib (markdown):
+1. Judul Materi
+2. Deskripsi Singkat
+3. Konsep Utama (bertahap)
+4. Contoh Kasus
+5. Tips Praktis
+6. Kesimpulan
+7. Pertanyaan Refleksi
+
+Tone: profesional, edukatif, engaging.
+Jika relevan, gunakan backlink materi terkait dengan format [[Judul Materi]].`
+
+	userPrompt := fmt.Sprintf("Judul materi: %q", strings.TrimSpace(req.Title))
+	userPrompt += "\nTarget audience: " + targetUser
+	userPrompt += "\nTujuan pembelajaran: " + objectives
+	userPrompt += "\nGaya materi: " + style
 	if strings.TrimSpace(req.Brief) != "" {
-		userPrompt += "\n\nDeskripsi/brief dari admin:\n" + strings.TrimSpace(req.Brief)
+		userPrompt += "\n\nDeskripsi/brief tambahan dari admin:\n" + strings.TrimSpace(req.Brief)
 	}
 	if req.CompetencyID > 0 {
 		var compName string
@@ -7029,8 +7056,8 @@ Gunakan gaya bahasa jelas dan to the point.`
 			userPrompt += "\n\nKonteks kompetensi teknis: " + compName
 		}
 	}
-	userPrompt += "\n\nSisipkan backlink [[Judul Materi Terkait]] jika relevan, tapi jangan berlebihan."
-	content, errAI := a.aiChat(r.Context(), systemPrompt, userPrompt, 1800, 0.7)
+	userPrompt += "\n\nBatasi total panjang sekitar 700-1100 kata."
+	content, errAI := a.aiChat(r.Context(), systemPrompt, userPrompt, 2200, 0.7)
 	if errAI != nil { writeJSON(w, http.StatusBadGateway, map[string]string{"error":"gagal hubungi AI: " + errAI.Error()}); return }
 	writeJSON(w, http.StatusOK, map[string]any{"draft_content": strings.TrimSpace(content)})
 }
