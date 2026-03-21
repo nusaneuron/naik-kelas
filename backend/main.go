@@ -7820,7 +7820,12 @@ func (a *app) handleAdminRoadmapNotes(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.CategoryID<=0 || strings.TrimSpace(req.Title)=="" { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"category_id dan title wajib"}); return }
 		var positionID int64
-		_ = a.db.QueryRowContext(r.Context(), `SELECT position_id FROM roadmap_categories WHERE id=$1`, req.CategoryID).Scan(&positionID)
+		if err := a.db.QueryRowContext(r.Context(), `SELECT position_id FROM roadmap_categories WHERE id=$1`, req.CategoryID).Scan(&positionID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				writeJSON(w,http.StatusBadRequest,map[string]string{"error":"kategori roadmap tidak ditemukan; silakan pilih ulang kategori"}); return
+			}
+			writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal validasi kategori roadmap"}); return
+		}
 		if admin.Role != "super_admin" && !a.canAccessRoadmapPosition(r.Context(), admin, positionID) { writeJSON(w,http.StatusForbidden,map[string]string{"error":"kategori di luar kelompok admin"}); return }
 		title := strings.TrimSpace(req.Title)
 		var savedID int64
