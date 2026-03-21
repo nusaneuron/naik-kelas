@@ -7584,16 +7584,20 @@ func (a *app) handleAdminRoadmapPositions(w http.ResponseWriter, r *http.Request
 	}
 	if r.Method == http.MethodPost {
 		var req struct { ID int64 `json:"id"`; Name, Description string `json:"name","description"`; GroupID int64 `json:"group_id"`; IsActive *bool `json:"is_active"` }
-		if json.NewDecoder(r.Body).Decode(&req)!=nil || strings.TrimSpace(req.Name)=="" { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"nama jabatan wajib diisi"}); return }
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w,http.StatusBadRequest,map[string]string{"error":"payload tidak valid: " + err.Error()}); return
+		}
+		req.Name = strings.TrimSpace(strings.ReplaceAll(req.Name, "\u00a0", " "))
+		if req.Name == "" { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"nama jabatan wajib diisi"}); return }
 		active := true; if req.IsActive != nil { active = *req.IsActive }
 		if admin.Role != "super_admin" {
 			req.GroupID = a.getAdminGroupIDFromUser(r.Context(), admin)
 		}
 		if req.ID > 0 {
 			if !a.canAccessRoadmapPosition(r.Context(), admin, req.ID) { writeJSON(w,http.StatusForbidden,map[string]string{"error":"posisi di luar kelompok admin"}); return }
-			_, err = a.db.ExecContext(r.Context(), `UPDATE roadmap_positions SET name=$1,description=$2,group_id=NULLIF($3,0),is_active=$4,updated_by=$5,updated_at=NOW() WHERE id=$6`, strings.TrimSpace(req.Name), strings.TrimSpace(req.Description), req.GroupID, active, admin.ID, req.ID)
+			_, err = a.db.ExecContext(r.Context(), `UPDATE roadmap_positions SET name=$1,description=$2,group_id=NULLIF($3,0),is_active=$4,updated_by=$5,updated_at=NOW() WHERE id=$6`, req.Name, strings.TrimSpace(req.Description), req.GroupID, active, admin.ID, req.ID)
 		} else {
-			_, err = a.db.ExecContext(r.Context(), `INSERT INTO roadmap_positions(name,description,group_id,is_active,created_by,updated_by) VALUES($1,$2,NULLIF($3,0),$4,$5,$5)`, strings.TrimSpace(req.Name), strings.TrimSpace(req.Description), req.GroupID, active, admin.ID)
+			_, err = a.db.ExecContext(r.Context(), `INSERT INTO roadmap_positions(name,description,group_id,is_active,created_by,updated_by) VALUES($1,$2,NULLIF($3,0),$4,$5,$5)`, req.Name, strings.TrimSpace(req.Description), req.GroupID, active, admin.ID)
 		}
 		if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal simpan posisi"}); return }
 		writeJSON(w,http.StatusOK,map[string]any{"ok":true}); return

@@ -535,7 +535,13 @@ export default function Page() {
     if (!positionForm.name.trim()) return showMsg('Nama jabatan wajib diisi', 'error');
     const res = await fetch(`${apiBase}/admin/roadmap/positions`, {
       method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...positionForm, group_id: Number(positionForm.group_id || 0) })
+      body: JSON.stringify({
+        id: Number(positionForm.id) || 0,
+        name: (positionForm.name || '').trim(),
+        description: positionForm.description || '',
+        group_id: Number(positionForm.group_id || 0),
+        is_active: !!positionForm.is_active,
+      })
     });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) return showMsg(d.error || 'Gagal simpan jabatan roadmap', 'error');
