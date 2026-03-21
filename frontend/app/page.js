@@ -107,7 +107,7 @@ export default function Page() {
   const [roadmapLeadershipCompetencies, setRoadmapLeadershipCompetencies] = useState([]);
   const [leadershipCompetencyForm, setLeadershipCompetencyForm] = useState({ id: 0, position_id: '', code: '', name: '', description: '', is_active: true });
   const [roadmapMaterials, setRoadmapMaterials] = useState([]);
-  const [materialForm, setMaterialForm] = useState({ id: 0, competency_id: '', title: '', content: '', is_active: true });
+  const [materialForm, setMaterialForm] = useState({ id: 0, competency_id: '', title: '', content: '', brief: '', is_active: true });
   const [materialLinkSuggestions, setMaterialLinkSuggestions] = useState([]);
   const [materialLinkQuery, setMaterialLinkQuery] = useState('');
   const [materialSuggestionIndex, setMaterialSuggestionIndex] = useState(0);
@@ -116,6 +116,7 @@ export default function Page() {
   const [materialUnknownBacklinks, setMaterialUnknownBacklinks] = useState([]);
   const [materialGraphFilter, setMaterialGraphFilter] = useState({ position_id: '', mode: 'material' });
   const [refreshingGraphData, setRefreshingGraphData] = useState(false);
+  const [generatingRoadmapMaterial, setGeneratingRoadmapMaterial] = useState(false);
   const materialEditorRef = useRef(null);
   const materialTitleInputRef = useRef(null);
   const [pendingFocusMaterial, setPendingFocusMaterial] = useState(false);
@@ -771,6 +772,27 @@ export default function Page() {
     if (res.ok) setRoadmapMaterials((await res.json()).items || []);
   }
 
+  async function generateRoadmapMaterialDraft() {
+    if (!(materialForm.title || '').trim()) return showMsg('Judul materi wajib diisi dulu', 'error');
+    setGeneratingRoadmapMaterial(true);
+    try {
+      const res = await fetch(`${apiBase}/admin/roadmap/materials/generate`, {
+        method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          competency_id: Number(materialForm.competency_id || 0),
+          title: (materialForm.title || '').trim(),
+          brief: materialForm.brief || '',
+        })
+      });
+      const d = await res.json().catch(()=>({}));
+      if (!res.ok) return showMsg(d.error || 'Gagal generate materi AI', 'error');
+      setMaterialForm(f => ({ ...f, content: d.draft_content || f.content }));
+      showMsg('Draft materi AI siap ✅', 'success');
+    } finally {
+      setGeneratingRoadmapMaterial(false);
+    }
+  }
+
   async function saveRoadmapMaterial() {
     if (!materialForm.competency_id) return showMsg('Kompetensi teknis wajib dipilih', 'error');
     if (!(materialForm.title || '').trim()) return showMsg('Judul materi wajib diisi', 'error');
@@ -792,7 +814,7 @@ export default function Page() {
     if (!res.ok) return showMsg(d.error || 'Gagal simpan materi roadmap', 'error');
     showMsg('Materi roadmap tersimpan ✅', 'success');
     const keepComp = materialForm.competency_id;
-    setMaterialForm({ id: 0, competency_id: keepComp, title: '', content: '', is_active: true });
+    setMaterialForm({ id: 0, competency_id: keepComp, title: '', content: '', brief: '', is_active: true });
     setMaterialLinkSuggestions([]); setMaterialLinkQuery('');
     await loadRoadmapMaterials(Number(keepComp));
   }
@@ -967,7 +989,7 @@ export default function Page() {
     const found = roadmapMaterials.find(m => String(m.id) === String(nodeId));
     if (!found) return showMsg('Materi dari node ini tidak ditemukan', 'error');
     setRoadmapMenu('materials');
-    setMaterialForm({ id: found.id, competency_id: String(found.competency_id || ''), title: found.title || '', content: found.content || '', is_active: !!found.is_active });
+    setMaterialForm({ id: found.id, competency_id: String(found.competency_id || ''), title: found.title || '', content: found.content || '', brief: '', is_active: !!found.is_active });
     setPendingFocusMaterial(true);
     if (found.competency_id) await loadRoadmapMaterials(Number(found.competency_id));
     showMsg(`Membuka materi: ${found.title}`, 'success');
@@ -4734,6 +4756,12 @@ export default function Page() {
                           })}
                         </select>
                         <input ref={materialTitleInputRef} className="nk-input-sm" placeholder="Judul materi" value={materialForm.title} onChange={e => setMaterialForm(f => ({ ...f, title: e.target.value }))} />
+                        <textarea className="nk-input-sm" placeholder="Deskripsi singkat materi (untuk AI generate draft)" value={materialForm.brief || ''} onChange={e => setMaterialForm(f => ({ ...f, brief: e.target.value }))} style={{ minHeight: 72 }} />
+                        <div style={{ display:'flex', justifyContent:'flex-end' }}>
+                          <button onClick={generateRoadmapMaterialDraft} disabled={generatingRoadmapMaterial || !(materialForm.title || '').trim()} style={{ border:'1px solid #334155', background: generatingRoadmapMaterial ? '#1e293b' : 'rgba(139,92,246,0.15)', color:'#ddd6fe', borderRadius:8, padding:'8px 12px', fontSize:12, fontWeight:700, cursor: generatingRoadmapMaterial ? 'not-allowed' : 'pointer' }}>
+                            {generatingRoadmapMaterial ? '⏳ Generating...' : '🤖 Generate Draft dengan AI'}
+                          </button>
+                        </div>
                         <textarea className="nk-input-sm" placeholder="Isi materi... ketik [[ untuk saran judul materi" value={materialForm.content} onChange={e => updateMaterialContentWithSuggestions(e.target.value)} onKeyDown={handleMaterialSuggestionKeyDown} style={{ minHeight: 120 }} />
                         {findUnknownBacklinks(materialForm.content || '').length > 0 && (
                           <div style={{ fontSize:11, color: materialStrictMode ? '#fca5a5' : '#fbbf24' }}>
@@ -4771,7 +4799,7 @@ export default function Page() {
                                   <td style={{ maxWidth: 380, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{renderBacklinkBold((m.content || '').slice(0,180))}{(m.content||'').length>180?'...':''}</td>
                                   <td style={{ fontSize:12, color:'#94a3b8' }}>{m.updated_at ? new Date(m.updated_at).toLocaleString('id-ID') : '-'}</td>
                                   <td style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                                    <BtnSm onClick={() => setMaterialForm({ id:m.id, competency_id:String(m.competency_id), title:m.title || '', content:m.content || '', is_active: !!m.is_active })}>Edit</BtnSm>
+                                    <BtnSm onClick={() => setMaterialForm({ id:m.id, competency_id:String(m.competency_id), title:m.title || '', content:m.content || '', brief:'', is_active: !!m.is_active })}>Edit</BtnSm>
                                     <BtnSm danger onClick={() => deleteRoadmapMaterial(m.id)}>Hapus</BtnSm>
                                   </td>
                                 </tr>

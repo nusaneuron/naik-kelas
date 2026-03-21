@@ -246,6 +246,7 @@ func main() {
 	mux.HandleFunc("/admin/roadmap/core-competencies", a.handleAdminRoadmapCoreCompetencies)
 	mux.HandleFunc("/admin/roadmap/leadership-competencies", a.handleAdminRoadmapLeadershipCompetencies)
 	mux.HandleFunc("/admin/roadmap/materials", a.handleAdminRoadmapMaterials)
+	mux.HandleFunc("/admin/roadmap/materials/generate", a.handleAdminGenerateRoadmapMaterial)
 	mux.HandleFunc("/admin/roadmap/materials-graph", a.handleAdminRoadmapMaterialsGraph)
 	mux.HandleFunc("/admin/tryout-configs", a.handleAdminTryoutConfigs)
 	mux.HandleFunc("/participant/materials", a.handleParticipantMaterials)
@@ -6993,6 +6994,45 @@ Contoh format: ["bubble 1 content", "bubble 2 content", "bubble 3 content"]`
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"bubbles": bubbles, "topic": req.Topic})
+}
+
+func (a *app) handleAdminGenerateRoadmapMaterial(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.requireRole(r.Context(), r, "admin", "super_admin")
+	if err != nil { writeJSON(w, http.StatusUnauthorized, map[string]string{"error":"unauthorized"}); return }
+	_ = admin
+	if r.Method != http.MethodPost { writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error":"method not allowed"}); return }
+	var req struct {
+		CompetencyID int64  `json:"competency_id"`
+		Title        string `json:"title"`
+		Brief        string `json:"brief"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil || strings.TrimSpace(req.Title) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error":"judul materi wajib diisi"}); return
+	}
+	systemPrompt := `Kamu adalah asisten penyusun materi roadmap kompetensi dalam Bahasa Indonesia.
+Tulis materi ringkas, praktis, dan siap pakai.
+Format output: markdown biasa (tanpa JSON), dengan struktur:
+## Tujuan
+## Ringkasan Konsep
+## Langkah Praktis
+## Contoh Penerapan
+## Checklist
+Gunakan gaya bahasa jelas dan to the point.`
+	userPrompt := fmt.Sprintf("Buat draft materi dengan judul: %q", strings.TrimSpace(req.Title))
+	if strings.TrimSpace(req.Brief) != "" {
+		userPrompt += "\n\nDeskripsi/brief dari admin:\n" + strings.TrimSpace(req.Brief)
+	}
+	if req.CompetencyID > 0 {
+		var compName string
+		_ = a.db.QueryRowContext(r.Context(), `SELECT name FROM roadmap_competencies WHERE id=$1`, req.CompetencyID).Scan(&compName)
+		if strings.TrimSpace(compName) != "" {
+			userPrompt += "\n\nKonteks kompetensi teknis: " + compName
+		}
+	}
+	userPrompt += "\n\nSisipkan backlink [[Judul Materi Terkait]] jika relevan, tapi jangan berlebihan."
+	content, errAI := a.aiChat(r.Context(), systemPrompt, userPrompt, 1800, 0.7)
+	if errAI != nil { writeJSON(w, http.StatusBadGateway, map[string]string{"error":"gagal hubungi AI: " + errAI.Error()}); return }
+	writeJSON(w, http.StatusOK, map[string]any{"draft_content": strings.TrimSpace(content)})
 }
 
 func (a *app) handleAdminMaterials(w http.ResponseWriter, r *http.Request) {
