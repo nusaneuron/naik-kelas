@@ -85,6 +85,7 @@ export default function Page() {
   const [roadmapPositions, setRoadmapPositions] = useState([]);
   const [roadmapCategories, setRoadmapCategories] = useState([]);
   const [roadmapNotes, setRoadmapNotes] = useState([]);
+  const [roadmapGraph, setRoadmapGraph] = useState('{"nodes":[],"edges":[]}');
   const [positionForm, setPositionForm] = useState({ id: 0, name: '', description: '', group_id: '', is_active: true });
   const [categoryForm, setCategoryForm] = useState({ id: 0, position_id: '', name: '', description: '', order_no: 0, is_active: true });
   const [noteForm, setNoteForm] = useState({ id: 0, category_id: '', title: '', content: '' });
@@ -564,9 +565,13 @@ export default function Page() {
   }
 
   async function loadRoadmapNotes(categoryId) {
-    if (!categoryId) return setRoadmapNotes([]);
-    const res = await fetch(`${apiBase}/admin/roadmap/notes?category_id=${categoryId}`, { credentials: 'include' });
+    if (!categoryId) { setRoadmapNotes([]); setRoadmapGraph('{"nodes":[],"edges":[]}'); return; }
+    const [res, gRes] = await Promise.all([
+      fetch(`${apiBase}/admin/roadmap/notes?category_id=${categoryId}`, { credentials: 'include' }),
+      fetch(`${apiBase}/admin/roadmap/graph?category_id=${categoryId}`, { credentials: 'include' }),
+    ]);
     if (res.ok) setRoadmapNotes((await res.json()).items || []);
+    if (gRes.ok) setRoadmapGraph((await gRes.json()).graph_json || '{"nodes":[],"edges":[]}');
   }
 
   async function saveRoadmapNote() {
@@ -580,6 +585,17 @@ export default function Page() {
     showMsg('Catatan roadmap tersimpan ✅', 'success');
     setNoteForm(f => ({ ...f, id: 0, title: '', content: '' }));
     await loadRoadmapNotes(noteForm.category_id);
+  }
+
+  function parseRoadmapGraph(raw) {
+    try {
+      const x = JSON.parse(raw || '{"nodes":[],"edges":[]}');
+      const nodes = (x.nodes || []).map((n, idx) => ({ id: String(n.id ?? idx + 1), title: n.title || n.label || `Node ${idx + 1}` }));
+      const edges = (x.edges || []).map(e => ({ from: String(e.from ?? e.source ?? ''), to: String(e.to ?? e.target ?? '') })).filter(e => e.from && e.to);
+      return { nodes, edges, error: '' };
+    } catch {
+      return { nodes: [], edges: [], error: 'Graph JSON tidak valid.' };
+    }
   }
 
   async function loadAdmin() {
@@ -4008,6 +4024,14 @@ export default function Page() {
 
                       <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
                         <div style={{ fontWeight:700, marginBottom:8 }}>3) Catatan per Kategori</div>
+                        {(() => {
+                          const g = parseRoadmapGraph(roadmapGraph);
+                          return (
+                            <div style={{ marginBottom: 10 }}>
+                              {g.error ? <div className="nk-empty" style={{ margin:0, color:'#fca5a5' }}>{g.error}</div> : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={() => {}} />}
+                            </div>
+                          );
+                        })()}
                         <div style={{ display:'grid', gap:8 }}>
                           <select className="nk-input-sm" value={noteForm.category_id} onChange={e => { const v=e.target.value; setNoteForm(f => ({ ...f, category_id: v })); loadRoadmapNotes(v); }}>
                             <option value="">Pilih kategori roadmap</option>

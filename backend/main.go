@@ -244,6 +244,7 @@ func main() {
 	mux.HandleFunc("/admin/roadmap/positions", a.handleAdminRoadmapPositions)
 	mux.HandleFunc("/admin/roadmap/categories", a.handleAdminRoadmapCategories)
 	mux.HandleFunc("/admin/roadmap/notes", a.handleAdminRoadmapNotes)
+	mux.HandleFunc("/admin/roadmap/graph", a.handleAdminRoadmapGraph)
 	mux.HandleFunc("/admin/tryout-configs", a.handleAdminTryoutConfigs)
 	mux.HandleFunc("/participant/materials", a.handleParticipantMaterials)
 	mux.HandleFunc("/participant/materials/complete", a.handleParticipantMaterialComplete)
@@ -7641,6 +7642,33 @@ func (a *app) handleAdminRoadmapCategories(w http.ResponseWriter, r *http.Reques
 	writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"})
 }
 
+func extractBacklinks(s string) []string {
+	out := []string{}
+	seen := map[string]bool{}
+	for {
+		i := strings.Index(s, "[[")
+		if i < 0 {
+			break
+		}
+		s = s[i+2:]
+		j := strings.Index(s, "]]")
+		if j < 0 {
+			break
+		}
+		t := strings.TrimSpace(s[:j])
+		s = s[j+2:]
+		if t == "" {
+			continue
+		}
+		k := strings.ToLower(t)
+		if !seen[k] {
+			seen[k] = true
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
 func (a *app) handleAdminRoadmapNotes(w http.ResponseWriter, r *http.Request) {
 	admin, err := a.requireRole(r.Context(), r, "admin", "super_admin")
 	if err != nil { writeJSON(w,http.StatusUnauthorized,map[string]string{"error":"unauthorized"}); return }
@@ -7673,6 +7701,51 @@ func (a *app) handleAdminRoadmapNotes(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w,http.StatusOK,map[string]any{"ok":true}); return
 	}
 	writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"})
+}
+
+func (a *app) handleAdminRoadmapGraph(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.requireRole(r.Context(), r, "admin", "super_admin")
+	if err != nil { writeJSON(w,http.StatusUnauthorized,map[string]string{"error":"unauthorized"}); return }
+	if r.Method != http.MethodGet {
+		writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"}); return
+	}
+	categoryID, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("category_id")), 10, 64)
+	if categoryID <= 0 { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"category_id wajib"}); return }
+	var positionID int64
+	_ = a.db.QueryRowContext(r.Context(), `SELECT position_id FROM roadmap_categories WHERE id=$1`, categoryID).Scan(&positionID)
+	if admin.Role != "super_admin" && !a.canAccessRoadmapPosition(r.Context(), admin, positionID) { writeJSON(w,http.StatusForbidden,map[string]string{"error":"kategori di luar kelompok admin"}); return }
+
+	rows, err := a.db.QueryContext(r.Context(), `SELECT id,title,content FROM roadmap_notes WHERE category_id=$1 ORDER BY id ASC`, categoryID)
+	if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"db error"}); return }
+	defer rows.Close()
+	type n struct{ ID int64; Title, Content string }
+	notes := []n{}
+	titleToID := map[string]string{}
+	for rows.Next() {
+		var x n
+		if rows.Scan(&x.ID,&x.Title,&x.Content)==nil {
+			notes = append(notes,x)
+			titleToID[strings.ToLower(strings.TrimSpace(x.Title))] = fmt.Sprintf("n%d", x.ID)
+		}
+	}
+	nodes := []map[string]any{}
+	edges := []map[string]any{}
+	seen := map[string]bool{}
+	for _, x := range notes {
+		sid := fmt.Sprintf("n%d", x.ID)
+		nodes = append(nodes, map[string]any{"id": sid, "label": x.Title})
+		for _, bk := range extractBacklinks(x.Content) {
+			if tid, ok := titleToID[strings.ToLower(strings.TrimSpace(bk))]; ok && tid != sid {
+				k := sid + "->" + tid
+				if !seen[k] {
+					seen[k] = true
+					edges = append(edges, map[string]any{"source": sid, "target": tid})
+				}
+			}
+		}
+	}
+	buf, _ := json.Marshal(map[string]any{"nodes": nodes, "edges": edges})
+	writeJSON(w,http.StatusOK,map[string]any{"ok": true, "graph_json": string(buf), "nodes": len(nodes), "edges": len(edges)})
 }
 
 // ── Refleksi: Agregat Admin ─────────────────────────────────────────────────
