@@ -578,6 +578,17 @@ export default function Page() {
     }
   }
 
+  async function deleteRoadmapPosition(id) {
+    if (!confirm('Hapus jabatan roadmap ini? Seluruh kategori dan catatan terkait juga terhapus.')) return;
+    const res = await fetch(`${apiBase}/admin/roadmap/positions`, {
+      method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'delete', id })
+    });
+    const d = await res.json().catch(()=>({}));
+    if (!res.ok) return showMsg(d.error || 'Gagal hapus jabatan roadmap', 'error');
+    showMsg('Jabatan roadmap dihapus ✅', 'success');
+    await loadAdminSection('roadmap');
+  }
+
   async function saveRoadmapPosition() {
     const normalizedName = (positionForm.name || '').replace(/\u00A0/g, ' ').trim();
     if (!normalizedName) return showMsg('Nama jabatan wajib diisi', 'error');
@@ -601,6 +612,19 @@ export default function Page() {
     ]);
     if (pRes.ok) setRoadmapPositions((await pRes.json()).items || []);
     if (cRes.ok) setRoadmapCategories((await cRes.json()).items || []);
+  }
+
+  async function deleteRoadmapCategory(id) {
+    if (!confirm('Hapus kategori roadmap ini? Catatan kategori ini juga terhapus.')) return;
+    const res = await fetch(`${apiBase}/admin/roadmap/categories`, {
+      method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'delete', id })
+    });
+    const d = await res.json().catch(()=>({}));
+    if (!res.ok) return showMsg(d.error || 'Gagal hapus kategori roadmap', 'error');
+    showMsg('Kategori roadmap dihapus ✅', 'success');
+    const cRes = await fetch(`${apiBase}/admin/roadmap/categories`, { credentials:'include' });
+    if (cRes.ok) setRoadmapCategories((await cRes.json()).items || []);
+    if (String(noteForm.category_id) === String(id)) { setNoteForm({ id:0, category_id:'', title:'', content:'' }); setRoadmapNotes([]); }
   }
 
   async function saveRoadmapCategory() {
@@ -629,6 +653,19 @@ export default function Page() {
       setRoadmapGraph(gd.graph_json || '{"nodes":[],"edges":[]}');
       setRoadmapUnknownBacklinks(gd.unknown_backlinks || []);
     }
+  }
+
+  async function deleteRoadmapNote(id) {
+    if (!confirm('Hapus catatan roadmap ini?')) return;
+    const res = await fetch(`${apiBase}/admin/roadmap/notes`, {
+      method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'delete', id })
+    });
+    const d = await res.json().catch(()=>({}));
+    if (!res.ok) return showMsg(d.error || 'Gagal hapus catatan roadmap', 'error');
+    showMsg('Catatan roadmap dihapus ✅', 'success');
+    setRoadmapNotes(prev => prev.filter(x => x.id !== id));
+    if (noteForm.id === id) setNoteForm(f => ({ ...f, id:0, title:'', content:'' }));
+    if (noteForm.category_id) await loadRoadmapNotes(Number(noteForm.category_id));
   }
 
   async function saveRoadmapNote() {
@@ -4145,6 +4182,24 @@ export default function Page() {
                             <BtnSm color="purple" disabled={!((positionForm.name || '').replace(/\u00A0/g, ' ').trim())} onClick={saveRoadmapPosition}>💾 Simpan Jabatan</BtnSm>
                           </div>
                         </div>
+                        <div className="nk-table-wrap" style={{ marginTop:10 }}>
+                          <table className="nk-table">
+                            <thead><tr><th>Jabatan</th><th>Group</th><th>Aksi</th></tr></thead>
+                            <tbody>
+                              {roadmapPositions.map(p => (
+                                <tr key={p.id}>
+                                  <td>{p.name}</td>
+                                  <td>{p.group_id ? (adminGroups.find(g => g.id === p.group_id)?.name || `#${p.group_id}`) : 'Global'}</td>
+                                  <td style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                                    <BtnSm onClick={() => setPositionForm({ id: p.id, name: p.name || '', description: p.description || '', group_id: String(p.group_id || ''), is_active: !!p.is_active })}>Edit</BtnSm>
+                                    <BtnSm danger onClick={() => deleteRoadmapPosition(p.id)}>Hapus</BtnSm>
+                                  </td>
+                                </tr>
+                              ))}
+                              {roadmapPositions.length === 0 && <tr><td colSpan={3} className="nk-empty">Belum ada jabatan roadmap.</td></tr>}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
 
                       <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
@@ -4158,6 +4213,25 @@ export default function Page() {
                           <input className="nk-input-sm" placeholder="Urutan" type="number" value={categoryForm.order_no} onChange={e => setCategoryForm(f => ({ ...f, order_no: e.target.value }))} />
                           <textarea className="nk-input-sm" placeholder="Deskripsi kategori" value={categoryForm.description} onChange={e => setCategoryForm(f => ({ ...f, description: e.target.value }))} style={{ minHeight: 70, gridColumn:'1 / span 2' }} />
                           <div style={{ gridColumn:'1 / span 2', display:'flex', justifyContent:'flex-end' }}><BtnSm color="purple" onClick={saveRoadmapCategory}>💾 Simpan Kategori</BtnSm></div>
+                        </div>
+                        <div className="nk-table-wrap" style={{ marginTop:10 }}>
+                          <table className="nk-table">
+                            <thead><tr><th>Jabatan</th><th>Kategori</th><th>Urutan</th><th>Aksi</th></tr></thead>
+                            <tbody>
+                              {roadmapCategories.map(c => (
+                                <tr key={c.id}>
+                                  <td>{c.position_name}</td>
+                                  <td>{c.name}</td>
+                                  <td>{c.order_no}</td>
+                                  <td style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                                    <BtnSm onClick={() => setCategoryForm({ id: c.id, position_id: String(c.position_id), name: c.name || '', description: c.description || '', order_no: c.order_no || 0, is_active: !!c.is_active })}>Edit</BtnSm>
+                                    <BtnSm danger onClick={() => deleteRoadmapCategory(c.id)}>Hapus</BtnSm>
+                                  </td>
+                                </tr>
+                              ))}
+                              {roadmapCategories.length === 0 && <tr><td colSpan={4} className="nk-empty">Belum ada kategori roadmap.</td></tr>}
+                            </tbody>
+                          </table>
                         </div>
                       </div>
 
@@ -4206,7 +4280,10 @@ export default function Page() {
                                   <td>{n.title}</td>
                                   <td style={{ maxWidth: 280, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{(n.content||'').slice(0,140)}{(n.content||'').length>140?'...':''}</td>
                                   <td style={{ fontSize:12, color:'#94a3b8' }}>{new Date(n.updated_at).toLocaleString('id-ID')}</td>
-                                  <td><BtnSm onClick={() => setNoteForm(f => ({ ...f, id: n.id, title: n.title || '', content: n.content || '' }))}>Edit</BtnSm></td>
+                                  <td style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                                    <BtnSm onClick={() => setNoteForm(f => ({ ...f, id: n.id, title: n.title || '', content: n.content || '' }))}>Edit</BtnSm>
+                                    <BtnSm danger onClick={() => deleteRoadmapNote(n.id)}>Hapus</BtnSm>
+                                  </td>
                                 </tr>
                               ))}
                               {roadmapNotes.length === 0 && <tr><td colSpan={4} className="nk-empty">Belum ada catatan roadmap.</td></tr>}

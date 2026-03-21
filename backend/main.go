@@ -7621,9 +7621,18 @@ func (a *app) handleAdminRoadmapPositions(w http.ResponseWriter, r *http.Request
 			Description string `json:"description"`
 			GroupID     int64  `json:"group_id"`
 			IsActive    *bool  `json:"is_active"`
+			Action      string `json:"action"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeJSON(w,http.StatusBadRequest,map[string]string{"error":"payload tidak valid: " + err.Error()}); return
+		}
+		if req.Action == "delete" {
+			if req.ID <= 0 { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"id wajib"}); return }
+			if !a.canAccessRoadmapPosition(r.Context(), admin, req.ID) { writeJSON(w,http.StatusForbidden,map[string]string{"error":"posisi di luar kelompok admin"}); return }
+			res, err := a.db.ExecContext(r.Context(), `DELETE FROM roadmap_positions WHERE id=$1`, req.ID)
+			if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal hapus posisi roadmap"}); return }
+			af, _ := res.RowsAffected(); if af == 0 { writeJSON(w,http.StatusNotFound,map[string]string{"error":"posisi roadmap tidak ditemukan"}); return }
+			writeJSON(w,http.StatusOK,map[string]any{"ok":true}); return
 		}
 		req.Name = strings.TrimSpace(strings.ReplaceAll(req.Name, "\u00a0", " "))
 		if req.Name == "" { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"nama jabatan wajib diisi"}); return }
@@ -7680,8 +7689,20 @@ func (a *app) handleAdminRoadmapCategories(w http.ResponseWriter, r *http.Reques
 			Description string `json:"description"`
 			OrderNo     int    `json:"order_no"`
 			IsActive    *bool  `json:"is_active"`
+			Action      string `json:"action"`
 		}
-		if json.NewDecoder(r.Body).Decode(&req)!=nil || req.PositionID<=0 || strings.TrimSpace(req.Name)=="" { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"position_id dan name wajib"}); return }
+		if json.NewDecoder(r.Body).Decode(&req)!=nil { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"payload tidak valid"}); return }
+		if req.Action == "delete" {
+			if req.ID <= 0 { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"id wajib"}); return }
+			_ = a.db.QueryRowContext(r.Context(), `SELECT position_id FROM roadmap_categories WHERE id=$1`, req.ID).Scan(&req.PositionID)
+			if req.PositionID <= 0 { writeJSON(w,http.StatusNotFound,map[string]string{"error":"kategori roadmap tidak ditemukan"}); return }
+			if admin.Role != "super_admin" && !a.canAccessRoadmapPosition(r.Context(), admin, req.PositionID) { writeJSON(w,http.StatusForbidden,map[string]string{"error":"kategori di luar kelompok admin"}); return }
+			res, err := a.db.ExecContext(r.Context(), `DELETE FROM roadmap_categories WHERE id=$1`, req.ID)
+			if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal hapus kategori roadmap"}); return }
+			af, _ := res.RowsAffected(); if af == 0 { writeJSON(w,http.StatusNotFound,map[string]string{"error":"kategori roadmap tidak ditemukan"}); return }
+			writeJSON(w,http.StatusOK,map[string]any{"ok":true}); return
+		}
+		if req.PositionID<=0 || strings.TrimSpace(req.Name)=="" { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"position_id dan name wajib"}); return }
 		if admin.Role != "super_admin" && !a.canAccessRoadmapPosition(r.Context(), admin, req.PositionID) { writeJSON(w,http.StatusForbidden,map[string]string{"error":"posisi di luar kelompok admin"}); return }
 		active := true; if req.IsActive!=nil { active = *req.IsActive }
 		if req.ID > 0 {
@@ -7790,8 +7811,22 @@ func (a *app) handleAdminRoadmapNotes(w http.ResponseWriter, r *http.Request) {
 			CategoryID int64  `json:"category_id"`
 			Title      string `json:"title"`
 			Content    string `json:"content"`
+			Action     string `json:"action"`
 		}
-		if json.NewDecoder(r.Body).Decode(&req)!=nil || req.CategoryID<=0 || strings.TrimSpace(req.Title)=="" { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"category_id dan title wajib"}); return }
+		if json.NewDecoder(r.Body).Decode(&req)!=nil { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"payload tidak valid"}); return }
+		if req.Action == "delete" {
+			if req.ID <= 0 { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"id wajib"}); return }
+			_ = a.db.QueryRowContext(r.Context(), `SELECT category_id FROM roadmap_notes WHERE id=$1`, req.ID).Scan(&req.CategoryID)
+			if req.CategoryID <= 0 { writeJSON(w,http.StatusNotFound,map[string]string{"error":"catatan roadmap tidak ditemukan"}); return }
+			var positionID int64
+			_ = a.db.QueryRowContext(r.Context(), `SELECT position_id FROM roadmap_categories WHERE id=$1`, req.CategoryID).Scan(&positionID)
+			if admin.Role != "super_admin" && !a.canAccessRoadmapPosition(r.Context(), admin, positionID) { writeJSON(w,http.StatusForbidden,map[string]string{"error":"catatan di luar kelompok admin"}); return }
+			res, err := a.db.ExecContext(r.Context(), `DELETE FROM roadmap_notes WHERE id=$1`, req.ID)
+			if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal hapus catatan roadmap"}); return }
+			af,_:=res.RowsAffected(); if af==0 { writeJSON(w,http.StatusNotFound,map[string]string{"error":"catatan roadmap tidak ditemukan"}); return }
+			writeJSON(w,http.StatusOK,map[string]any{"ok":true}); return
+		}
+		if req.CategoryID<=0 || strings.TrimSpace(req.Title)=="" { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"category_id dan title wajib"}); return }
 		var positionID int64
 		_ = a.db.QueryRowContext(r.Context(), `SELECT position_id FROM roadmap_categories WHERE id=$1`, req.CategoryID).Scan(&positionID)
 		if admin.Role != "super_admin" && !a.canAccessRoadmapPosition(r.Context(), admin, positionID) { writeJSON(w,http.StatusForbidden,map[string]string{"error":"kategori di luar kelompok admin"}); return }
