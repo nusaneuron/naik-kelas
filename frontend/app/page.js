@@ -107,6 +107,7 @@ export default function Page() {
   const [materialLinkSuggestions, setMaterialLinkSuggestions] = useState([]);
   const [materialLinkQuery, setMaterialLinkQuery] = useState('');
   const [materialSuggestionIndex, setMaterialSuggestionIndex] = useState(0);
+  const [materialStrictMode, setMaterialStrictMode] = useState(true);
   const [roadmapMenu, setRoadmapMenu] = useState('positions');
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewingContrib, setReviewingContrib] = useState(null);
@@ -670,6 +671,10 @@ export default function Page() {
   async function saveRoadmapMaterial() {
     if (!materialForm.competency_id) return showMsg('Kompetensi teknis wajib dipilih', 'error');
     if (!(materialForm.title || '').trim()) return showMsg('Judul materi wajib diisi', 'error');
+    const unknown = findUnknownBacklinks(materialForm.content || '');
+    if (materialStrictMode && unknown.length > 0) {
+      return showMsg(`Strict mode aktif. Backlink belum ada: ${unknown.slice(0,4).join(', ')}${unknown.length>4?` (+${unknown.length-4})`:''}`, 'error');
+    }
     const res = await fetch(`${apiBase}/admin/roadmap/materials`, {
       method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
@@ -738,6 +743,17 @@ export default function Page() {
       if (mm) return <b key={i}>{mm[1]}</b>;
       return <span key={i}>{p}</span>;
     });
+  }
+
+  function findUnknownBacklinks(content) {
+    const text = String(content || '');
+    const matches = [...text.matchAll(/\[\[([^\]]+)\]\]/g)].map(m => (m[1] || '').trim()).filter(Boolean);
+    const known = new Set(roadmapMaterials.map(x => (x.title || '').trim().toLowerCase()).filter(Boolean));
+    const unknown = [];
+    for (const t of matches) {
+      if (!known.has(t.toLowerCase()) && !unknown.includes(t)) unknown.push(t);
+    }
+    return unknown;
   }
 
   function handleMaterialSuggestionKeyDown(e) {
@@ -4414,6 +4430,12 @@ export default function Page() {
 
                     {roadmapMenu === 'materials' && <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12, marginTop: 2 }}>
                       <div style={{ fontWeight:700, marginBottom:8 }}>Materi per Kompetensi Teknis</div>
+                      <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:8, flexWrap:'wrap' }}>
+                        <label style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:12, color:'#cbd5e1' }}>
+                          <input type="checkbox" checked={materialStrictMode} onChange={e => setMaterialStrictMode(e.target.checked)} />
+                          Strict mode backlink (hanya judul yang sudah ada)
+                        </label>
+                      </div>
                       <div style={{ display:'grid', gap:8 }}>
                         <select className="nk-input-sm" value={materialForm.competency_id} onChange={async e => { const v=e.target.value; setMaterialForm(f => ({ ...f, competency_id: v })); await loadRoadmapMaterials(v); }}>
                           <option value="">Pilih kompetensi teknis</option>
@@ -4424,6 +4446,11 @@ export default function Page() {
                         </select>
                         <input className="nk-input-sm" placeholder="Judul materi" value={materialForm.title} onChange={e => setMaterialForm(f => ({ ...f, title: e.target.value }))} />
                         <textarea className="nk-input-sm" placeholder="Isi materi... ketik [[ untuk saran judul materi" value={materialForm.content} onChange={e => updateMaterialContentWithSuggestions(e.target.value)} onKeyDown={handleMaterialSuggestionKeyDown} style={{ minHeight: 120 }} />
+                        {findUnknownBacklinks(materialForm.content || '').length > 0 && (
+                          <div style={{ fontSize:11, color: materialStrictMode ? '#fca5a5' : '#fbbf24' }}>
+                            Backlink belum ada: {findUnknownBacklinks(materialForm.content || '').slice(0,6).join(', ')}{findUnknownBacklinks(materialForm.content || '').length>6?` (+${findUnknownBacklinks(materialForm.content || '').length-6})`:''}
+                          </div>
+                        )}
                         {materialLinkSuggestions.length > 0 && (
                           <div style={{ border:'1px solid #334155', borderRadius:8, padding:8, background:'#0b1220' }}>
                             <div style={{ fontSize:11, color:'#94a3b8', marginBottom:6 }}>Saran backlink untuk [[{materialLinkQuery}]] (↑ ↓ Enter/Tab):</div>
