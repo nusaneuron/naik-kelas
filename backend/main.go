@@ -266,6 +266,8 @@ func main() {
 	mux.HandleFunc("/admin/reflections/stats", a.handleAdminReflectionStats)
 	mux.HandleFunc("/admin/roadmaps", a.handleAdminRoadmaps)
 	mux.HandleFunc("/admin/roadmaps/generate", a.handleAdminGenerateRoadmap)
+	mux.HandleFunc("/admin/roadmaps/notes", a.handleAdminRoadmapNotes)
+	mux.HandleFunc("/admin/roadmaps/generate-from-notes", a.handleAdminGenerateRoadmapFromNotes)
 	mux.HandleFunc("/participant/roadmaps", a.handleParticipantRoadmaps)
 
 	port := getenv("PORT", "8080")
@@ -915,6 +917,22 @@ func (a *app) initDB(ctx context.Context) error {
 			description   TEXT NOT NULL DEFAULT '',
 			graph_json    TEXT NOT NULL DEFAULT '{"nodes":[],"edges":[]}',
 			is_published  BOOLEAN NOT NULL DEFAULT FALSE,
+			created_by    BIGINT REFERENCES users(id) ON DELETE SET NULL,
+			updated_by    BIGINT REFERENCES users(id) ON DELETE SET NULL,
+			created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS roadmap_notes (
+			id            BIGSERIAL PRIMARY KEY,
+			roadmap_id    BIGINT NOT NULL REFERENCES category_roadmaps(id) ON DELETE CASCADE,
+			title         TEXT NOT NULL,
+			content       TEXT NOT NULL DEFAULT '',
 			created_by    BIGINT REFERENCES users(id) ON DELETE SET NULL,
 			updated_by    BIGINT REFERENCES users(id) ON DELETE SET NULL,
 			created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -7686,6 +7704,152 @@ func (a *app) handleAdminGenerateRoadmap(w http.ResponseWriter, r *http.Request)
 	}
 	graph := buildRoadmapGraphFromText(req.SourceText)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "graph_json": graph})
+}
+
+func extractBacklinks(s string) []string {
+	res := []string{}
+	seen := map[string]bool{}
+	for {
+		start := strings.Index(s, "[[")
+		if start < 0 {
+			break
+		}
+		s = s[start+2:]
+		end := strings.Index(s, "]]")
+		if end < 0 {
+			break
+		}
+		t := strings.TrimSpace(s[:end])
+		s = s[end+2:]
+		if t == "" {
+			continue
+		}
+		k := strings.ToLower(t)
+		if !seen[k] {
+			seen[k] = true
+			res = append(res, t)
+		}
+	}
+	return res
+}
+
+func (a *app) handleAdminRoadmapNotes(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.requireRole(r.Context(), r, "admin", "super_admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method == http.MethodGet {
+		roadmapID, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("roadmap_id")), 10, 64)
+		if roadmapID <= 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "roadmap_id wajib"})
+			return
+		}
+		if admin.Role != "super_admin" {
+			var catID int64
+			var gidA, gidC sql.NullInt64
+			_ = a.db.QueryRowContext(r.Context(), `SELECT category_id FROM category_roadmaps WHERE id=$1`, roadmapID).Scan(&catID)
+			_ = a.db.QueryRowContext(r.Context(), `SELECT group_id FROM participant_profiles WHERE user_id=$1`, admin.ID).Scan(&gidA)
+			_ = a.db.QueryRowContext(r.Context(), `SELECT group_id FROM question_categories WHERE id=$1`, catID).Scan(&gidC)
+			if gidA.Valid != gidC.Valid || (gidA.Valid && gidA.Int64 != gidC.Int64) {
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": "roadmap di luar kelompok admin"})
+				return
+			}
+		}
+		rows, err := a.db.QueryContext(r.Context(), `SELECT id,title,content,updated_at FROM roadmap_notes WHERE roadmap_id=$1 ORDER BY updated_at DESC`, roadmapID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
+			return
+		}
+		defer rows.Close()
+		type item struct {
+			ID int64 `json:"id"`
+			Title string `json:"title"`
+			Content string `json:"content"`
+			UpdatedAt string `json:"updated_at"`
+		}
+		items := []item{}
+		for rows.Next() {
+			var it item
+			var t time.Time
+			if rows.Scan(&it.ID,&it.Title,&it.Content,&t) == nil {
+				it.UpdatedAt = t.Format(time.RFC3339)
+				items = append(items, it)
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+		return
+	}
+	if r.Method == http.MethodPost {
+		var req struct{ ID int64 `json:"id"`; RoadmapID int64 `json:"roadmap_id"`; Title string `json:"title"`; Content string `json:"content"` }
+		if json.NewDecoder(r.Body).Decode(&req) != nil || req.RoadmapID <= 0 || strings.TrimSpace(req.Title)=="" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "roadmap_id dan title wajib diisi"})
+			return
+		}
+		if req.ID > 0 {
+			_, err = a.db.ExecContext(r.Context(), `UPDATE roadmap_notes SET title=$1, content=$2, updated_by=$3, updated_at=NOW() WHERE id=$4 AND roadmap_id=$5`, strings.TrimSpace(req.Title), req.Content, admin.ID, req.ID, req.RoadmapID)
+		} else {
+			_, err = a.db.ExecContext(r.Context(), `INSERT INTO roadmap_notes(roadmap_id,title,content,created_by,updated_by) VALUES($1,$2,$3,$4,$4)`, req.RoadmapID, strings.TrimSpace(req.Title), req.Content, admin.ID)
+		}
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal simpan catatan roadmap"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+		return
+	}
+	writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+}
+
+func (a *app) handleAdminGenerateRoadmapFromNotes(w http.ResponseWriter, r *http.Request) {
+	_, err := a.requireRole(r.Context(), r, "admin", "super_admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req struct{ RoadmapID int64 `json:"roadmap_id"` }
+	if json.NewDecoder(r.Body).Decode(&req) != nil || req.RoadmapID <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "roadmap_id wajib"})
+		return
+	}
+	rows, err := a.db.QueryContext(r.Context(), `SELECT id,title,content FROM roadmap_notes WHERE roadmap_id=$1 ORDER BY id ASC`, req.RoadmapID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
+		return
+	}
+	defer rows.Close()
+	type nItem struct{ ID int64; Title, Content string }
+	ns := []nItem{}
+	byTitle := map[string]string{}
+	for rows.Next() {
+		var n nItem
+		if rows.Scan(&n.ID,&n.Title,&n.Content)==nil {
+			ns = append(ns,n)
+			byTitle[strings.ToLower(strings.TrimSpace(n.Title))] = fmt.Sprintf("n%d", n.ID)
+		}
+	}
+	nodes := []map[string]any{}
+	edges := []map[string]any{}
+	edgeSeen := map[string]bool{}
+	for _, n := range ns {
+		nid := fmt.Sprintf("n%d", n.ID)
+		nodes = append(nodes, map[string]any{"id": nid, "label": n.Title})
+		for _, bk := range extractBacklinks(n.Content) {
+			if tid, ok := byTitle[strings.ToLower(strings.TrimSpace(bk))]; ok && tid != nid {
+				k := nid + "->" + tid
+				if !edgeSeen[k] {
+					edges = append(edges, map[string]any{"source": nid, "target": tid})
+					edgeSeen[k] = true
+				}
+			}
+		}
+	}
+	buf, _ := json.Marshal(map[string]any{"nodes": nodes, "edges": edges})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "graph_json": string(buf)})
 }
 
 func (a *app) handleParticipantRoadmaps(w http.ResponseWriter, r *http.Request) {
