@@ -571,15 +571,34 @@ export default function Page() {
   }
 
   async function saveRoadmapNote() {
-    if (!roadmapForm.id) return showMsg('Simpan roadmap dulu sebelum menambah catatan', 'error');
     if (!roadmapNoteForm.title.trim()) return showMsg('Judul catatan roadmap wajib diisi', 'error');
     const categoryId = Number(roadmapNoteForm.category_id || roadmapForm.category_id || 0);
     if (!categoryId) return showMsg('Kategori catatan roadmap wajib dipilih', 'error');
+
+    let roadmapId = Number(roadmapForm.id) || 0;
+    if (!roadmapId) {
+      const cat = categories.find(c => Number(c.id) === categoryId);
+      const autoTitle = `Roadmap ${cat?.name || 'Kategori'}`;
+      const createRes = await fetch(`${apiBase}/admin/roadmaps`, {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category_id: categoryId, title: autoTitle, description: '', graph_json: '{"nodes":[],"edges":[]}', is_published: false })
+      });
+      const createData = await createRes.json().catch(() => ({}));
+      if (!createRes.ok) return showMsg(createData.error || 'Gagal membuat roadmap kategori', 'error');
+      const rf = await fetch(`${apiBase}/admin/roadmaps`, { credentials: 'include' });
+      const items = rf.ok ? ((await rf.json()).items || []) : [];
+      setAdminRoadmaps(items);
+      const found = items.find(x => Number(x.category_id) === categoryId);
+      roadmapId = Number(found?.id || 0);
+      if (!roadmapId) return showMsg('Roadmap kategori belum ditemukan setelah dibuat', 'error');
+      setRoadmapForm(f => ({ ...f, id: roadmapId, category_id: categoryId, title: found?.title || autoTitle }));
+    }
+
     const res = await fetch(`${apiBase}/admin/roadmaps/notes`, {
       method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id: Number(roadmapNoteForm.id) || 0,
-        roadmap_id: Number(roadmapForm.id),
+        roadmap_id: roadmapId,
         category_id: categoryId,
         title: roadmapNoteForm.title.trim(),
         content: roadmapNoteForm.content || ''
@@ -589,7 +608,7 @@ export default function Page() {
     if (!res.ok) return showMsg(d.error || 'Gagal simpan catatan roadmap', 'error');
     showMsg('Catatan roadmap tersimpan ✅', 'success');
     setRoadmapNoteForm({ id: 0, category_id: String(categoryId), title: '', content: '' });
-    await loadRoadmapNotes(roadmapForm.id, categoryId);
+    await loadRoadmapNotes(roadmapId, categoryId);
   }
 
   async function generateRoadmapFromNotes() {
@@ -4007,40 +4026,29 @@ export default function Page() {
                   <AdminSection title="🕸️ Roadmap Belajar per Kategori">
                     <div style={{ display:'grid', gap:10 }}>
                       <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))', maxWidth: 900 }}>
-                        <select className="nk-input-sm" value={roadmapForm.category_id} onChange={e => setRoadmapForm(f => ({ ...f, category_id: e.target.value }))}>
-                          <option value="">Pilih kategori</option>
+                        <select className="nk-input-sm" value={roadmapNoteForm.category_id || roadmapForm.category_id || ''} onChange={e => {
+                          const v = e.target.value;
+                          setRoadmapForm(f => ({ ...f, category_id: v }));
+                          setRoadmapNoteForm(f => ({ ...f, category_id: v }));
+                          const picked = adminRoadmaps.find(x => String(x.category_id) === String(v));
+                          if (picked) {
+                            setRoadmapForm({ id: picked.id, category_id: picked.category_id, title: picked.title || '', description: picked.description || '', graph_json: picked.graph_json || '{"nodes":[],"edges":[]}', is_published: !!picked.is_published });
+                            loadRoadmapNotes(picked.id, picked.category_id);
+                          } else {
+                            setRoadmapForm(f => ({ ...f, id: 0, title: '', graph_json: '{"nodes":[],"edges":[]}', is_published: false }));
+                            setRoadmapNotes([]);
+                          }
+                        }}>
+                          <option value="">Pilih kategori untuk menulis catatan roadmap</option>
                           {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
-                        <input className="nk-input-sm" placeholder="Judul roadmap" value={roadmapForm.title} onChange={e => setRoadmapForm(f => ({ ...f, title: e.target.value }))} />
-                        <textarea className="nk-input-sm" placeholder="Deskripsi singkat" value={roadmapForm.description} onChange={e => setRoadmapForm(f => ({ ...f, description: e.target.value }))} style={{ minHeight: 74, gridColumn:'1 / span 2' }} />
-                        <textarea className="nk-input-sm" placeholder="Kumpulan teks (satu poin per baris / kalimat) untuk generate otomatis" value={roadmapSourceText} onChange={e => setRoadmapSourceText(e.target.value)} style={{ minHeight: 100, gridColumn:'1 / span 2' }} />
-                        <div style={{ gridColumn:'1 / span 2', display:'flex', justifyContent:'flex-end' }}>
-                          <BtnSm color="purple" onClick={generateRoadmapFromText}>✨ Generate dari Teks</BtnSm>
-                        </div>
-                        <textarea className="nk-input-sm" placeholder='Graph JSON, contoh: {"nodes":[],"edges":[]}' value={roadmapForm.graph_json} onChange={e => setRoadmapForm(f => ({ ...f, graph_json: e.target.value }))} style={{ minHeight: 110, gridColumn:'1 / span 2', fontFamily:'monospace' }} />
-                        {(() => {
-                          const g = parseRoadmapGraph(roadmapForm.graph_json);
-                          return (
-                            <div style={{ gridColumn:'1 / span 2' }}>
-                              {g.error ? (
-                                <div className="nk-empty" style={{ marginBottom: 8, color: '#fca5a5' }}>⚠️ {g.error}</div>
-                              ) : (
-                                <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={() => {}} />
-                              )}
-                            </div>
-                          );
-                        })()}
-                        <label style={{ display:'flex', alignItems:'center', gap:8, color:'#cbd5e1' }}><input type="checkbox" checked={!!roadmapForm.is_published} onChange={e => setRoadmapForm(f => ({ ...f, is_published: e.target.checked }))} /> Publish</label>
-                        <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
-                          <BtnSm onClick={() => setRoadmapForm({ id: 0, category_id: '', title: '', description: '', graph_json: '{"nodes":[],"edges":[]}', is_published: false })}>Reset</BtnSm>
-                          <BtnSm color="purple" onClick={saveRoadmap}>💾 Simpan Roadmap</BtnSm>
-                        </div>
+                        <div className="nk-empty" style={{ margin: 0 }}>Mode catatan dulu aktif. Judul/deskripsi/graph JSON disembunyikan.</div>
                       </div>
 
                       <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
                         <div style={{ fontWeight:700, marginBottom:8 }}>📝 Catatan Roadmap (khusus roadmap ini)</div>
-                        {!roadmapForm.id ? (
-                          <div className="nk-empty" style={{ margin:0 }}>Simpan dulu roadmap, lalu tambah catatan roadmap dengan backlink [[Judul Catatan]].</div>
+                        {!(roadmapForm.id || roadmapForm.category_id) ? (
+                          <div className="nk-empty" style={{ margin:0 }}>Pilih kategori dulu, lalu tambah catatan roadmap dengan backlink [[Judul Catatan]].</div>
                         ) : (
                           <>
                             <div style={{ display:'grid', gap:8 }}>
