@@ -877,33 +877,64 @@ export default function Page() {
     }
   }
 
-  async function loadRoadmapMaterialGraph(positionId='', mode='material') {
-    const p = new URLSearchParams();
-    if (positionId) p.set('position_id', positionId);
-    if (mode) p.set('mode', mode);
-    const qs = p.toString() ? `?${p.toString()}` : '';
-    const res = await fetch(`${apiBase}/admin/roadmap/materials-graph${qs}`, { credentials: 'include' });
-    if (res.ok) {
-      const d = await res.json();
-      let graphRaw = d.graph_json || '{"nodes":[],"edges":[]}';
-      // UI-side hard filter by selected position (fallback safety, material mode only)
-      if (positionId && mode === 'material') {
-        try {
-          const g = JSON.parse(graphRaw || '{"nodes":[],"edges":[]}');
-          const allowedCompetency = new Set(roadmapCompetencies.filter(c => String(c.position_id) === String(positionId)).map(c => String(c.id)));
-          const allowed = new Set(
-            roadmapMaterials
-              .filter(m => allowedCompetency.has(String(m.competency_id)))
-              .map(m => String(m.id))
-          );
-          g.nodes = (g.nodes || []).filter(n => allowed.has(String(n.id)));
-          g.edges = (g.edges || []).filter(e => allowed.has(String(e.from)) && allowed.has(String(e.to)));
-          graphRaw = JSON.stringify(g);
-        } catch {}
+  function extractBacklinksClient(content) {
+    const text = String(content || '');
+    return [...text.matchAll(/\[\[([^\]]+)\]\]/g)].map(m => (m[1] || '').trim()).filter(Boolean);
+  }
+
+  function buildMaterialGraphClient(positionId='', mode='material', matsSrc=null, compSrc=null) {
+    const comps = compSrc || roadmapCompetencies;
+    const matsAll = matsSrc || roadmapMaterials;
+    const allowedCompetency = positionId
+      ? new Set(comps.filter(c => String(c.position_id) === String(positionId)).map(c => String(c.id)))
+      : null;
+    const mats = matsAll.filter(m => !allowedCompetency || allowedCompetency.has(String(m.competency_id)));
+
+    if (mode === 'competency') {
+      const compMap = new Map();
+      const titleToMat = new Map();
+      for (const m of mats) {
+        const c = comps.find(x => String(x.id) === String(m.competency_id));
+        if (c) compMap.set(String(c.id), c.name || c.code || `Kompetensi ${c.id}`);
+        titleToMat.set((m.title || '').trim().toLowerCase(), m);
       }
-      setMaterialGraph(graphRaw);
-      setMaterialUnknownBacklinks(d.unknown_backlinks || []);
+      const edgeSet = new Set();
+      const unknownSet = new Set();
+      for (const m of mats) {
+        const from = String(m.competency_id);
+        for (const t of extractBacklinksClient(m.content)) {
+          const target = titleToMat.get(t.toLowerCase());
+          if (!target) { unknownSet.add(t); continue; }
+          const to = String(target.competency_id);
+          edgeSet.add(`${from}->${to}`);
+        }
+      }
+      const nodes = [...compMap.entries()].map(([id, title]) => ({ id: `c-${id}`, title }));
+      const edges = [...edgeSet].map(x => { const [from,to]=x.split('->'); return { from:`c-${from}`, to:`c-${to}` }; });
+      return { graph: JSON.stringify({ nodes, edges }), unknown: [...unknownSet] };
     }
+
+    const titleToId = new Map();
+    for (const m of mats) titleToId.set((m.title || '').trim().toLowerCase(), String(m.id));
+    const edgeSet = new Set();
+    const unknownSet = new Set();
+    for (const m of mats) {
+      const from = String(m.id);
+      for (const t of extractBacklinksClient(m.content)) {
+        const to = titleToId.get(t.toLowerCase());
+        if (!to) { unknownSet.add(t); continue; }
+        edgeSet.add(`${from}->${to}`);
+      }
+    }
+    const nodes = mats.map(m => ({ id: String(m.id), title: m.title || `Materi ${m.id}` }));
+    const edges = [...edgeSet].map(x => { const [from,to]=x.split('->'); return { from, to }; });
+    return { graph: JSON.stringify({ nodes, edges }), unknown: [...unknownSet] };
+  }
+
+  async function loadRoadmapMaterialGraph(positionId='', mode='material') {
+    const local = buildMaterialGraphClient(positionId, mode);
+    setMaterialGraph(local.graph || '{"nodes":[],"edges":[]}');
+    setMaterialUnknownBacklinks(local.unknown || []);
   }
 
   async function openMaterialFromGraph(nodeId) {
@@ -1103,24 +1134,26 @@ export default function Page() {
     } else if (section === 'kontribusi') {
       await refreshAdminContributions();
     } else if (section === 'roadmap') {
-      const [pRes, kRes, ckRes, lkRes, mRes, gRes] = await Promise.all([
+      const [pRes, kRes, ckRes, lkRes, mRes] = await Promise.all([
         fetch(`${apiBase}/admin/roadmap/positions`, { credentials: 'include' }),
         fetch(`${apiBase}/admin/roadmap/competencies`, { credentials: 'include' }),
         fetch(`${apiBase}/admin/roadmap/core-competencies`, { credentials: 'include' }),
         fetch(`${apiBase}/admin/roadmap/leadership-competencies`, { credentials: 'include' }),
         fetch(`${apiBase}/admin/roadmap/materials`, { credentials: 'include' }),
-        fetch(`${apiBase}/admin/roadmap/materials-graph`, { credentials: 'include' }),
       ]);
-      if (pRes.ok) setRoadmapPositions((await pRes.json()).items || []);
-      if (kRes.ok) setRoadmapCompetencies((await kRes.json()).items || []);
-      if (ckRes.ok) setRoadmapCoreCompetencies((await ckRes.json()).items || []);
-      if (lkRes.ok) setRoadmapLeadershipCompetencies((await lkRes.json()).items || []);
-      if (mRes.ok) setRoadmapMaterials((await mRes.json()).items || []);
-      if (gRes.ok) {
-        const gd = await gRes.json();
-        setMaterialGraph(gd.graph_json || '{"nodes":[],"edges":[]}');
-        setMaterialUnknownBacklinks(gd.unknown_backlinks || []);
-      }
+      const pItems = pRes.ok ? ((await pRes.json()).items || []) : [];
+      const kItems = kRes.ok ? ((await kRes.json()).items || []) : [];
+      const ckItems = ckRes.ok ? ((await ckRes.json()).items || []) : [];
+      const lkItems = lkRes.ok ? ((await lkRes.json()).items || []) : [];
+      const mItems = mRes.ok ? ((await mRes.json()).items || []) : [];
+      setRoadmapPositions(pItems);
+      setRoadmapCompetencies(kItems);
+      setRoadmapCoreCompetencies(ckItems);
+      setRoadmapLeadershipCompetencies(lkItems);
+      setRoadmapMaterials(mItems);
+      const localGraph = buildMaterialGraphClient(materialGraphFilter.position_id || '', materialGraphFilter.mode || 'material', mItems, kItems);
+      setMaterialGraph(localGraph.graph || '{"nodes":[],"edges":[]}');
+      setMaterialUnknownBacklinks(localGraph.unknown || []);
     } else if (section === 'ai') {
       const [res, pRes] = await Promise.all([
         fetch(`${apiBase}/admin/ai-settings`, { credentials: 'include' }),
