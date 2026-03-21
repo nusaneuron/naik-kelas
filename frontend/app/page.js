@@ -114,7 +114,7 @@ export default function Page() {
   const [materialStrictMode, setMaterialStrictMode] = useState(true);
   const [materialGraph, setMaterialGraph] = useState('{"nodes":[],"edges":[]}');
   const [materialUnknownBacklinks, setMaterialUnknownBacklinks] = useState([]);
-  const [materialGraphFilter, setMaterialGraphFilter] = useState({ position_id: '' });
+  const [materialGraphFilter, setMaterialGraphFilter] = useState({ position_id: '', mode: 'material' });
   const materialEditorRef = useRef(null);
   const materialTitleInputRef = useRef(null);
   const [pendingFocusMaterial, setPendingFocusMaterial] = useState(false);
@@ -877,19 +877,23 @@ export default function Page() {
     }
   }
 
-  async function loadRoadmapMaterialGraph(positionId='') {
-    const qs = positionId ? `?position_id=${positionId}` : '';
+  async function loadRoadmapMaterialGraph(positionId='', mode='material') {
+    const p = new URLSearchParams();
+    if (positionId) p.set('position_id', positionId);
+    if (mode) p.set('mode', mode);
+    const qs = p.toString() ? `?${p.toString()}` : '';
     const res = await fetch(`${apiBase}/admin/roadmap/materials-graph${qs}`, { credentials: 'include' });
     if (res.ok) {
       const d = await res.json();
       let graphRaw = d.graph_json || '{"nodes":[],"edges":[]}';
-      // UI-side hard filter by selected position (fallback safety)
-      if (positionId) {
+      // UI-side hard filter by selected position (fallback safety, material mode only)
+      if (positionId && mode === 'material') {
         try {
           const g = JSON.parse(graphRaw || '{"nodes":[],"edges":[]}');
+          const allowedCompetency = new Set(roadmapCompetencies.filter(c => String(c.position_id) === String(positionId)).map(c => String(c.id)));
           const allowed = new Set(
             roadmapMaterials
-              .filter(m => String(m.position_id) === String(positionId))
+              .filter(m => allowedCompetency.has(String(m.competency_id)))
               .map(m => String(m.id))
           );
           g.nodes = (g.nodes || []).filter(n => allowed.has(String(n.id)));
@@ -4490,7 +4494,7 @@ export default function Page() {
                       <button onClick={async () => { setRoadmapMenu('core-competencies'); await loadRoadmapCoreCompetencies(coreCompetencyForm.position_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'core-competencies' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'core-competencies' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'core-competencies' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>🧠 Kompetensi Inti</button>
                       <button onClick={async () => { setRoadmapMenu('leadership-competencies'); await loadRoadmapLeadershipCompetencies(leadershipCompetencyForm.position_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'leadership-competencies' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'leadership-competencies' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'leadership-competencies' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>👑 Kompetensi Kepemimpinan</button>
                       <button onClick={async () => { setRoadmapMenu('materials'); await loadRoadmapMaterials(materialForm.competency_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'materials' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'materials' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'materials' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>📘 Materi</button>
-                      <button onClick={async () => { setRoadmapMenu('graph'); await loadRoadmapMaterialGraph(materialGraphFilter.position_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'graph' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'graph' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'graph' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>🕸️ Graph</button>
+                      <button onClick={async () => { setRoadmapMenu('graph'); await loadRoadmapMaterialGraph(materialGraphFilter.position_id || '', materialGraphFilter.mode || 'material'); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'graph' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'graph' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'graph' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>🕸️ Graph</button>
                     </div>
 
                     {roadmapMenu === 'positions' && <>
@@ -4723,9 +4727,13 @@ export default function Page() {
                     {roadmapMenu === 'graph' && <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12, marginTop: 2 }}>
                       <div style={{ fontWeight:700, marginBottom:8 }}>Graph Materi (Backlink)</div>
                       <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(240px,1fr))', marginBottom: 10 }}>
-                        <select className="nk-input-sm" value={materialGraphFilter.position_id} onChange={async e => { const v=e.target.value; setMaterialGraphFilter({ position_id: v }); await loadRoadmapMaterialGraph(v); }}>
+                        <select className="nk-input-sm" value={materialGraphFilter.position_id} onChange={async e => { const v=e.target.value; setMaterialGraphFilter(f => ({ ...f, position_id: v })); await loadRoadmapMaterialGraph(v, materialGraphFilter.mode || 'material'); }}>
                           <option value="">Semua jabatan</option>
                           {roadmapPositions.map(p => <option key={p.id} value={p.id}>{p.code} • {p.name}</option>)}
+                        </select>
+                        <select className="nk-input-sm" value={materialGraphFilter.mode} onChange={async e => { const mode=e.target.value; setMaterialGraphFilter(f => ({ ...f, mode })); await loadRoadmapMaterialGraph(materialGraphFilter.position_id || '', mode); }}>
+                          <option value="material">Mode: Materi</option>
+                          <option value="competency">Mode: Kompetensi</option>
                         </select>
                       </div>
                       {(() => {
