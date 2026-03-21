@@ -2764,7 +2764,7 @@ export default function Page() {
                           <span className="nk-badge">{participantRoadmapMaterialDetail.bloom_level || 'C2'}</span>
                         </div>
                         <div style={{ fontSize:16, fontWeight:700, marginBottom:8 }}>{participantRoadmapMaterialDetail.title}</div>
-                        <div style={{ whiteSpace:'pre-wrap', color:'#cbd5e1', lineHeight:1.7 }}>{participantRoadmapMaterialDetail.content || '-'}</div>
+                        <div style={{ color:'#cbd5e1', lineHeight:1.7 }} dangerouslySetInnerHTML={{ __html: renderMD(participantRoadmapMaterialDetail.content || '-') }} />
                       </div>
                     )}
                   </div>
