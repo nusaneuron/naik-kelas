@@ -4173,6 +4173,16 @@ export default function Page() {
                       <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))' }}>
                         <input className="nk-input-sm" placeholder="Kode jabatan (contoh: CS-01)" value={positionForm.code || ''} onChange={e => setPositionForm(f => ({ ...f, code: e.target.value }))} />
                         <input className="nk-input-sm" placeholder="Nama jabatan" value={positionForm.name} onChange={e => setPositionForm(f => ({ ...f, name: e.target.value }))} />
+                        {isSuperAdmin ? (
+                          <select className="nk-input-sm" value={positionForm.group_id || ''} onChange={e => setPositionForm(f => ({ ...f, group_id: e.target.value }))}>
+                            <option value="">Global / semua kelompok</option>
+                            {adminGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                          </select>
+                        ) : (
+                          <div className="nk-input-sm" style={{ display:'flex', alignItems:'center', color:'#94a3b8' }}>
+                            Kelompok aktif: <b style={{ marginLeft:6, color:'#e2e8f0' }}>{adminGroups.find(g => String(g.id) === String(positionForm.group_id || me?.group_id || ''))?.name || 'Kelompok Admin'}</b>
+                          </div>
+                        )}
                         <textarea className="nk-input-sm" placeholder="Deskripsi jabatan" value={positionForm.description} onChange={e => setPositionForm(f => ({ ...f, description: e.target.value }))} style={{ minHeight: 70, gridColumn:'1 / -1' }} />
                         <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'space-between', gap:8, flexWrap:'wrap' }}>
                           <BtnSm onClick={() => setPositionForm({ id:0, code:'', name:'', description:'', group_id:'', is_active:true })}>Reset</BtnSm>
@@ -4183,10 +4193,11 @@ export default function Page() {
 
                     <div className="nk-table-wrap" style={{ marginTop: 12 }}>
                       <table className="nk-table">
-                        <thead><tr><th>Kode</th><th>Nama</th><th>Deskripsi</th><th>Update</th><th>Aksi</th></tr></thead>
+                        <thead><tr><th>Kelompok</th><th>Kode</th><th>Nama</th><th>Deskripsi</th><th>Update</th><th>Aksi</th></tr></thead>
                         <tbody>
                           {roadmapPositions.map(p => (
                             <tr key={p.id}>
+                              <td>{p.group_id ? (adminGroups.find(g => String(g.id) === String(p.group_id))?.name || `#${p.group_id}`) : 'Global'}</td>
                               <td style={{ fontWeight:700 }}>{p.code}</td>
                               <td>{p.name}</td>
                               <td style={{ maxWidth: 320, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{p.description || '-'}</td>
@@ -4197,7 +4208,7 @@ export default function Page() {
                               </td>
                             </tr>
                           ))}
-                          {roadmapPositions.length === 0 && <tr><td colSpan={5} className="nk-empty">Belum ada jabatan roadmap.</td></tr>}
+                          {roadmapPositions.length === 0 && <tr><td colSpan={6} className="nk-empty">Belum ada jabatan roadmap.</td></tr>}
                         </tbody>
                       </table>
                     </div>
