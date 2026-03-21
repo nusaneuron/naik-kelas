@@ -265,7 +265,6 @@ func main() {
 	mux.HandleFunc("/admin/feedback/stats", a.handleAdminFeedbackStats)
 	mux.HandleFunc("/admin/reflections/stats", a.handleAdminReflectionStats)
 	mux.HandleFunc("/admin/roadmaps", a.handleAdminRoadmaps)
-	mux.HandleFunc("/admin/roadmaps/generate", a.handleAdminGenerateRoadmap)
 	mux.HandleFunc("/participant/roadmaps", a.handleParticipantRoadmaps)
 
 	port := getenv("PORT", "8080")
@@ -7622,70 +7621,6 @@ func (a *app) handleAdminRoadmaps(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-}
-
-func buildRoadmapGraphFromText(src string) string {
-	s := strings.TrimSpace(src)
-	if s == "" {
-		return `{"nodes":[],"edges":[]}`
-	}
-	repl := strings.NewReplacer("\r", "\n", "\t", " ", ".", "\n", ";", "\n", "?", "\n", "!", "\n")
-	s = repl.Replace(s)
-	lines := strings.Split(s, "\n")
-	nodes := []map[string]any{}
-	edges := []map[string]any{}
-	seen := map[string]bool{}
-	id := 1
-	prevID := ""
-	for _, raw := range lines {
-		t := strings.TrimSpace(raw)
-		if t == "" {
-			continue
-		}
-		t = strings.TrimLeft(t, "-•0123456789.) ")
-		t = strings.TrimSpace(t)
-		if t == "" {
-			continue
-		}
-		key := strings.ToLower(t)
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-		nid := fmt.Sprintf("n%d", id)
-		nodes = append(nodes, map[string]any{"id": nid, "label": t})
-		if prevID != "" {
-			edges = append(edges, map[string]any{"source": prevID, "target": nid})
-		}
-		prevID = nid
-		id++
-		if id > 40 {
-			break
-		}
-	}
-	buf, _ := json.Marshal(map[string]any{"nodes": nodes, "edges": edges})
-	return string(buf)
-}
-
-func (a *app) handleAdminGenerateRoadmap(w http.ResponseWriter, r *http.Request) {
-	_, err := a.requireRole(r.Context(), r, "admin", "super_admin")
-	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-		return
-	}
-	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-		return
-	}
-	var req struct {
-		SourceText string `json:"source_text"`
-	}
-	if json.NewDecoder(r.Body).Decode(&req) != nil || strings.TrimSpace(req.SourceText) == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "source_text wajib diisi"})
-		return
-	}
-	graph := buildRoadmapGraphFromText(req.SourceText)
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "graph_json": graph})
 }
 
 func (a *app) handleParticipantRoadmaps(w http.ResponseWriter, r *http.Request) {
