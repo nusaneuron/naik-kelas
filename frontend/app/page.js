@@ -567,12 +567,13 @@ export default function Page() {
   }
 
   async function saveRoadmapPosition() {
-    if (!positionForm.name.trim()) return showMsg('Nama jabatan wajib diisi', 'error');
+    const normalizedName = (positionForm.name || '').replace(/\u00A0/g, ' ').trim();
+    if (!normalizedName) return showMsg('Nama jabatan wajib diisi', 'error');
     const res = await fetch(`${apiBase}/admin/roadmap/positions`, {
       method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id: Number(positionForm.id) || 0,
-        name: (positionForm.name || '').trim(),
+        name: normalizedName,
         description: positionForm.description || '',
         group_id: Number(positionForm.group_id || 0),
         is_active: !!positionForm.is_active,
@@ -4095,15 +4096,15 @@ export default function Page() {
                       <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
                         <div style={{ fontWeight:700, marginBottom:8 }}>1) Jabatan</div>
                         <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(240px,1fr))' }}>
-                          <input className="nk-input-sm" placeholder="Nama jabatan" value={positionForm.name} onChange={e => setPositionForm(f => ({ ...f, name: e.target.value }))} />
+                          <input className="nk-input-sm" placeholder="Nama jabatan" value={positionForm.name} onChange={e => setPositionForm(f => ({ ...f, name: e.target.value }))} onInput={e => setPositionForm(f => ({ ...f, name: e.target.value }))} />
                           <select className="nk-input-sm" value={positionForm.group_id} onChange={e => setPositionForm(f => ({ ...f, group_id: e.target.value }))}>
                             <option value="">Global / semua kelompok</option>
                             {adminGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                           </select>
                           <textarea className="nk-input-sm" placeholder="Deskripsi jabatan" value={positionForm.description} onChange={e => setPositionForm(f => ({ ...f, description: e.target.value }))} style={{ minHeight: 70, gridColumn:'1 / span 2' }} />
                           <div style={{ gridColumn:'1 / span 2', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                            {!positionForm.name.trim() && <span style={{ fontSize:12, color:'#fca5a5' }}>⚠️ Nama jabatan wajib diisi</span>}
-                            <BtnSm color="purple" disabled={!positionForm.name.trim()} onClick={saveRoadmapPosition}>💾 Simpan Jabatan</BtnSm>
+                            {!((positionForm.name || '').replace(/\u00A0/g, ' ').trim()) && <span style={{ fontSize:12, color:'#fca5a5' }}>⚠️ Nama jabatan wajib diisi</span>}
+                            <BtnSm color="purple" disabled={!((positionForm.name || '').replace(/\u00A0/g, ' ').trim())} onClick={saveRoadmapPosition}>💾 Simpan Jabatan</BtnSm>
                           </div>
                         </div>
                       </div>
