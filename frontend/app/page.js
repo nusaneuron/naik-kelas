@@ -108,6 +108,9 @@ export default function Page() {
   const [materialLinkQuery, setMaterialLinkQuery] = useState('');
   const [materialSuggestionIndex, setMaterialSuggestionIndex] = useState(0);
   const [materialStrictMode, setMaterialStrictMode] = useState(true);
+  const [materialGraph, setMaterialGraph] = useState('{"nodes":[],"edges":[]}');
+  const [materialUnknownBacklinks, setMaterialUnknownBacklinks] = useState([]);
+  const [materialGraphFilter, setMaterialGraphFilter] = useState({ position_id: '' });
   const [roadmapMenu, setRoadmapMenu] = useState('positions');
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewingContrib, setReviewingContrib] = useState(null);
@@ -775,6 +778,16 @@ export default function Page() {
     }
   }
 
+  async function loadRoadmapMaterialGraph(positionId='') {
+    const qs = positionId ? `?position_id=${positionId}` : '';
+    const res = await fetch(`${apiBase}/admin/roadmap/materials-graph${qs}`, { credentials: 'include' });
+    if (res.ok) {
+      const d = await res.json();
+      setMaterialGraph(d.graph_json || '{"nodes":[],"edges":[]}');
+      setMaterialUnknownBacklinks(d.unknown_backlinks || []);
+    }
+  }
+
   async function deleteRoadmapCategory(id) {
     if (!confirm('Hapus kategori roadmap ini? Catatan kategori ini juga terhapus.')) return;
     const res = await fetch(`${apiBase}/admin/roadmap/categories`, {
@@ -962,14 +975,20 @@ export default function Page() {
     } else if (section === 'kontribusi') {
       await refreshAdminContributions();
     } else if (section === 'roadmap') {
-      const [pRes, kRes, mRes] = await Promise.all([
+      const [pRes, kRes, mRes, gRes] = await Promise.all([
         fetch(`${apiBase}/admin/roadmap/positions`, { credentials: 'include' }),
         fetch(`${apiBase}/admin/roadmap/competencies`, { credentials: 'include' }),
         fetch(`${apiBase}/admin/roadmap/materials`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/roadmap/materials-graph`, { credentials: 'include' }),
       ]);
       if (pRes.ok) setRoadmapPositions((await pRes.json()).items || []);
       if (kRes.ok) setRoadmapCompetencies((await kRes.json()).items || []);
       if (mRes.ok) setRoadmapMaterials((await mRes.json()).items || []);
+      if (gRes.ok) {
+        const gd = await gRes.json();
+        setMaterialGraph(gd.graph_json || '{"nodes":[],"edges":[]}');
+        setMaterialUnknownBacklinks(gd.unknown_backlinks || []);
+      }
     } else if (section === 'ai') {
       const [res, pRes] = await Promise.all([
         fetch(`${apiBase}/admin/ai-settings`, { credentials: 'include' }),
@@ -4341,6 +4360,7 @@ export default function Page() {
                       <button onClick={() => setRoadmapMenu('positions')} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'positions' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'positions' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'positions' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>👔 Jabatan</button>
                       <button onClick={async () => { setRoadmapMenu('competencies'); await loadRoadmapCompetencies(competencyForm.position_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'competencies' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'competencies' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'competencies' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>🛠️ Kompetensi Teknis</button>
                       <button onClick={async () => { setRoadmapMenu('materials'); await loadRoadmapMaterials(materialForm.competency_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'materials' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'materials' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'materials' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>📘 Materi</button>
+                      <button onClick={async () => { setRoadmapMenu('graph'); await loadRoadmapMaterialGraph(materialGraphFilter.position_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'graph' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'graph' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'graph' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>🕸️ Graph</button>
                     </div>
 
                     {roadmapMenu === 'positions' && <>
@@ -4492,6 +4512,23 @@ export default function Page() {
                           </tbody>
                         </table>
                       </div>
+                    </div>}
+
+                    {roadmapMenu === 'graph' && <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12, marginTop: 2 }}>
+                      <div style={{ fontWeight:700, marginBottom:8 }}>Graph Materi (Backlink)</div>
+                      <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(240px,1fr))', marginBottom: 10 }}>
+                        <select className="nk-input-sm" value={materialGraphFilter.position_id} onChange={async e => { const v=e.target.value; setMaterialGraphFilter({ position_id: v }); await loadRoadmapMaterialGraph(v); }}>
+                          <option value="">Semua jabatan</option>
+                          {roadmapPositions.map(p => <option key={p.id} value={p.id}>{p.code} • {p.name}</option>)}
+                        </select>
+                      </div>
+                      {(() => {
+                        const g = parseRoadmapGraph(materialGraph);
+                        return g.error ? <div className="nk-empty" style={{ margin:0, color:'#fca5a5' }}>{g.error}</div> : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={() => {}} />;
+                      })()}
+                      {materialUnknownBacklinks.length > 0 && (
+                        <div className="nk-empty" style={{ marginTop:8, color:'#fbbf24' }}>⚠️ Backlink belum ketemu: {materialUnknownBacklinks.slice(0,8).join(', ')}{materialUnknownBacklinks.length > 8 ? ` (+${materialUnknownBacklinks.length - 8})` : ''}</div>
+                      )}
                     </div>}
                   </AdminSection>
                 </>

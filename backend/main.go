@@ -244,6 +244,7 @@ func main() {
 	mux.HandleFunc("/admin/roadmap/positions", a.handleAdminRoadmapPositions)
 	mux.HandleFunc("/admin/roadmap/competencies", a.handleAdminRoadmapCompetencies)
 	mux.HandleFunc("/admin/roadmap/materials", a.handleAdminRoadmapMaterials)
+	mux.HandleFunc("/admin/roadmap/materials-graph", a.handleAdminRoadmapMaterialsGraph)
 	mux.HandleFunc("/admin/tryout-configs", a.handleAdminTryoutConfigs)
 	mux.HandleFunc("/participant/materials", a.handleParticipantMaterials)
 	mux.HandleFunc("/participant/materials/complete", a.handleParticipantMaterialComplete)
@@ -7717,6 +7718,69 @@ func (a *app) handleAdminRoadmapCompetencies(w http.ResponseWriter, r *http.Requ
 		writeJSON(w,http.StatusOK,map[string]any{"ok":true}); return
 	}
 	writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"})
+}
+
+func buildGraphFromRoadmapMaterials(materials []struct{ ID int64; Title, Content string }) (string, []string) {
+	type node struct { ID int64 `json:"id"`; Title string `json:"title"` }
+	type edge struct { From int64 `json:"from"`; To int64 `json:"to"` }
+	nodes := []node{}
+	edges := []edge{}
+	titleToID := map[string]int64{}
+	for _, m := range materials {
+		nodes = append(nodes, node{ID: m.ID, Title: m.Title})
+		titleToID[strings.ToLower(strings.TrimSpace(m.Title))] = m.ID
+	}
+	unknownSet := map[string]struct{}{}
+	edgeSet := map[string]struct{}{}
+	for _, m := range materials {
+		for _, target := range extractBacklinks(m.Content) {
+			k := strings.ToLower(strings.TrimSpace(target))
+			toID, ok := titleToID[k]
+			if !ok {
+				if strings.TrimSpace(target) != "" { unknownSet[strings.TrimSpace(target)] = struct{}{} }
+				continue
+			}
+			es := fmt.Sprintf("%d->%d", m.ID, toID)
+			if _, exists := edgeSet[es]; exists { continue }
+			edgeSet[es] = struct{}{}
+			edges = append(edges, edge{From: m.ID, To: toID})
+		}
+	}
+	unknown := make([]string, 0, len(unknownSet))
+	for u := range unknownSet { unknown = append(unknown, u) }
+	b, _ := json.Marshal(map[string]any{"nodes": nodes, "edges": edges})
+	return string(b), unknown
+}
+
+func (a *app) handleAdminRoadmapMaterialsGraph(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.requireRole(r.Context(), r, "admin", "super_admin")
+	if err != nil { writeJSON(w,http.StatusUnauthorized,map[string]string{"error":"unauthorized"}); return }
+	if r.Method != http.MethodGet { writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"}); return }
+	positionID, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("position_id")), 10, 64)
+	q := `
+		SELECT rm.id, rm.title, rm.content, rc.position_id
+		FROM roadmap_materials rm
+		JOIN roadmap_competencies rc ON rc.id=rm.competency_id
+	`
+	args := []any{}
+	if positionID > 0 {
+		q += ` WHERE rc.position_id=$1`
+		args = append(args, positionID)
+	}
+	q += ` ORDER BY rm.id ASC`
+	rows, err := a.db.QueryContext(r.Context(), q, args...)
+	if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"db error"}); return }
+	defer rows.Close()
+	materials := []struct{ ID int64; Title, Content string }{}
+	for rows.Next() {
+		var id, posID int64; var title, content string
+		if rows.Scan(&id, &title, &content, &posID) == nil {
+			if admin.Role != "super_admin" && !a.canAccessRoadmapPosition(r.Context(), admin, posID) { continue }
+			materials = append(materials, struct{ ID int64; Title, Content string }{ID: id, Title: title, Content: content})
+		}
+	}
+	graphJSON, unknown := buildGraphFromRoadmapMaterials(materials)
+	writeJSON(w,http.StatusOK,map[string]any{"graph_json": graphJSON, "unknown_backlinks": unknown, "count": len(materials)})
 }
 
 func (a *app) handleAdminRoadmapMaterials(w http.ResponseWriter, r *http.Request) {
