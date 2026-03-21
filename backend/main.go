@@ -8625,7 +8625,7 @@ func (a *app) participantRoadmapGroupID(ctx context.Context, u authUser) int64 {
 	return -1
 }
 
-func (a *app) handleParticipantRoadmapPositions(w http.ResponseWriter, r *http.Request) {
+func (a *app) handleParticipantRoadmapPositionsLegacy(w http.ResponseWriter, r *http.Request) {
 	u, err := a.requireRole(r.Context(), r, "participant", "admin", "super_admin")
 	if err != nil { writeJSON(w,http.StatusUnauthorized,map[string]string{"error":"unauthorized"}); return }
 	if r.Method != http.MethodGet { writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"}); return }
@@ -8642,7 +8642,7 @@ func (a *app) handleParticipantRoadmapPositions(w http.ResponseWriter, r *http.R
 	writeJSON(w,http.StatusOK,map[string]any{"items":items})
 }
 
-func (a *app) handleParticipantRoadmapCategories(w http.ResponseWriter, r *http.Request) {
+func (a *app) handleParticipantRoadmapCategoriesLegacy(w http.ResponseWriter, r *http.Request) {
 	u, err := a.requireRole(r.Context(), r, "participant", "admin", "super_admin")
 	if err != nil { writeJSON(w,http.StatusUnauthorized,map[string]string{"error":"unauthorized"}); return }
 	if r.Method != http.MethodGet { writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"}); return }
@@ -8660,7 +8660,7 @@ func (a *app) handleParticipantRoadmapCategories(w http.ResponseWriter, r *http.
 	writeJSON(w,http.StatusOK,map[string]any{"items":items})
 }
 
-func (a *app) handleParticipantRoadmapGraph(w http.ResponseWriter, r *http.Request) {
+func (a *app) handleParticipantRoadmapGraphLegacy(w http.ResponseWriter, r *http.Request) {
 	u, err := a.requireRole(r.Context(), r, "participant", "admin", "super_admin")
 	if err != nil { writeJSON(w,http.StatusUnauthorized,map[string]string{"error":"unauthorized"}); return }
 	if r.Method != http.MethodGet { writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"}); return }
@@ -8681,7 +8681,7 @@ func (a *app) handleParticipantRoadmapGraph(w http.ResponseWriter, r *http.Reque
 	writeJSON(w,http.StatusOK,map[string]any{"ok":true,"graph_json":graph,"nodes":nCount,"edges":eCount,"unknown_backlinks":unknown})
 }
 
-func (a *app) handleParticipantRoadmapPositionGraph(w http.ResponseWriter, r *http.Request) {
+func (a *app) handleParticipantRoadmapPositionGraphLegacy(w http.ResponseWriter, r *http.Request) {
 	u, err := a.requireRole(r.Context(), r, "participant", "admin", "super_admin")
 	if err != nil { writeJSON(w,http.StatusUnauthorized,map[string]string{"error":"unauthorized"}); return }
 	if r.Method != http.MethodGet { writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"}); return }
