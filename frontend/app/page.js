@@ -4046,6 +4046,16 @@ export default function Page() {
                       </div>
 
                       <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
+                        <div style={{ fontWeight:700, marginBottom:8 }}>🕸️ Graph Roadmap (Preview)</div>
+                        {(() => {
+                          const g = parseRoadmapGraph(roadmapForm.graph_json || '{"nodes":[],"edges":[]}');
+                          return g.error
+                            ? <div className="nk-empty" style={{ margin: 0, color:'#fca5a5' }}>⚠️ {g.error}</div>
+                            : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={() => {}} />;
+                        })()}
+                      </div>
+
+                      <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
                         <div style={{ fontWeight:700, marginBottom:8 }}>📝 Catatan Roadmap (khusus roadmap ini)</div>
                         {!(roadmapForm.id || roadmapForm.category_id) ? (
                           <div className="nk-empty" style={{ margin:0 }}>Pilih kategori dulu, lalu tambah catatan roadmap dengan backlink [[Judul Catatan]].</div>
