@@ -788,6 +788,15 @@ export default function Page() {
     }
   }
 
+  async function openMaterialFromGraph(nodeId) {
+    const found = roadmapMaterials.find(m => String(m.id) === String(nodeId));
+    if (!found) return showMsg('Materi dari node ini tidak ditemukan', 'error');
+    setRoadmapMenu('materials');
+    setMaterialForm({ id: found.id, competency_id: String(found.competency_id || ''), title: found.title || '', content: found.content || '', is_active: !!found.is_active });
+    if (found.competency_id) await loadRoadmapMaterials(Number(found.competency_id));
+    showMsg(`Membuka materi: ${found.title}`, 'success');
+  }
+
   async function deleteRoadmapCategory(id) {
     if (!confirm('Hapus kategori roadmap ini? Catatan kategori ini juga terhapus.')) return;
     const res = await fetch(`${apiBase}/admin/roadmap/categories`, {
@@ -4524,7 +4533,7 @@ export default function Page() {
                       </div>
                       {(() => {
                         const g = parseRoadmapGraph(materialGraph);
-                        return g.error ? <div className="nk-empty" style={{ margin:0, color:'#fca5a5' }}>{g.error}</div> : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={() => {}} />;
+                        return g.error ? <div className="nk-empty" style={{ margin:0, color:'#fca5a5' }}>{g.error}</div> : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={openMaterialFromGraph} />;
                       })()}
                       {materialUnknownBacklinks.length > 0 && (
                         <div className="nk-empty" style={{ marginTop:8, color:'#fbbf24' }}>⚠️ Backlink belum ketemu: {materialUnknownBacklinks.slice(0,8).join(', ')}{materialUnknownBacklinks.length > 8 ? ` (+${materialUnknownBacklinks.length - 8})` : ''}</div>
