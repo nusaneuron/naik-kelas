@@ -194,7 +194,7 @@ export default function Page() {
   const [aiGroupDesc, setAiGroupDesc] = useState('');
   const [aiShowDesc, setAiShowDesc] = useState(false);
   const [qAiGenerating, setQAiGenerating] = useState(false);
-  const [qAiCatId, setQAiCatId] = useState('');
+  const [qAiRoadmapCompId, setQAiRoadmapCompId] = useState('');
   const [qAiMateriId, setQAiMateriId] = useState('');
   const [qAiCategoryMateri, setQAiCategoryMateri] = useState([]);
   const [qAiGenerated, setQAiGenerated] = useState([]);
@@ -1097,12 +1097,16 @@ export default function Page() {
     if (cRes.ok) { const cd = await cRes.json(); setCategories(cd.categories || cd.items || []); setAdminCategories(cd.categories || cd.items || []); }
     if (qRes.ok) setQuestions((await qRes.json()).items || []);
     // Load materi & groups (dipakai di banyak section)
-    const [amRes, grpRes] = await Promise.all([
+    const [amRes, grpRes, rCompRes, rMatRes] = await Promise.all([
       fetch(`${apiBase}/admin/materials`, { credentials: 'include' }),
       fetch(`${apiBase}/admin/groups`, { credentials: 'include' }),
+      fetch(`${apiBase}/admin/roadmap/competencies`, { credentials: 'include' }),
+      fetch(`${apiBase}/admin/roadmap/materials`, { credentials: 'include' }),
     ]);
     if (amRes.ok) setAdminMaterials((await amRes.json()).items || []);
     if (grpRes.ok) setAdminGroups((await grpRes.json()).items || []);
+    if (rCompRes.ok) setRoadmapCompetencies((await rCompRes.json()).items || []);
+    if (rMatRes.ok) setRoadmapMaterials((await rMatRes.json()).items || []);
   }
 
   const [loadedAdminSections, setLoadedAdminSections] = useState({});
@@ -1439,7 +1443,9 @@ export default function Page() {
 
   function startEditQuestion(q) {
     setEditingQuestionId(String(q.id));
-    setQCategoryId(String(q.category_id));
+    const cat = categories.find(c => String(c.id) === String(q.category_id));
+    const m = String(cat?.code || '').match(/^rmc-(\d+)$/);
+    setQCategoryId(m ? m[1] : '');
     setQText(q.question_text || '');
     setQA(q.option_a || '');
     setQB(q.option_b || '');
@@ -1465,8 +1471,8 @@ export default function Page() {
     await fetch(`${apiBase}/admin/questions`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify(isEdit
-        ? { action: 'update', id: Number(editingQuestionId), category_id: Number(qCategoryId), question_text: qText, option_a: qA, option_b: qB, option_c: qC, option_d: qD, correct_option: qCorrect, is_active: true }
-        : { action: 'create', category_id: Number(qCategoryId), question_text: qText, option_a: qA, option_b: qB, option_c: qC, option_d: qD, correct_option: qCorrect })
+        ? { action: 'update', id: Number(editingQuestionId), roadmap_competency_id: Number(qCategoryId), question_text: qText, option_a: qA, option_b: qB, option_c: qC, option_d: qD, correct_option: qCorrect, is_active: true }
+        : { action: 'create', roadmap_competency_id: Number(qCategoryId), question_text: qText, option_a: qA, option_b: qB, option_c: qC, option_d: qD, correct_option: qCorrect })
     });
     setQText(''); setQA(''); setQB(''); setQC(''); setQD(''); setQCorrect('A'); setQCategoryId(''); setEditingQuestionId('');
     await refreshAdmin();
@@ -3275,43 +3281,42 @@ export default function Page() {
                       <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, color: '#93c5fd' }}>✨ Generate Soal dengan AI</p>
                       <div className="nk-grid-2col" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8, marginBottom: 8 }}>
                         <div>
-                          <label style={fieldLbl}>Kategori Soal</label>
-                          <select className="nk-input-sm" style={{ width: '100%' }} value={qAiCatId}
+                          <label style={fieldLbl}>Kompetensi (Roadmap)</label>
+                          <select className="nk-input-sm" style={{ width: '100%' }} value={qAiRoadmapCompId}
                             onChange={async e => {
-                              const catId = e.target.value;
-                              setQAiCatId(catId);
+                              const compId = e.target.value;
+                              setQAiRoadmapCompId(compId);
                               setQAiMateriId('');
                               setQAiCategoryMateri([]);
                               setQAiGenerated([]);
                               setQAiChecked([]);
-                              if (!catId) return;
-                              const res = await fetch(`${apiBase}/admin/materials?category_id=${catId}`, { credentials: 'include' });
-                              const data = await res.json();
-                              setQAiCategoryMateri(data.items || []);
+                              if (!compId) return;
+                              const items = roadmapMaterials.filter(m => String(m.competency_id) === String(compId));
+                              setQAiCategoryMateri(items || []);
                             }}>
-                            <option value="">-- Pilih Kategori --</option>
-                            {categories.filter(c => isSuperAdmin || c.group_id > 0).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            <option value="">-- Pilih Kompetensi --</option>
+                            {roadmapCompetencies.map(c => <option key={c.id} value={c.id}>{c.code} • {c.name}</option>)}
                           </select>
                         </div>
                         <div>
-                          <label style={fieldLbl}>Materi Sumber <span style={{ color: '#64748b' }}>(opsional)</span></label>
+                          <label style={fieldLbl}>Materi Sumber (Roadmap) <span style={{ color: '#64748b' }}>(opsional)</span></label>
                           <select className="nk-input-sm" style={{ width: '100%' }} value={qAiMateriId} onChange={e => { setQAiMateriId(e.target.value); setQAiGenerated([]); setQAiChecked([]); }}>
-                            <option value="">-- Semua Materi Kategori --</option>
+                            <option value="">-- Semua Materi Kompetensi --</option>
                             {qAiCategoryMateri.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
                           </select>
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: qAiGenerated.length ? 12 : 0 }}>
                         {[5, 10, 15].map(n => (
-                          <button key={n} type="button" disabled={qAiGenerating || !qAiCatId}
+                          <button key={n} type="button" disabled={qAiGenerating || !qAiRoadmapCompId}
                             onClick={async () => {
-                              if (!qAiCatId) { alert('Pilih kategori dulu!'); return; }
+                              if (!qAiRoadmapCompId) { alert('Pilih kompetensi dulu!'); return; }
                               setQAiGenerating(true); setQAiGenerated([]); setQAiChecked([]);
                               try {
                                 const res = await fetch(`${apiBase}/admin/questions/generate`, {
                                   method: 'POST', credentials: 'include',
                                   headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ category_id: Number(qAiCatId), materi_id: Number(qAiMateriId) || 0, question_count: n })
+                                  body: JSON.stringify({ roadmap_competency_id: Number(qAiRoadmapCompId), roadmap_material_id: Number(qAiMateriId) || 0, question_count: n })
                                 });
                                 const data = await res.json();
                                 if (data.questions?.length > 0) {
@@ -3321,12 +3326,12 @@ export default function Page() {
                               } catch(e) { alert('Error: ' + e.message); }
                               setQAiGenerating(false);
                             }}
-                            style={{ flex: '1 1 80px', minWidth: 80, padding: '7px 0', background: qAiGenerating || !qAiCatId ? '#1e3a5f' : '#1d4ed8', color: '#fff', border: 'none', borderRadius: 8, cursor: qAiGenerating || !qAiCatId ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, opacity: !qAiCatId ? 0.5 : 1 }}>
+                            style={{ flex: '1 1 80px', minWidth: 80, padding: '7px 0', background: qAiGenerating || !qAiRoadmapCompId ? '#1e3a5f' : '#1d4ed8', color: '#fff', border: 'none', borderRadius: 8, cursor: qAiGenerating || !qAiRoadmapCompId ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, opacity: !qAiRoadmapCompId ? 0.5 : 1 }}>
                             {qAiGenerating ? '⏳ Generating...' : `✨ ${n} Soal`}
                           </button>
                         ))}
                       </div>
-                      {!qAiCatId && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#64748b' }}>Pilih kategori dulu sebelum generate soal.</p>}
+                      {!qAiRoadmapCompId && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#64748b' }}>Pilih kompetensi roadmap dulu sebelum generate soal.</p>}
                       {/* Preview hasil generate */}
                       {qAiGenerated.length > 0 && (
                         <div style={{ marginTop: 12 }}>
@@ -3367,7 +3372,7 @@ export default function Page() {
                                 const res = await fetch(`${apiBase}/admin/questions`, {
                                   method: 'POST', credentials: 'include',
                                   headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ action: 'create', category_id: Number(qAiCatId), question_text: q.question_text, option_a: q.option_a, option_b: q.option_b, option_c: q.option_c, option_d: q.option_d, correct_option: q.correct_option?.toUpperCase(), is_active: true })
+                                  body: JSON.stringify({ action: 'create', roadmap_competency_id: Number(qAiRoadmapCompId), question_text: q.question_text, option_a: q.option_a, option_b: q.option_b, option_c: q.option_c, option_d: q.option_d, correct_option: q.correct_option?.toUpperCase(), is_active: true })
                                 });
                                 if (res.ok) saved++;
                               }
@@ -3388,12 +3393,10 @@ export default function Page() {
                     <div style={{ display: 'grid', gap: 10, marginBottom: 16 }}>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8 }}>
                         <div>
-                          <label style={fieldLbl}>Kategori</label>
+                          <label style={fieldLbl}>Kompetensi (Roadmap)</label>
                           <select className="nk-input" value={qCategoryId} onChange={(e) => setQCategoryId(e.target.value)}>
-                            <option value="">Pilih kategori</option>
-                            {categories
-                              .filter(c => isSuperAdmin || c.group_id > 0)
-                              .map((c) => <option key={c.id} value={c.id}>{c.name}{c.group_name && !isSuperAdmin ? '' : c.group_name ? ` (${c.group_name})` : ' 🌐'}</option>)}
+                            <option value="">Pilih kompetensi roadmap</option>
+                            {roadmapCompetencies.map((c) => <option key={c.id} value={c.id}>{c.code} • {c.name}</option>)}
                           </select>
                         </div>
                         <div>

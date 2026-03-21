@@ -2650,6 +2650,24 @@ func (a *app) handleAdminCategories(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (a *app) ensureQuestionCategoryFromRoadmapCompetency(ctx context.Context, competencyID int64) (int64, error) {
+	if competencyID <= 0 { return 0, fmt.Errorf("invalid competency id") }
+	var compName string
+	if err := a.db.QueryRowContext(ctx, `SELECT name FROM roadmap_competencies WHERE id=$1`, competencyID).Scan(&compName); err != nil {
+		return 0, err
+	}
+	code := fmt.Sprintf("rmc-%d", competencyID)
+	var catID int64
+	err := a.db.QueryRowContext(ctx, `SELECT id FROM question_categories WHERE code=$1`, code).Scan(&catID)
+	if err == nil && catID > 0 {
+		_, _ = a.db.ExecContext(ctx, `UPDATE question_categories SET name=$1,is_active=TRUE,updated_at=NOW() WHERE id=$2`, compName, catID)
+		return catID, nil
+	}
+	err = a.db.QueryRowContext(ctx, `INSERT INTO question_categories(code,name,is_active) VALUES($1,$2,TRUE) RETURNING id`, code, compName).Scan(&catID)
+	if err != nil { return 0, err }
+	return catID, nil
+}
+
 func (a *app) handleAdminQuestions(w http.ResponseWriter, r *http.Request) {
 	admin, err := a.requireRole(r.Context(), r, "admin")
 	if err != nil {
@@ -2690,10 +2708,11 @@ func (a *app) handleAdminQuestions(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"items": items})
 	case http.MethodPost:
 		var req struct {
-			Action        string `json:"action"`
-			ID            int64  `json:"id"`
-			CategoryID    int64  `json:"category_id"`
-			QuestionText  string `json:"question_text"`
+			Action              string `json:"action"`
+			ID                  int64  `json:"id"`
+			CategoryID          int64  `json:"category_id"`
+			RoadmapCompetencyID int64  `json:"roadmap_competency_id"`
+			QuestionText        string `json:"question_text"`
 			OptionA       string `json:"option_a"`
 			OptionB       string `json:"option_b"`
 			OptionC       string `json:"option_c"`
@@ -2704,6 +2723,14 @@ func (a *app) handleAdminQuestions(w http.ResponseWriter, r *http.Request) {
 		if json.NewDecoder(r.Body).Decode(&req) != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 			return
+		}
+		if (req.Action == "create" || req.Action == "update") && req.CategoryID <= 0 && req.RoadmapCompetencyID > 0 {
+			cid, mErr := a.ensureQuestionCategoryFromRoadmapCompetency(r.Context(), req.RoadmapCompetencyID)
+			if mErr != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kompetensi roadmap tidak valid"})
+				return
+			}
+			req.CategoryID = cid
 		}
 		// Validasi: admin biasa tidak boleh tambah soal ke kategori global
 		if (req.Action == "create" || req.Action == "update") && req.CategoryID > 0 && !isSuperAdmin(admin) {
@@ -6456,13 +6483,27 @@ func (a *app) handleAdminGenerateQuestions(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var req struct {
-		CategoryID  int64  `json:"category_id"`
-		MateriID    int64  `json:"materi_id"`
-		QuestionCount int  `json:"question_count"`
+		CategoryID           int64  `json:"category_id"`
+		MateriID             int64  `json:"materi_id"`
+		RoadmapCompetencyID  int64  `json:"roadmap_competency_id"`
+		RoadmapMaterialID    int64  `json:"roadmap_material_id"`
+		QuestionCount        int    `json:"question_count"`
 	}
-	if json.NewDecoder(r.Body).Decode(&req) != nil || req.CategoryID == 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "category_id wajib diisi"})
+	if json.NewDecoder(r.Body).Decode(&req) != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "payload tidak valid"})
 		return
+	}
+	if req.CategoryID == 0 && req.RoadmapCompetencyID == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "category_id atau roadmap_competency_id wajib diisi"})
+		return
+	}
+	if req.CategoryID == 0 && req.RoadmapCompetencyID > 0 {
+		cid, mErr := a.ensureQuestionCategoryFromRoadmapCompetency(r.Context(), req.RoadmapCompetencyID)
+		if mErr != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kompetensi roadmap tidak valid"})
+			return
+		}
+		req.CategoryID = cid
 	}
 	if req.QuestionCount <= 0 || req.QuestionCount > 20 {
 		req.QuestionCount = 5
@@ -6472,19 +6513,36 @@ func (a *app) handleAdminGenerateQuestions(w http.ResponseWriter, r *http.Reques
 
 	// Ambil konten materi sebagai konteks
 	var materiContext string
-	if req.MateriID > 0 {
+	if req.RoadmapCompetencyID > 0 {
+		if req.RoadmapMaterialID > 0 {
+			var title, content string
+			_ = a.db.QueryRowContext(ctx, `SELECT title, content FROM roadmap_materials WHERE id=$1`, req.RoadmapMaterialID).Scan(&title, &content)
+			if title != "" {
+				materiContext = fmt.Sprintf("Judul Materi: %s\n\nIsi Materi:\n%s", title, content)
+			}
+		} else {
+			rows, _ := a.db.QueryContext(ctx, `SELECT title, content FROM roadmap_materials WHERE competency_id=$1 AND is_active=TRUE ORDER BY updated_at DESC LIMIT 5`, req.RoadmapCompetencyID)
+			if rows != nil {
+				var parts []string
+				for rows.Next() {
+					var title, content string
+					if rows.Scan(&title, &content) == nil {
+						parts = append(parts, fmt.Sprintf("## %s\n%s", title, content))
+					}
+				}
+				rows.Close()
+				materiContext = strings.Join(parts, "\n\n---\n\n")
+			}
+		}
+	} else if req.MateriID > 0 {
 		var title, content string
 		_ = a.db.QueryRowContext(ctx, `SELECT title, content FROM learning_materials WHERE id=$1`, req.MateriID).Scan(&title, &content)
 		if title != "" {
-			// Jika content adalah JSON array (multi-bubble), gabungkan
 			var bubbles []string
-			if json.Unmarshal([]byte(content), &bubbles) == nil {
-				content = strings.Join(bubbles, "\n\n")
-			}
+			if json.Unmarshal([]byte(content), &bubbles) == nil { content = strings.Join(bubbles, "\n\n") }
 			materiContext = fmt.Sprintf("Judul Materi: %s\n\nIsi Materi:\n%s", title, content)
 		}
 	} else {
-		// Ambil semua materi dari kategori ini
 		rows, _ := a.db.QueryContext(ctx, `SELECT title, content FROM learning_materials WHERE category_id=$1 AND is_active=TRUE ORDER BY order_no, id LIMIT 5`, req.CategoryID)
 		if rows != nil {
 			var parts []string
@@ -6492,9 +6550,7 @@ func (a *app) handleAdminGenerateQuestions(w http.ResponseWriter, r *http.Reques
 				var title, content string
 				if rows.Scan(&title, &content) == nil {
 					var bubbles []string
-					if json.Unmarshal([]byte(content), &bubbles) == nil {
-						content = strings.Join(bubbles, "\n\n")
-					}
+					if json.Unmarshal([]byte(content), &bubbles) == nil { content = strings.Join(bubbles, "\n\n") }
 					parts = append(parts, fmt.Sprintf("## %s\n%s", title, content))
 				}
 			}
