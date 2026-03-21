@@ -84,8 +84,6 @@ export default function Page() {
   const [adminContribFilter, setAdminContribFilter] = useState('pending');
   const [adminRoadmaps, setAdminRoadmaps] = useState([]);
   const [roadmapSourceText, setRoadmapSourceText] = useState('');
-  const [roadmapNotes, setRoadmapNotes] = useState([]);
-  const [roadmapNoteForm, setRoadmapNoteForm] = useState({ id: 0, title: '', content: '' });
   const [roadmapForm, setRoadmapForm] = useState({ id: 0, category_id: '', title: '', description: '', graph_json: '{"nodes":[],"edges":[]}', is_published: false });
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewingContrib, setReviewingContrib] = useState(null);
@@ -561,43 +559,6 @@ export default function Page() {
     if (!res.ok) return showMsg(d.error || 'Gagal generate roadmap', 'error');
     setRoadmapForm(f => ({ ...f, graph_json: d.graph_json || '{"nodes":[],"edges":[]}' }));
     showMsg('Graph berhasil digenerate dari teks ✅', 'success');
-  }
-
-  async function loadRoadmapNotes(roadmapId) {
-    if (!roadmapId) return setRoadmapNotes([]);
-    const res = await fetch(`${apiBase}/admin/roadmaps/notes?roadmap_id=${roadmapId}`, { credentials: 'include' });
-    if (res.ok) setRoadmapNotes((await res.json()).items || []);
-  }
-
-  async function saveRoadmapNote() {
-    if (!roadmapForm.id) return showMsg('Simpan roadmap dulu sebelum menambah catatan', 'error');
-    if (!roadmapNoteForm.title.trim()) return showMsg('Judul catatan roadmap wajib diisi', 'error');
-    const res = await fetch(`${apiBase}/admin/roadmaps/notes`, {
-      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: Number(roadmapNoteForm.id) || 0,
-        roadmap_id: Number(roadmapForm.id),
-        title: roadmapNoteForm.title.trim(),
-        content: roadmapNoteForm.content || ''
-      })
-    });
-    const d = await res.json().catch(() => ({}));
-    if (!res.ok) return showMsg(d.error || 'Gagal simpan catatan roadmap', 'error');
-    showMsg('Catatan roadmap tersimpan ✅', 'success');
-    setRoadmapNoteForm({ id: 0, title: '', content: '' });
-    await loadRoadmapNotes(roadmapForm.id);
-  }
-
-  async function generateRoadmapFromNotes() {
-    if (!roadmapForm.id) return showMsg('Pilih/simpan roadmap dulu', 'error');
-    const res = await fetch(`${apiBase}/admin/roadmaps/generate-from-notes`, {
-      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ roadmap_id: Number(roadmapForm.id) })
-    });
-    const d = await res.json().catch(() => ({}));
-    if (!res.ok) return showMsg(d.error || 'Gagal generate graph dari catatan roadmap', 'error');
-    setRoadmapForm(f => ({ ...f, graph_json: d.graph_json || '{"nodes":[],"edges":[]}' }));
-    showMsg('Graph dari catatan roadmap berhasil dibuat ✅', 'success');
   }
 
   function parseRoadmapGraph(raw) {
@@ -4031,44 +3992,6 @@ export default function Page() {
                           <BtnSm color="purple" onClick={saveRoadmap}>💾 Simpan Roadmap</BtnSm>
                         </div>
                       </div>
-
-                      <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
-                        <div style={{ fontWeight:700, marginBottom:8 }}>📝 Catatan Roadmap (khusus roadmap ini)</div>
-                        {!roadmapForm.id ? (
-                          <div className="nk-empty" style={{ margin:0 }}>Simpan dulu roadmap, lalu tambah catatan roadmap dengan backlink [[Judul Catatan]].</div>
-                        ) : (
-                          <>
-                            <div style={{ display:'grid', gap:8 }}>
-                              <input className="nk-input-sm" placeholder="Judul catatan roadmap" value={roadmapNoteForm.title} onChange={e => setRoadmapNoteForm(f => ({ ...f, title: e.target.value }))} />
-                              <textarea className="nk-input-sm" placeholder="Isi catatan roadmap... gunakan backlink seperti [[Prompt Engineering]]" value={roadmapNoteForm.content} onChange={e => setRoadmapNoteForm(f => ({ ...f, content: e.target.value }))} style={{ minHeight: 100 }} />
-                              <div style={{ display:'flex', justifyContent:'space-between', gap:8 }}>
-                                <BtnSm onClick={() => setRoadmapNoteForm({ id: 0, title: '', content: '' })}>Reset Catatan</BtnSm>
-                                <div style={{ display:'flex', gap:8 }}>
-                                  <BtnSm onClick={generateRoadmapFromNotes}>🕸️ Generate Graph dari Catatan</BtnSm>
-                                  <BtnSm color="purple" onClick={saveRoadmapNote}>💾 Simpan Catatan</BtnSm>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="nk-table-wrap" style={{ marginTop: 10 }}>
-                              <table className="nk-table">
-                                <thead><tr><th>Judul</th><th>Isi</th><th>Update</th><th>Aksi</th></tr></thead>
-                                <tbody>
-                                  {roadmapNotes.map(n => (
-                                    <tr key={n.id}>
-                                      <td>{n.title}</td>
-                                      <td style={{ maxWidth: 420, whiteSpace:'pre-wrap' }}>{(n.content || '').slice(0, 160)}{(n.content || '').length > 160 ? '...' : ''}</td>
-                                      <td style={{ fontSize:12, color:'#94a3b8' }}>{new Date(n.updated_at).toLocaleString('id-ID')}</td>
-                                      <td><BtnSm onClick={() => setRoadmapNoteForm({ id: n.id, title: n.title || '', content: n.content || '' })}>Edit</BtnSm></td>
-                                    </tr>
-                                  ))}
-                                  {roadmapNotes.length === 0 && <tr><td colSpan={4} className="nk-empty">Belum ada catatan roadmap.</td></tr>}
-                                </tbody>
-                              </table>
-                            </div>
-                          </>
-                        )}
-                      </div>
-
                       <div className="nk-table-wrap">
                         <table className="nk-table">
                           <thead><tr><th>Kategori</th><th>Judul</th><th>Status</th><th>Update</th><th>Aksi</th></tr></thead>
@@ -4079,7 +4002,7 @@ export default function Page() {
                                 <td>{r.title}</td>
                                 <td>{r.is_published ? '✅ Published' : '📝 Draft'}</td>
                                 <td style={{ fontSize:12, color:'#94a3b8' }}>{new Date(r.updated_at).toLocaleString('id-ID')}</td>
-                                <td><BtnSm onClick={() => { setRoadmapForm({ id: r.id, category_id: r.category_id, title: r.title || '', description: r.description || '', graph_json: r.graph_json || '{"nodes":[],"edges":[]}', is_published: !!r.is_published }); loadRoadmapNotes(r.id); }}>Edit</BtnSm></td>
+                                <td><BtnSm onClick={() => setRoadmapForm({ id: r.id, category_id: r.category_id, title: r.title || '', description: r.description || '', graph_json: r.graph_json || '{"nodes":[],"edges":[]}', is_published: !!r.is_published })}>Edit</BtnSm></td>
                               </tr>
                             ))}
                             {adminRoadmaps.length === 0 && <tr><td colSpan={5} className="nk-empty">Belum ada roadmap.</td></tr>}
