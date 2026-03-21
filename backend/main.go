@@ -7873,8 +7873,24 @@ func (a *app) handleAdminRoadmapNotes(w http.ResponseWriter, r *http.Request) {
 			errText := strings.ToLower(err.Error())
 			if strings.Contains(errText, "duplicate") || strings.Contains(errText, "unique") {
 				msg = "judul catatan sudah ada di kategori ini"
-			} else if strings.Contains(errText, "roadmap_id") {
-				msg = "struktur tabel roadmap_notes lama terdeteksi; coba redeploy backend sekali lagi"
+			} else if strings.Contains(errText, "roadmap_id") || strings.Contains(errText, "not null") || strings.Contains(errText, "violates not-null") {
+				// fallback: coba hapus constraint lama dan insert ulang
+				_, _ = a.db.ExecContext(r.Context(), `ALTER TABLE roadmap_notes ALTER COLUMN roadmap_id DROP NOT NULL`)
+				if req.ID > 0 {
+					err = a.db.QueryRowContext(r.Context(), `
+						UPDATE roadmap_notes SET category_id=$1,title=$2,content=$3,updated_by=$4,updated_at=NOW()
+						WHERE id=$5 RETURNING id,title,content,updated_at
+					`, req.CategoryID, title, req.Content, admin.ID, req.ID).Scan(&savedID, &savedTitle, &savedContent, &savedAt)
+				} else {
+					err = a.db.QueryRowContext(r.Context(), `
+						INSERT INTO roadmap_notes(category_id,title,content,created_by,updated_by)
+						VALUES($1,$2,$3,$4,$4) RETURNING id,title,content,updated_at
+					`, req.CategoryID, title, req.Content, admin.ID).Scan(&savedID, &savedTitle, &savedContent, &savedAt)
+				}
+				if err != nil {
+					writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal simpan catatan (schema lama): " + err.Error()}); return
+				}
+				writeJSON(w,http.StatusOK,map[string]any{"ok":true,"item": map[string]any{"id":savedID,"title":savedTitle,"content":savedContent,"updated_at":savedAt.Format(time.RFC3339)}}); return
 			}
 			writeJSON(w,http.StatusInternalServerError,map[string]string{"error": msg, "detail": err.Error()}); return
 		}
