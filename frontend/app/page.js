@@ -111,6 +111,9 @@ export default function Page() {
   const [materialGraph, setMaterialGraph] = useState('{"nodes":[],"edges":[]}');
   const [materialUnknownBacklinks, setMaterialUnknownBacklinks] = useState([]);
   const [materialGraphFilter, setMaterialGraphFilter] = useState({ position_id: '' });
+  const materialEditorRef = useRef(null);
+  const materialTitleInputRef = useRef(null);
+  const [pendingFocusMaterial, setPendingFocusMaterial] = useState(false);
   const [roadmapMenu, setRoadmapMenu] = useState('positions');
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewingContrib, setReviewingContrib] = useState(null);
@@ -323,6 +326,18 @@ export default function Page() {
       setParticipantPositionUnknownBacklinks(d.unknown_backlinks || []);
     }
   }
+
+  useEffect(() => {
+    if (!pendingFocusMaterial || roadmapMenu !== 'materials') return;
+    const t = setTimeout(() => {
+      try {
+        materialEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        materialTitleInputRef.current?.focus();
+      } catch {}
+      setPendingFocusMaterial(false);
+    }, 120);
+    return () => clearTimeout(t);
+  }, [pendingFocusMaterial, roadmapMenu]);
 
   async function loadSection(section) {
     if (loadedSections[section]) return;
@@ -793,6 +808,7 @@ export default function Page() {
     if (!found) return showMsg('Materi dari node ini tidak ditemukan', 'error');
     setRoadmapMenu('materials');
     setMaterialForm({ id: found.id, competency_id: String(found.competency_id || ''), title: found.title || '', content: found.content || '', is_active: !!found.is_active });
+    setPendingFocusMaterial(true);
     if (found.competency_id) await loadRoadmapMaterials(Number(found.competency_id));
     showMsg(`Membuka materi: ${found.title}`, 'success');
   }
@@ -4465,7 +4481,7 @@ export default function Page() {
                           Strict mode backlink (hanya judul yang sudah ada)
                         </label>
                       </div>
-                      <div style={{ display:'grid', gap:8 }}>
+                      <div ref={materialEditorRef} style={{ display:'grid', gap:8 }}>
                         <select className="nk-input-sm" value={materialForm.competency_id} onChange={async e => { const v=e.target.value; setMaterialForm(f => ({ ...f, competency_id: v })); await loadRoadmapMaterials(v); }}>
                           <option value="">Pilih kompetensi teknis</option>
                           {roadmapCompetencies.map(c => {
@@ -4473,7 +4489,7 @@ export default function Page() {
                             return <option key={c.id} value={c.id}>{pos?.code || '-'} • {c.code} • {c.name}</option>;
                           })}
                         </select>
-                        <input className="nk-input-sm" placeholder="Judul materi" value={materialForm.title} onChange={e => setMaterialForm(f => ({ ...f, title: e.target.value }))} />
+                        <input ref={materialTitleInputRef} className="nk-input-sm" placeholder="Judul materi" value={materialForm.title} onChange={e => setMaterialForm(f => ({ ...f, title: e.target.value }))} />
                         <textarea className="nk-input-sm" placeholder="Isi materi... ketik [[ untuk saran judul materi" value={materialForm.content} onChange={e => updateMaterialContentWithSuggestions(e.target.value)} onKeyDown={handleMaterialSuggestionKeyDown} style={{ minHeight: 120 }} />
                         {findUnknownBacklinks(materialForm.content || '').length > 0 && (
                           <div style={{ fontSize:11, color: materialStrictMode ? '#fca5a5' : '#fbbf24' }}>
