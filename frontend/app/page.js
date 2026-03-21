@@ -583,7 +583,12 @@ export default function Page() {
     if (!res.ok) return showMsg(d.error || 'Gagal simpan jabatan roadmap', 'error');
     showMsg('Jabatan roadmap tersimpan ✅', 'success');
     setPositionForm({ id: 0, name: '', description: '', group_id: '', is_active: true });
-    await loadAdminSection('roadmap');
+    const [pRes, cRes] = await Promise.all([
+      fetch(`${apiBase}/admin/roadmap/positions`, { credentials: 'include' }),
+      fetch(`${apiBase}/admin/roadmap/categories`, { credentials: 'include' }),
+    ]);
+    if (pRes.ok) setRoadmapPositions((await pRes.json()).items || []);
+    if (cRes.ok) setRoadmapCategories((await cRes.json()).items || []);
   }
 
   async function saveRoadmapCategory() {
@@ -596,7 +601,8 @@ export default function Page() {
     if (!res.ok) return showMsg(d.error || 'Gagal simpan kategori roadmap', 'error');
     showMsg('Kategori roadmap tersimpan ✅', 'success');
     setCategoryForm({ id: 0, position_id: categoryForm.position_id, name: '', description: '', order_no: 0, is_active: true });
-    await loadAdminSection('roadmap');
+    const cRes = await fetch(`${apiBase}/admin/roadmap/categories`, { credentials: 'include' });
+    if (cRes.ok) setRoadmapCategories((await cRes.json()).items || []);
   }
 
   async function loadRoadmapNotes(categoryId) {
