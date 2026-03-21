@@ -63,12 +63,9 @@ export default function Page() {
   // Materi
   const [myMaterials, setMyMaterials] = useState([]);
   const [participantRoadmapPositions, setParticipantRoadmapPositions] = useState([]);
-  const [participantRoadmapCategories, setParticipantRoadmapCategories] = useState([]);
-  const [participantRoadmapFilter, setParticipantRoadmapFilter] = useState({ position_id: '', category_id: '', category_ids: [] });
+  const [participantRoadmapFilter, setParticipantRoadmapFilter] = useState({ position_id: '', mode: 'material' });
   const [participantRoadmapGraph, setParticipantRoadmapGraph] = useState('{"nodes":[],"edges":[]}');
   const [participantUnknownBacklinks, setParticipantUnknownBacklinks] = useState([]);
-  const [participantRoadmapPositionGraph, setParticipantRoadmapPositionGraph] = useState('{"nodes":[],"edges":[]}');
-  const [participantPositionUnknownBacklinks, setParticipantPositionUnknownBacklinks] = useState([]);
   const [myReflections, setMyReflections] = useState([]);
   const [reflectionDraft, setReflectionDraft] = useState('');
   const [reflectionSaving, setReflectionSaving] = useState(false);
@@ -305,31 +302,16 @@ export default function Page() {
     if (res.ok) setParticipantRoadmapPositions((await res.json()).items || []);
   }
 
-  async function loadParticipantRoadmapCategories(positionId) {
-    if (!positionId) return setParticipantRoadmapCategories([]);
-    const res = await fetch(`${apiBase}/participant/roadmap/categories?position_id=${positionId}`, { credentials: 'include' });
-    if (res.ok) setParticipantRoadmapCategories((await res.json()).items || []);
-  }
-
-  async function loadParticipantCategoryGraph(categoryId) {
-    if (!categoryId) return setParticipantRoadmapGraph('{"nodes":[],"edges":[]}');
-    const res = await fetch(`${apiBase}/participant/roadmap/graph?category_id=${categoryId}`, { credentials: 'include' });
+  async function loadParticipantRoadmapGraph(positionId='', mode='material') {
+    const p = new URLSearchParams();
+    if (positionId) p.set('position_id', positionId);
+    if (mode) p.set('mode', mode);
+    const qs = p.toString() ? `?${p.toString()}` : '';
+    const res = await fetch(`${apiBase}/participant/roadmap/materials-graph${qs}`, { credentials: 'include' });
     if (res.ok) {
       const d = await res.json();
       setParticipantRoadmapGraph(d.graph_json || '{"nodes":[],"edges":[]}');
       setParticipantUnknownBacklinks(d.unknown_backlinks || []);
-    }
-  }
-
-  async function loadParticipantPositionGraph(positionId, categoryIds = []) {
-    if (!positionId) return setParticipantRoadmapPositionGraph('{"nodes":[],"edges":[]}');
-    const qs = new URLSearchParams({ position_id: String(positionId) });
-    if (categoryIds.length) qs.set('category_ids', categoryIds.join(','));
-    const res = await fetch(`${apiBase}/participant/roadmap/position-graph?${qs.toString()}`, { credentials: 'include' });
-    if (res.ok) {
-      const d = await res.json();
-      setParticipantRoadmapPositionGraph(d.graph_json || '{"nodes":[],"edges":[]}');
-      setParticipantPositionUnknownBacklinks(d.unknown_backlinks || []);
     }
   }
 
@@ -384,6 +366,7 @@ export default function Page() {
       if (refRes.ok) setMyReflections((await refRes.json()).items || []);
     } else if (section === 'roadmap') {
       await loadParticipantRoadmapPositions();
+      await loadParticipantRoadmapGraph(participantRoadmapFilter.position_id || '', participantRoadmapFilter.mode || 'material');
     }
   }
 
@@ -1784,6 +1767,7 @@ export default function Page() {
         ['profil', '👤', 'Profil'],
         ['catatan', '📝', 'Catatan'],
         ['materi', '📚', 'Materi'],
+        ['roadmap', '🕸️', 'Roadmap'],
         ['quiz', '🧠', 'Quiz & Tryout'],
         ['redeem', '🎁', 'Redeem'],
         ['poin', '💰', 'Poin'],
@@ -2723,62 +2707,36 @@ export default function Page() {
               </div>
             )}
 
-            {/* ── Roadmap (Participant Read-Only) ── */}
-            {false && (
+            {/* ── Roadmap (Participant) ── */}
+            {participantSection === 'roadmap' && (
               <>
-                <Section title="🧭 Roadmap Jabatan">
+                <Section title="🕸️ Roadmap Materi">
                   <div style={{ display:'grid', gap:10 }}>
-                    <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(240px,1fr))' }}>
+                    <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))' }}>
                       <select className="nk-input-sm" value={participantRoadmapFilter.position_id} onChange={async e => {
                         const v = e.target.value;
-                        setParticipantRoadmapFilter({ position_id: v, category_id: '', category_ids: [] });
-                        setParticipantRoadmapCategories([]);
-                        await loadParticipantRoadmapCategories(v);
-                        await loadParticipantPositionGraph(v, []);
+                        setParticipantRoadmapFilter(f => ({ ...f, position_id: v }));
+                        await loadParticipantRoadmapGraph(v, participantRoadmapFilter.mode || 'material');
                       }}>
-                        <option value="">Pilih jabatan</option>
-                        {participantRoadmapPositions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        <option value="">Semua jabatan</option>
+                        {participantRoadmapPositions.map(p => <option key={p.id} value={p.id}>{p.code} • {p.name}</option>)}
                       </select>
-                      <select className="nk-input-sm" value={participantRoadmapFilter.category_id} onChange={async e => {
-                        const v = e.target.value;
-                        setParticipantRoadmapFilter(f => ({ ...f, category_id: v }));
-                        await loadParticipantCategoryGraph(v);
-                      }} disabled={!participantRoadmapFilter.position_id}>
-                        <option value="">Pilih kategori</option>
-                        {participantRoadmapCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      <select className="nk-input-sm" value={participantRoadmapFilter.mode || 'material'} onChange={async e => {
+                        const mode = e.target.value;
+                        setParticipantRoadmapFilter(f => ({ ...f, mode }));
+                        await loadParticipantRoadmapGraph(participantRoadmapFilter.position_id || '', mode);
+                      }}>
+                        <option value="material">Mode: Materi</option>
+                        <option value="competency">Mode: Kompetensi</option>
                       </select>
+                      <button className="nk-input-sm" onClick={() => loadParticipantRoadmapGraph(participantRoadmapFilter.position_id || '', participantRoadmapFilter.mode || 'material')}>🔄 Refresh Graph</button>
                     </div>
 
                     <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
-                      <div style={{ fontWeight:700, marginBottom:8 }}>Graph Kategori</div>
+                      <div style={{ fontWeight:700, marginBottom:8 }}>Graph Materi (Backlink)</div>
                       {(() => { const g = parseRoadmapGraph(participantRoadmapGraph); return g.error ? <div className="nk-empty" style={{ margin:0 }}>{g.error}</div> : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={() => {}} />; })()}
                       {participantUnknownBacklinks.length > 0 && (
-                        <div className="nk-empty" style={{ marginTop:8, color:'#fbbf24' }}>⚠️ Referensi belum ditemukan: {participantUnknownBacklinks.slice(0,6).join(', ')}{participantUnknownBacklinks.length > 6 ? ` (+${participantUnknownBacklinks.length - 6})` : ''}</div>
-                      )}
-                    </div>
-
-                    <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
-                      <div style={{ fontWeight:700, marginBottom:8 }}>Graph Jabatan (Gabungan)</div>
-                      <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom: 10 }}>
-                        {participantRoadmapCategories.map(c => {
-                          const checked = participantRoadmapFilter.category_ids.includes(c.id);
-                          return (
-                            <label key={c.id} style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:'#cbd5e1', border:'1px solid #1e2d45', borderRadius:8, padding:'4px 8px' }}>
-                              <input type="checkbox" checked={checked} onChange={async e => {
-                                const next = e.target.checked
-                                  ? [...participantRoadmapFilter.category_ids, c.id]
-                                  : participantRoadmapFilter.category_ids.filter(x => x !== c.id);
-                                setParticipantRoadmapFilter(f => ({ ...f, category_ids: next }));
-                                await loadParticipantPositionGraph(participantRoadmapFilter.position_id, next);
-                              }} />
-                              {c.name}
-                            </label>
-                          );
-                        })}
-                      </div>
-                      {(() => { const g = parseRoadmapGraph(participantRoadmapPositionGraph); return g.error ? <div className="nk-empty" style={{ margin:0 }}>{g.error}</div> : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={() => {}} />; })()}
-                      {participantPositionUnknownBacklinks.length > 0 && (
-                        <div className="nk-empty" style={{ marginTop:8, color:'#fbbf24' }}>⚠️ Referensi belum ditemukan: {participantPositionUnknownBacklinks.slice(0,8).join(', ')}{participantPositionUnknownBacklinks.length > 8 ? ` (+${participantPositionUnknownBacklinks.length - 8})` : ''}</div>
+                        <div className="nk-empty" style={{ marginTop:8, color:'#fbbf24' }}>⚠️ Referensi belum ditemukan: {participantUnknownBacklinks.slice(0,8).join(', ')}{participantUnknownBacklinks.length > 8 ? ` (+${participantUnknownBacklinks.length - 8})` : ''}</div>
                       )}
                     </div>
                   </div>
