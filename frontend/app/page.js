@@ -104,6 +104,8 @@ export default function Page() {
   const [roadmapCompetencies, setRoadmapCompetencies] = useState([]);
   const [roadmapCoreCompetencies, setRoadmapCoreCompetencies] = useState([]);
   const [coreCompetencyForm, setCoreCompetencyForm] = useState({ id: 0, position_id: '', code: '', name: '', description: '', is_active: true });
+  const [roadmapLeadershipCompetencies, setRoadmapLeadershipCompetencies] = useState([]);
+  const [leadershipCompetencyForm, setLeadershipCompetencyForm] = useState({ id: 0, position_id: '', code: '', name: '', description: '', is_active: true });
   const [roadmapMaterials, setRoadmapMaterials] = useState([]);
   const [materialForm, setMaterialForm] = useState({ id: 0, competency_id: '', title: '', content: '', is_active: true });
   const [materialLinkSuggestions, setMaterialLinkSuggestions] = useState([]);
@@ -688,6 +690,46 @@ export default function Page() {
     if (coreCompetencyForm.position_id) await loadRoadmapCoreCompetencies(Number(coreCompetencyForm.position_id));
   }
 
+  async function loadRoadmapLeadershipCompetencies(positionId) {
+    const qs = positionId ? `?position_id=${positionId}` : '';
+    const res = await fetch(`${apiBase}/admin/roadmap/leadership-competencies${qs}`, { credentials: 'include' });
+    if (res.ok) setRoadmapLeadershipCompetencies((await res.json()).items || []);
+  }
+
+  async function saveRoadmapLeadershipCompetency() {
+    if (!leadershipCompetencyForm.position_id) return showMsg('Jabatan wajib dipilih', 'error');
+    if (!(leadershipCompetencyForm.code || '').trim()) return showMsg('Kode kompetensi kepemimpinan wajib diisi', 'error');
+    if (!(leadershipCompetencyForm.name || '').trim()) return showMsg('Nama kompetensi kepemimpinan wajib diisi', 'error');
+    const res = await fetch(`${apiBase}/admin/roadmap/leadership-competencies`, {
+      method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        id: Number(leadershipCompetencyForm.id) || 0,
+        position_id: Number(leadershipCompetencyForm.position_id),
+        code: (leadershipCompetencyForm.code || '').trim().toUpperCase(),
+        name: (leadershipCompetencyForm.name || '').trim(),
+        description: leadershipCompetencyForm.description || '',
+        is_active: !!leadershipCompetencyForm.is_active,
+      })
+    });
+    const d = await res.json().catch(()=>({}));
+    if (!res.ok) return showMsg(d.error || 'Gagal simpan kompetensi kepemimpinan', 'error');
+    showMsg('Kompetensi kepemimpinan tersimpan ✅', 'success');
+    const keepPosition = leadershipCompetencyForm.position_id;
+    setLeadershipCompetencyForm({ id: 0, position_id: keepPosition, code: '', name: '', description: '', is_active: true });
+    await loadRoadmapLeadershipCompetencies(Number(keepPosition));
+  }
+
+  async function deleteRoadmapLeadershipCompetency(id) {
+    if (!confirm('Hapus kompetensi kepemimpinan ini?')) return;
+    const res = await fetch(`${apiBase}/admin/roadmap/leadership-competencies`, {
+      method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'delete', id })
+    });
+    const d = await res.json().catch(()=>({}));
+    if (!res.ok) return showMsg(d.error || 'Gagal hapus kompetensi kepemimpinan', 'error');
+    showMsg('Kompetensi kepemimpinan dihapus ✅', 'success');
+    if (leadershipCompetencyForm.position_id) await loadRoadmapLeadershipCompetencies(Number(leadershipCompetencyForm.position_id));
+  }
+
   async function saveRoadmapCompetency() {
     if (!competencyForm.position_id) return showMsg('Jabatan wajib dipilih', 'error');
     if (!(competencyForm.code || '').trim()) return showMsg('Kode kompetensi wajib diisi', 'error');
@@ -1042,16 +1084,18 @@ export default function Page() {
     } else if (section === 'kontribusi') {
       await refreshAdminContributions();
     } else if (section === 'roadmap') {
-      const [pRes, kRes, ckRes, mRes, gRes] = await Promise.all([
+      const [pRes, kRes, ckRes, lkRes, mRes, gRes] = await Promise.all([
         fetch(`${apiBase}/admin/roadmap/positions`, { credentials: 'include' }),
         fetch(`${apiBase}/admin/roadmap/competencies`, { credentials: 'include' }),
         fetch(`${apiBase}/admin/roadmap/core-competencies`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/roadmap/leadership-competencies`, { credentials: 'include' }),
         fetch(`${apiBase}/admin/roadmap/materials`, { credentials: 'include' }),
         fetch(`${apiBase}/admin/roadmap/materials-graph`, { credentials: 'include' }),
       ]);
       if (pRes.ok) setRoadmapPositions((await pRes.json()).items || []);
       if (kRes.ok) setRoadmapCompetencies((await kRes.json()).items || []);
       if (ckRes.ok) setRoadmapCoreCompetencies((await ckRes.json()).items || []);
+      if (lkRes.ok) setRoadmapLeadershipCompetencies((await lkRes.json()).items || []);
       if (mRes.ok) setRoadmapMaterials((await mRes.json()).items || []);
       if (gRes.ok) {
         const gd = await gRes.json();
@@ -4429,6 +4473,7 @@ export default function Page() {
                       <button onClick={() => setRoadmapMenu('positions')} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'positions' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'positions' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'positions' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>👔 Jabatan</button>
                       <button onClick={async () => { setRoadmapMenu('competencies'); await loadRoadmapCompetencies(competencyForm.position_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'competencies' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'competencies' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'competencies' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>🛠️ Kompetensi Teknis</button>
                       <button onClick={async () => { setRoadmapMenu('core-competencies'); await loadRoadmapCoreCompetencies(coreCompetencyForm.position_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'core-competencies' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'core-competencies' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'core-competencies' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>🧠 Kompetensi Inti</button>
+                      <button onClick={async () => { setRoadmapMenu('leadership-competencies'); await loadRoadmapLeadershipCompetencies(leadershipCompetencyForm.position_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'leadership-competencies' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'leadership-competencies' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'leadership-competencies' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>👑 Kompetensi Kepemimpinan</button>
                       <button onClick={async () => { setRoadmapMenu('materials'); await loadRoadmapMaterials(materialForm.competency_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'materials' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'materials' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'materials' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>📘 Materi</button>
                       <button onClick={async () => { setRoadmapMenu('graph'); await loadRoadmapMaterialGraph(materialGraphFilter.position_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'graph' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'graph' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'graph' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>🕸️ Graph</button>
                     </div>
@@ -4551,6 +4596,44 @@ export default function Page() {
                               </tr>
                             ))}
                             {roadmapCoreCompetencies.length === 0 && <tr><td colSpan={6} className="nk-empty">Belum ada kompetensi inti.</td></tr>}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>}
+
+                    {roadmapMenu === 'leadership-competencies' && <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12, marginTop: 2 }}>
+                      <div style={{ fontWeight:700, marginBottom:8 }}>Kompetensi Kepemimpinan per Jabatan</div>
+                      <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))' }}>
+                        <select className="nk-input-sm" value={leadershipCompetencyForm.position_id} onChange={async e => { const v=e.target.value; setLeadershipCompetencyForm(f => ({ ...f, position_id: v })); await loadRoadmapLeadershipCompetencies(v); }}>
+                          <option value="">Pilih jabatan</option>
+                          {roadmapPositions.map(p => <option key={p.id} value={p.id}>{p.code} • {p.name}</option>)}
+                        </select>
+                        <input className="nk-input-sm" placeholder="Kode kompetensi kepemimpinan" value={leadershipCompetencyForm.code} onChange={e => setLeadershipCompetencyForm(f => ({ ...f, code: e.target.value }))} />
+                        <input className="nk-input-sm" placeholder="Nama kompetensi kepemimpinan" value={leadershipCompetencyForm.name} onChange={e => setLeadershipCompetencyForm(f => ({ ...f, name: e.target.value }))} />
+                        <textarea className="nk-input-sm" placeholder="Deskripsi kompetensi kepemimpinan" value={leadershipCompetencyForm.description} onChange={e => setLeadershipCompetencyForm(f => ({ ...f, description: e.target.value }))} style={{ minHeight: 70, gridColumn:'1 / -1' }} />
+                        <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'space-between', gap:8, flexWrap:'wrap' }}>
+                          <BtnSm onClick={() => setLeadershipCompetencyForm(f => ({ ...f, id:0, code:'', name:'', description:'' }))}>Reset</BtnSm>
+                          <BtnSm color="purple" onClick={saveRoadmapLeadershipCompetency}>💾 Simpan Kompetensi Kepemimpinan</BtnSm>
+                        </div>
+                      </div>
+                      <div className="nk-table-wrap" style={{ marginTop: 12 }}>
+                        <table className="nk-table">
+                          <thead><tr><th>Jabatan</th><th>Kode</th><th>Nama</th><th>Deskripsi</th><th>Update</th><th>Aksi</th></tr></thead>
+                          <tbody>
+                            {roadmapLeadershipCompetencies.map(c => (
+                              <tr key={c.id}>
+                                <td>{roadmapPositions.find(p => String(p.id) === String(c.position_id))?.name || `#${c.position_id}`}</td>
+                                <td style={{ fontWeight:700 }}>{c.code}</td>
+                                <td>{c.name}</td>
+                                <td style={{ maxWidth: 320, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{c.description || '-'}</td>
+                                <td style={{ fontSize:12, color:'#94a3b8' }}>{c.updated_at ? new Date(c.updated_at).toLocaleString('id-ID') : '-'}</td>
+                                <td style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                                  <BtnSm onClick={() => setLeadershipCompetencyForm({ id:c.id, position_id:String(c.position_id), code:c.code || '', name:c.name || '', description:c.description || '', is_active: !!c.is_active })}>Edit</BtnSm>
+                                  <BtnSm danger onClick={() => deleteRoadmapLeadershipCompetency(c.id)}>Hapus</BtnSm>
+                                </td>
+                              </tr>
+                            ))}
+                            {roadmapLeadershipCompetencies.length === 0 && <tr><td colSpan={6} className="nk-empty">Belum ada kompetensi kepemimpinan.</td></tr>}
                           </tbody>
                         </table>
                       </div>
