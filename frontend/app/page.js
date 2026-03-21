@@ -62,6 +62,11 @@ export default function Page() {
   const [redeemClaimNote, setRedeemClaimNote] = useState('');
   // Materi
   const [myMaterials, setMyMaterials] = useState([]);
+  const [participantRoadmapPositions, setParticipantRoadmapPositions] = useState([]);
+  const [participantRoadmapCategories, setParticipantRoadmapCategories] = useState([]);
+  const [participantRoadmapFilter, setParticipantRoadmapFilter] = useState({ position_id: '', category_id: '', category_ids: [] });
+  const [participantRoadmapGraph, setParticipantRoadmapGraph] = useState('{"nodes":[],"edges":[]}');
+  const [participantRoadmapPositionGraph, setParticipantRoadmapPositionGraph] = useState('{"nodes":[],"edges":[]}');
   const [myReflections, setMyReflections] = useState([]);
   const [reflectionDraft, setReflectionDraft] = useState('');
   const [reflectionSaving, setReflectionSaving] = useState(false);
@@ -270,6 +275,31 @@ export default function Page() {
   // ── LAZY: load data per section saat dikunjungi ──────────────────────────────
   const [loadedSections, setLoadedSections] = useState({});
 
+  async function loadParticipantRoadmapPositions() {
+    const res = await fetch(`${apiBase}/participant/roadmap/positions`, { credentials: 'include' });
+    if (res.ok) setParticipantRoadmapPositions((await res.json()).items || []);
+  }
+
+  async function loadParticipantRoadmapCategories(positionId) {
+    if (!positionId) return setParticipantRoadmapCategories([]);
+    const res = await fetch(`${apiBase}/participant/roadmap/categories?position_id=${positionId}`, { credentials: 'include' });
+    if (res.ok) setParticipantRoadmapCategories((await res.json()).items || []);
+  }
+
+  async function loadParticipantCategoryGraph(categoryId) {
+    if (!categoryId) return setParticipantRoadmapGraph('{"nodes":[],"edges":[]}');
+    const res = await fetch(`${apiBase}/participant/roadmap/graph?category_id=${categoryId}`, { credentials: 'include' });
+    if (res.ok) setParticipantRoadmapGraph((await res.json()).graph_json || '{"nodes":[],"edges":[]}');
+  }
+
+  async function loadParticipantPositionGraph(positionId, categoryIds = []) {
+    if (!positionId) return setParticipantRoadmapPositionGraph('{"nodes":[],"edges":[]}');
+    const qs = new URLSearchParams({ position_id: String(positionId) });
+    if (categoryIds.length) qs.set('category_ids', categoryIds.join(','));
+    const res = await fetch(`${apiBase}/participant/roadmap/position-graph?${qs.toString()}`, { credentials: 'include' });
+    if (res.ok) setParticipantRoadmapPositionGraph((await res.json()).graph_json || '{"nodes":[],"edges":[]}');
+  }
+
   async function loadSection(section) {
     if (loadedSections[section]) return;
     setLoadedSections(prev => ({...prev, [section]: true}));
@@ -307,6 +337,8 @@ export default function Page() {
         fetch(`${apiBase}/participant/reflections`, { credentials: 'include' }),
       ]);
       if (refRes.ok) setMyReflections((await refRes.json()).items || []);
+    } else if (section === 'roadmap') {
+      await loadParticipantRoadmapPositions();
     }
   }
 
@@ -1275,6 +1307,7 @@ export default function Page() {
         ['profil', '👤', 'Profil'],
         ['catatan', '📝', 'Catatan'],
         ['materi', '📚', 'Materi'],
+        ['roadmap', '🧭', 'Roadmap'],
         ['quiz', '🧠', 'Quiz & Tryout'],
         ['redeem', '🎁', 'Redeem'],
         ['poin', '💰', 'Poin'],
@@ -2212,6 +2245,63 @@ export default function Page() {
                   <div className="nk-empty">🕸️ Belum ada catatan untuk ditampilkan di graph.</div>
                 )}
               </div>
+            )}
+
+            {/* ── Roadmap (Participant Read-Only) ── */}
+            {participantSection === 'roadmap' && (
+              <>
+                <Section title="🧭 Roadmap Jabatan">
+                  <div style={{ display:'grid', gap:10 }}>
+                    <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(240px,1fr))' }}>
+                      <select className="nk-input-sm" value={participantRoadmapFilter.position_id} onChange={async e => {
+                        const v = e.target.value;
+                        setParticipantRoadmapFilter({ position_id: v, category_id: '', category_ids: [] });
+                        setParticipantRoadmapCategories([]);
+                        await loadParticipantRoadmapCategories(v);
+                        await loadParticipantPositionGraph(v, []);
+                      }}>
+                        <option value="">Pilih jabatan</option>
+                        {participantRoadmapPositions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                      <select className="nk-input-sm" value={participantRoadmapFilter.category_id} onChange={async e => {
+                        const v = e.target.value;
+                        setParticipantRoadmapFilter(f => ({ ...f, category_id: v }));
+                        await loadParticipantCategoryGraph(v);
+                      }} disabled={!participantRoadmapFilter.position_id}>
+                        <option value="">Pilih kategori</option>
+                        {participantRoadmapCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+
+                    <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
+                      <div style={{ fontWeight:700, marginBottom:8 }}>Graph Kategori</div>
+                      {(() => { const g = parseRoadmapGraph(participantRoadmapGraph); return g.error ? <div className="nk-empty" style={{ margin:0 }}>{g.error}</div> : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={() => {}} />; })()}
+                    </div>
+
+                    <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
+                      <div style={{ fontWeight:700, marginBottom:8 }}>Graph Jabatan (Gabungan)</div>
+                      <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom: 10 }}>
+                        {participantRoadmapCategories.map(c => {
+                          const checked = participantRoadmapFilter.category_ids.includes(c.id);
+                          return (
+                            <label key={c.id} style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:'#cbd5e1', border:'1px solid #1e2d45', borderRadius:8, padding:'4px 8px' }}>
+                              <input type="checkbox" checked={checked} onChange={async e => {
+                                const next = e.target.checked
+                                  ? [...participantRoadmapFilter.category_ids, c.id]
+                                  : participantRoadmapFilter.category_ids.filter(x => x !== c.id);
+                                setParticipantRoadmapFilter(f => ({ ...f, category_ids: next }));
+                                await loadParticipantPositionGraph(participantRoadmapFilter.position_id, next);
+                              }} />
+                              {c.name}
+                            </label>
+                          );
+                        })}
+                      </div>
+                      {(() => { const g = parseRoadmapGraph(participantRoadmapPositionGraph); return g.error ? <div className="nk-empty" style={{ margin:0 }}>{g.error}</div> : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={() => {}} />; })()}
+                    </div>
+                  </div>
+                </Section>
+              </>
             )}
 
             {/* ── Quiz & Tryout ── */}

@@ -246,6 +246,10 @@ func main() {
 	mux.HandleFunc("/admin/roadmap/notes", a.handleAdminRoadmapNotes)
 	mux.HandleFunc("/admin/roadmap/graph", a.handleAdminRoadmapGraph)
 	mux.HandleFunc("/admin/roadmap/position-graph", a.handleAdminRoadmapPositionGraph)
+	mux.HandleFunc("/participant/roadmap/positions", a.handleParticipantRoadmapPositions)
+	mux.HandleFunc("/participant/roadmap/categories", a.handleParticipantRoadmapCategories)
+	mux.HandleFunc("/participant/roadmap/graph", a.handleParticipantRoadmapGraph)
+	mux.HandleFunc("/participant/roadmap/position-graph", a.handleParticipantRoadmapPositionGraph)
 	mux.HandleFunc("/admin/tryout-configs", a.handleAdminTryoutConfigs)
 	mux.HandleFunc("/participant/materials", a.handleParticipantMaterials)
 	mux.HandleFunc("/participant/materials/complete", a.handleParticipantMaterialComplete)
@@ -7793,6 +7797,100 @@ func (a *app) handleAdminRoadmapPositionGraph(w http.ResponseWriter, r *http.Req
 	}
 	graph, nCount, eCount := buildGraphFromRoadmapNotes(notes, "p")
 	writeJSON(w,http.StatusOK,map[string]any{"ok": true, "graph_json": graph, "nodes": nCount, "edges": eCount})
+}
+
+func (a *app) participantRoadmapGroupID(ctx context.Context, u authUser) int64 {
+	if u.Role == "super_admin" { return 0 }
+	var gid sql.NullInt64
+	_ = a.db.QueryRowContext(ctx, `SELECT group_id FROM participant_profiles WHERE user_id=$1`, u.ID).Scan(&gid)
+	if gid.Valid { return gid.Int64 }
+	return -1
+}
+
+func (a *app) handleParticipantRoadmapPositions(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant", "admin", "super_admin")
+	if err != nil { writeJSON(w,http.StatusUnauthorized,map[string]string{"error":"unauthorized"}); return }
+	if r.Method != http.MethodGet { writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"}); return }
+	gid := a.participantRoadmapGroupID(r.Context(), u)
+	q := `SELECT id,name,description FROM roadmap_positions WHERE is_active=TRUE`
+	args := []any{}
+	if gid > 0 { q += ` AND COALESCE(group_id,0) IN (0,$1)`; args = append(args, gid) }
+	q += ` ORDER BY name ASC`
+	rows, err := a.db.QueryContext(r.Context(), q, args...)
+	if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"db error"}); return }
+	defer rows.Close()
+	items := []map[string]any{}
+	for rows.Next() { var id int64; var n,d string; if rows.Scan(&id,&n,&d)==nil { items=append(items,map[string]any{"id":id,"name":n,"description":d}) }}
+	writeJSON(w,http.StatusOK,map[string]any{"items":items})
+}
+
+func (a *app) handleParticipantRoadmapCategories(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant", "admin", "super_admin")
+	if err != nil { writeJSON(w,http.StatusUnauthorized,map[string]string{"error":"unauthorized"}); return }
+	if r.Method != http.MethodGet { writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"}); return }
+	positionID, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("position_id")),10,64)
+	if positionID <= 0 { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"position_id wajib"}); return }
+	if u.Role != "super_admin" {
+		adminLike := authUser{ID:u.ID, Role:u.Role}
+		if !a.canAccessRoadmapPosition(r.Context(), adminLike, positionID) { writeJSON(w,http.StatusForbidden,map[string]string{"error":"posisi tidak dapat diakses"}); return }
+	}
+	rows, err := a.db.QueryContext(r.Context(), `SELECT id,name,description,order_no FROM roadmap_categories WHERE position_id=$1 AND is_active=TRUE ORDER BY order_no ASC,name ASC`, positionID)
+	if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"db error"}); return }
+	defer rows.Close()
+	items := []map[string]any{}
+	for rows.Next() { var id int64; var n,d string; var o int; if rows.Scan(&id,&n,&d,&o)==nil { items=append(items,map[string]any{"id":id,"name":n,"description":d,"order_no":o}) }}
+	writeJSON(w,http.StatusOK,map[string]any{"items":items})
+}
+
+func (a *app) handleParticipantRoadmapGraph(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant", "admin", "super_admin")
+	if err != nil { writeJSON(w,http.StatusUnauthorized,map[string]string{"error":"unauthorized"}); return }
+	if r.Method != http.MethodGet { writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"}); return }
+	categoryID, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("category_id")),10,64)
+	if categoryID <= 0 { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"category_id wajib"}); return }
+	var positionID int64
+	_ = a.db.QueryRowContext(r.Context(), `SELECT position_id FROM roadmap_categories WHERE id=$1`, categoryID).Scan(&positionID)
+	if u.Role != "super_admin" {
+		adminLike := authUser{ID:u.ID, Role:u.Role}
+		if !a.canAccessRoadmapPosition(r.Context(), adminLike, positionID) { writeJSON(w,http.StatusForbidden,map[string]string{"error":"kategori tidak dapat diakses"}); return }
+	}
+	rows, err := a.db.QueryContext(r.Context(), `SELECT id,title,content FROM roadmap_notes WHERE category_id=$1 ORDER BY id ASC`, categoryID)
+	if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"db error"}); return }
+	defer rows.Close()
+	notes := []struct{ ID int64; Title, Content string }{}
+	for rows.Next() { var x struct{ ID int64; Title, Content string }; if rows.Scan(&x.ID,&x.Title,&x.Content)==nil { notes=append(notes,x) } }
+	graph, nCount, eCount := buildGraphFromRoadmapNotes(notes, "n")
+	writeJSON(w,http.StatusOK,map[string]any{"ok":true,"graph_json":graph,"nodes":nCount,"edges":eCount})
+}
+
+func (a *app) handleParticipantRoadmapPositionGraph(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant", "admin", "super_admin")
+	if err != nil { writeJSON(w,http.StatusUnauthorized,map[string]string{"error":"unauthorized"}); return }
+	if r.Method != http.MethodGet { writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"}); return }
+	positionID, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("position_id")),10,64)
+	if positionID <= 0 { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"position_id wajib"}); return }
+	if u.Role != "super_admin" {
+		adminLike := authUser{ID:u.ID, Role:u.Role}
+		if !a.canAccessRoadmapPosition(r.Context(), adminLike, positionID) { writeJSON(w,http.StatusForbidden,map[string]string{"error":"posisi tidak dapat diakses"}); return }
+	}
+	catIDsRaw := strings.TrimSpace(r.URL.Query().Get("category_ids"))
+	catIDs := []int64{}
+	if catIDsRaw != "" { for _, s := range strings.Split(catIDsRaw, ",") { v,_ := strconv.ParseInt(strings.TrimSpace(s),10,64); if v>0 { catIDs=append(catIDs,v) } } }
+	q := `SELECT rn.id,rn.title,rn.content FROM roadmap_notes rn JOIN roadmap_categories rc ON rc.id=rn.category_id WHERE rc.position_id=$1 AND rc.is_active=TRUE`
+	args := []any{positionID}
+	if len(catIDs)>0 {
+		ph:=[]string{}
+		for i,id := range catIDs { args=append(args,id); ph=append(ph, fmt.Sprintf("$%d", i+2)) }
+		q += ` AND rn.category_id IN (` + strings.Join(ph, ",") + `)`
+	}
+	q += ` ORDER BY rn.id ASC`
+	rows, err := a.db.QueryContext(r.Context(), q, args...)
+	if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"db error"}); return }
+	defer rows.Close()
+	notes := []struct{ ID int64; Title, Content string }{}
+	for rows.Next() { var x struct{ ID int64; Title, Content string }; if rows.Scan(&x.ID,&x.Title,&x.Content)==nil { notes=append(notes,x) } }
+	graph, nCount, eCount := buildGraphFromRoadmapNotes(notes, "p")
+	writeJSON(w,http.StatusOK,map[string]any{"ok":true,"graph_json":graph,"nodes":nCount,"edges":eCount})
 }
 
 // ── Refleksi: Agregat Admin ─────────────────────────────────────────────────
