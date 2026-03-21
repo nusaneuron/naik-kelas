@@ -7765,7 +7765,7 @@ func (a *app) handleAdminRoadmapNotes(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"})
 }
 
-func buildGraphFromRoadmapNotes(notes []struct{ ID int64; Title, Content string }, idPrefix string) (string, int, int) {
+func buildGraphFromRoadmapNotes(notes []struct{ ID int64; Title, Content string }, idPrefix string) (string, int, int, []string) {
 	titleToID := map[string]string{}
 	for _, x := range notes {
 		titleToID[strings.ToLower(strings.TrimSpace(x.Title))] = fmt.Sprintf("%s%d", idPrefix, x.ID)
@@ -7773,21 +7773,29 @@ func buildGraphFromRoadmapNotes(notes []struct{ ID int64; Title, Content string 
 	nodes := []map[string]any{}
 	edges := []map[string]any{}
 	seen := map[string]bool{}
+	unknownSet := map[string]bool{}
 	for _, x := range notes {
 		sid := fmt.Sprintf("%s%d", idPrefix, x.ID)
 		nodes = append(nodes, map[string]any{"id": sid, "label": x.Title})
 		for _, bk := range extractBacklinks(x.Content) {
-			if tid, ok := titleToID[strings.ToLower(strings.TrimSpace(bk))]; ok && tid != sid {
+			kTitle := strings.ToLower(strings.TrimSpace(bk))
+			if tid, ok := titleToID[kTitle]; ok && tid != sid {
 				k := sid + "->" + tid
 				if !seen[k] {
 					seen[k] = true
 					edges = append(edges, map[string]any{"source": sid, "target": tid})
 				}
+			} else if !ok {
+				unknownSet[strings.TrimSpace(bk)] = true
 			}
 		}
 	}
+	unknown := []string{}
+	for x := range unknownSet {
+		unknown = append(unknown, x)
+	}
 	buf, _ := json.Marshal(map[string]any{"nodes": nodes, "edges": edges})
-	return string(buf), len(nodes), len(edges)
+	return string(buf), len(nodes), len(edges), unknown
 }
 
 func (a *app) handleAdminRoadmapGraph(w http.ResponseWriter, r *http.Request) {
@@ -7810,8 +7818,8 @@ func (a *app) handleAdminRoadmapGraph(w http.ResponseWriter, r *http.Request) {
 		var x struct{ ID int64; Title, Content string }
 		if rows.Scan(&x.ID,&x.Title,&x.Content)==nil { notes = append(notes,x) }
 	}
-	graph, nCount, eCount := buildGraphFromRoadmapNotes(notes, "n")
-	writeJSON(w,http.StatusOK,map[string]any{"ok": true, "graph_json": graph, "nodes": nCount, "edges": eCount})
+	graph, nCount, eCount, unknown := buildGraphFromRoadmapNotes(notes, "n")
+	writeJSON(w,http.StatusOK,map[string]any{"ok": true, "graph_json": graph, "nodes": nCount, "edges": eCount, "unknown_backlinks": unknown})
 }
 
 func (a *app) handleAdminRoadmapPositionGraph(w http.ResponseWriter, r *http.Request) {
@@ -7852,8 +7860,8 @@ func (a *app) handleAdminRoadmapPositionGraph(w http.ResponseWriter, r *http.Req
 		var x struct{ ID int64; Title, Content string }
 		if rows.Scan(&x.ID,&x.Title,&x.Content)==nil { notes = append(notes,x) }
 	}
-	graph, nCount, eCount := buildGraphFromRoadmapNotes(notes, "p")
-	writeJSON(w,http.StatusOK,map[string]any{"ok": true, "graph_json": graph, "nodes": nCount, "edges": eCount})
+	graph, nCount, eCount, unknown := buildGraphFromRoadmapNotes(notes, "p")
+	writeJSON(w,http.StatusOK,map[string]any{"ok": true, "graph_json": graph, "nodes": nCount, "edges": eCount, "unknown_backlinks": unknown})
 }
 
 func (a *app) participantRoadmapGroupID(ctx context.Context, u authUser) int64 {
@@ -7916,8 +7924,8 @@ func (a *app) handleParticipantRoadmapGraph(w http.ResponseWriter, r *http.Reque
 	defer rows.Close()
 	notes := []struct{ ID int64; Title, Content string }{}
 	for rows.Next() { var x struct{ ID int64; Title, Content string }; if rows.Scan(&x.ID,&x.Title,&x.Content)==nil { notes=append(notes,x) } }
-	graph, nCount, eCount := buildGraphFromRoadmapNotes(notes, "n")
-	writeJSON(w,http.StatusOK,map[string]any{"ok":true,"graph_json":graph,"nodes":nCount,"edges":eCount})
+	graph, nCount, eCount, unknown := buildGraphFromRoadmapNotes(notes, "n")
+	writeJSON(w,http.StatusOK,map[string]any{"ok":true,"graph_json":graph,"nodes":nCount,"edges":eCount,"unknown_backlinks":unknown})
 }
 
 func (a *app) handleParticipantRoadmapPositionGraph(w http.ResponseWriter, r *http.Request) {
@@ -7946,8 +7954,8 @@ func (a *app) handleParticipantRoadmapPositionGraph(w http.ResponseWriter, r *ht
 	defer rows.Close()
 	notes := []struct{ ID int64; Title, Content string }{}
 	for rows.Next() { var x struct{ ID int64; Title, Content string }; if rows.Scan(&x.ID,&x.Title,&x.Content)==nil { notes=append(notes,x) } }
-	graph, nCount, eCount := buildGraphFromRoadmapNotes(notes, "p")
-	writeJSON(w,http.StatusOK,map[string]any{"ok":true,"graph_json":graph,"nodes":nCount,"edges":eCount})
+	graph, nCount, eCount, unknown := buildGraphFromRoadmapNotes(notes, "p")
+	writeJSON(w,http.StatusOK,map[string]any{"ok":true,"graph_json":graph,"nodes":nCount,"edges":eCount,"unknown_backlinks":unknown})
 }
 
 // ── Refleksi: Agregat Admin ─────────────────────────────────────────────────

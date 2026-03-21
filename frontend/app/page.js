@@ -66,7 +66,9 @@ export default function Page() {
   const [participantRoadmapCategories, setParticipantRoadmapCategories] = useState([]);
   const [participantRoadmapFilter, setParticipantRoadmapFilter] = useState({ position_id: '', category_id: '', category_ids: [] });
   const [participantRoadmapGraph, setParticipantRoadmapGraph] = useState('{"nodes":[],"edges":[]}');
+  const [participantUnknownBacklinks, setParticipantUnknownBacklinks] = useState([]);
   const [participantRoadmapPositionGraph, setParticipantRoadmapPositionGraph] = useState('{"nodes":[],"edges":[]}');
+  const [participantPositionUnknownBacklinks, setParticipantPositionUnknownBacklinks] = useState([]);
   const [myReflections, setMyReflections] = useState([]);
   const [reflectionDraft, setReflectionDraft] = useState('');
   const [reflectionSaving, setReflectionSaving] = useState(false);
@@ -91,7 +93,9 @@ export default function Page() {
   const [roadmapCategories, setRoadmapCategories] = useState([]);
   const [roadmapNotes, setRoadmapNotes] = useState([]);
   const [roadmapGraph, setRoadmapGraph] = useState('{"nodes":[],"edges":[]}');
+  const [roadmapUnknownBacklinks, setRoadmapUnknownBacklinks] = useState([]);
   const [positionGraph, setPositionGraph] = useState('{"nodes":[],"edges":[]}');
+  const [positionUnknownBacklinks, setPositionUnknownBacklinks] = useState([]);
   const [positionGraphFilter, setPositionGraphFilter] = useState({ position_id: '', category_ids: [] });
   const [positionForm, setPositionForm] = useState({ id: 0, name: '', description: '', group_id: '', is_active: true });
   const [categoryForm, setCategoryForm] = useState({ id: 0, position_id: '', name: '', description: '', order_no: 0, is_active: true });
@@ -289,7 +293,11 @@ export default function Page() {
   async function loadParticipantCategoryGraph(categoryId) {
     if (!categoryId) return setParticipantRoadmapGraph('{"nodes":[],"edges":[]}');
     const res = await fetch(`${apiBase}/participant/roadmap/graph?category_id=${categoryId}`, { credentials: 'include' });
-    if (res.ok) setParticipantRoadmapGraph((await res.json()).graph_json || '{"nodes":[],"edges":[]}');
+    if (res.ok) {
+      const d = await res.json();
+      setParticipantRoadmapGraph(d.graph_json || '{"nodes":[],"edges":[]}');
+      setParticipantUnknownBacklinks(d.unknown_backlinks || []);
+    }
   }
 
   async function loadParticipantPositionGraph(positionId, categoryIds = []) {
@@ -297,7 +305,11 @@ export default function Page() {
     const qs = new URLSearchParams({ position_id: String(positionId) });
     if (categoryIds.length) qs.set('category_ids', categoryIds.join(','));
     const res = await fetch(`${apiBase}/participant/roadmap/position-graph?${qs.toString()}`, { credentials: 'include' });
-    if (res.ok) setParticipantRoadmapPositionGraph((await res.json()).graph_json || '{"nodes":[],"edges":[]}');
+    if (res.ok) {
+      const d = await res.json();
+      setParticipantRoadmapPositionGraph(d.graph_json || '{"nodes":[],"edges":[]}');
+      setParticipantPositionUnknownBacklinks(d.unknown_backlinks || []);
+    }
   }
 
   async function loadSection(section) {
@@ -612,7 +624,11 @@ export default function Page() {
       fetch(`${apiBase}/admin/roadmap/graph?category_id=${categoryId}`, { credentials: 'include' }),
     ]);
     if (res.ok) setRoadmapNotes((await res.json()).items || []);
-    if (gRes.ok) setRoadmapGraph((await gRes.json()).graph_json || '{"nodes":[],"edges":[]}');
+    if (gRes.ok) {
+      const gd = await gRes.json();
+      setRoadmapGraph(gd.graph_json || '{"nodes":[],"edges":[]}');
+      setRoadmapUnknownBacklinks(gd.unknown_backlinks || []);
+    }
   }
 
   async function saveRoadmapNote() {
@@ -650,7 +666,11 @@ export default function Page() {
     const qs = new URLSearchParams({ position_id: String(positionId) });
     if (categoryIds.length) qs.set('category_ids', categoryIds.join(','));
     const res = await fetch(`${apiBase}/admin/roadmap/position-graph?${qs.toString()}`, { credentials: 'include' });
-    if (res.ok) setPositionGraph((await res.json()).graph_json || '{"nodes":[],"edges":[]}');
+    if (res.ok) {
+      const d = await res.json();
+      setPositionGraph(d.graph_json || '{"nodes":[],"edges":[]}');
+      setPositionUnknownBacklinks(d.unknown_backlinks || []);
+    }
   }
 
   async function loadAdmin() {
@@ -2289,6 +2309,9 @@ export default function Page() {
                     <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
                       <div style={{ fontWeight:700, marginBottom:8 }}>Graph Kategori</div>
                       {(() => { const g = parseRoadmapGraph(participantRoadmapGraph); return g.error ? <div className="nk-empty" style={{ margin:0 }}>{g.error}</div> : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={() => {}} />; })()}
+                      {participantUnknownBacklinks.length > 0 && (
+                        <div className="nk-empty" style={{ marginTop:8, color:'#fbbf24' }}>⚠️ Referensi belum ditemukan: {participantUnknownBacklinks.slice(0,6).join(', ')}{participantUnknownBacklinks.length > 6 ? ` (+${participantUnknownBacklinks.length - 6})` : ''}</div>
+                      )}
                     </div>
 
                     <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
@@ -2311,6 +2334,9 @@ export default function Page() {
                         })}
                       </div>
                       {(() => { const g = parseRoadmapGraph(participantRoadmapPositionGraph); return g.error ? <div className="nk-empty" style={{ margin:0 }}>{g.error}</div> : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={() => {}} />; })()}
+                      {participantPositionUnknownBacklinks.length > 0 && (
+                        <div className="nk-empty" style={{ marginTop:8, color:'#fbbf24' }}>⚠️ Referensi belum ditemukan: {participantPositionUnknownBacklinks.slice(0,8).join(', ')}{participantPositionUnknownBacklinks.length > 8 ? ` (+${participantPositionUnknownBacklinks.length - 8})` : ''}</div>
+                      )}
                     </div>
                   </div>
                 </Section>
@@ -4142,6 +4168,9 @@ export default function Page() {
                           return (
                             <div style={{ marginBottom: 10 }}>
                               {g.error ? <div className="nk-empty" style={{ margin:0, color:'#fca5a5' }}>{g.error}</div> : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={() => {}} />}
+                              {roadmapUnknownBacklinks.length > 0 && (
+                                <div className="nk-empty" style={{ marginTop:8, color:'#fbbf24' }}>⚠️ Backlink belum ketemu: {roadmapUnknownBacklinks.slice(0,6).join(', ')}{roadmapUnknownBacklinks.length > 6 ? ` (+${roadmapUnknownBacklinks.length - 6})` : ''}</div>
+                              )}
                             </div>
                           );
                         })()}
@@ -4215,6 +4244,9 @@ export default function Page() {
                               ? <div className="nk-empty" style={{ margin:0, color:'#fca5a5' }}>{g.error}</div>
                               : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={() => {}} />;
                           })()}
+                          {positionUnknownBacklinks.length > 0 && (
+                            <div className="nk-empty" style={{ marginTop:8, color:'#fbbf24' }}>⚠️ Backlink belum ketemu: {positionUnknownBacklinks.slice(0,8).join(', ')}{positionUnknownBacklinks.length > 8 ? ` (+${positionUnknownBacklinks.length - 8})` : ''}</div>
+                          )}
                         </div>
                       </div>
                     </div>
