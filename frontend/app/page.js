@@ -882,7 +882,22 @@ export default function Page() {
     const res = await fetch(`${apiBase}/admin/roadmap/materials-graph${qs}`, { credentials: 'include' });
     if (res.ok) {
       const d = await res.json();
-      setMaterialGraph(d.graph_json || '{"nodes":[],"edges":[]}');
+      let graphRaw = d.graph_json || '{"nodes":[],"edges":[]}';
+      // UI-side hard filter by selected position (fallback safety)
+      if (positionId) {
+        try {
+          const g = JSON.parse(graphRaw || '{"nodes":[],"edges":[]}');
+          const allowed = new Set(
+            roadmapMaterials
+              .filter(m => String(m.position_id) === String(positionId))
+              .map(m => String(m.id))
+          );
+          g.nodes = (g.nodes || []).filter(n => allowed.has(String(n.id)));
+          g.edges = (g.edges || []).filter(e => allowed.has(String(e.from)) && allowed.has(String(e.to)));
+          graphRaw = JSON.stringify(g);
+        } catch {}
+      }
+      setMaterialGraph(graphRaw);
       setMaterialUnknownBacklinks(d.unknown_backlinks || []);
     }
   }
