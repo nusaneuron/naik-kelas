@@ -548,6 +548,17 @@ export default function Page() {
     if (rf.ok) setAdminRoadmaps((await rf.json()).items || []);
   }
 
+  function parseRoadmapGraph(raw) {
+    try {
+      const x = JSON.parse(raw || '{"nodes":[],"edges":[]}');
+      const nodes = (x.nodes || []).map((n, idx) => ({ id: String(n.id ?? idx + 1), title: n.title || n.label || `Node ${idx + 1}` }));
+      const edges = (x.edges || []).map(e => ({ from: String(e.from ?? e.source ?? ''), to: String(e.to ?? e.target ?? '') })).filter(e => e.from && e.to);
+      return { nodes, edges, error: '' };
+    } catch {
+      return { nodes: [], edges: [], error: 'Format graph_json tidak valid (pastikan JSON benar).' };
+    }
+  }
+
   async function loadAdmin() {
     // Critical admin data — participants, categories, questions
     const [pRes, cRes, qRes] = await Promise.all([
@@ -3946,6 +3957,18 @@ export default function Page() {
                         <input className="nk-input-sm" placeholder="Judul roadmap" value={roadmapForm.title} onChange={e => setRoadmapForm(f => ({ ...f, title: e.target.value }))} />
                         <textarea className="nk-input-sm" placeholder="Deskripsi singkat" value={roadmapForm.description} onChange={e => setRoadmapForm(f => ({ ...f, description: e.target.value }))} style={{ minHeight: 74, gridColumn:'1 / span 2' }} />
                         <textarea className="nk-input-sm" placeholder='Graph JSON, contoh: {"nodes":[],"edges":[]}' value={roadmapForm.graph_json} onChange={e => setRoadmapForm(f => ({ ...f, graph_json: e.target.value }))} style={{ minHeight: 110, gridColumn:'1 / span 2', fontFamily:'monospace' }} />
+                        {(() => {
+                          const g = parseRoadmapGraph(roadmapForm.graph_json);
+                          return (
+                            <div style={{ gridColumn:'1 / span 2' }}>
+                              {g.error ? (
+                                <div className="nk-empty" style={{ marginBottom: 8, color: '#fca5a5' }}>⚠️ {g.error}</div>
+                              ) : (
+                                <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={() => {}} />
+                              )}
+                            </div>
+                          );
+                        })()}
                         <label style={{ display:'flex', alignItems:'center', gap:8, color:'#cbd5e1' }}><input type="checkbox" checked={!!roadmapForm.is_published} onChange={e => setRoadmapForm(f => ({ ...f, is_published: e.target.checked }))} /> Publish</label>
                         <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
                           <BtnSm onClick={() => setRoadmapForm({ id: 0, category_id: '', title: '', description: '', graph_json: '{"nodes":[],"edges":[]}', is_published: false })}>Reset</BtnSm>
@@ -4847,7 +4870,7 @@ function NoteGraph({ nodes, edges, onNodeClick }) {
 
     // Label di luar titik
     node.append('text')
-      .text(d => d.title)
+      .text(d => d.title || d.label || String(d.id))
       .attr('text-anchor', 'middle')
       .attr('dy', '-0.9em')
       .attr('fill', '#9a9ab0')
