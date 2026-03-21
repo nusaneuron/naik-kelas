@@ -107,7 +107,7 @@ export default function Page() {
   const [roadmapLeadershipCompetencies, setRoadmapLeadershipCompetencies] = useState([]);
   const [leadershipCompetencyForm, setLeadershipCompetencyForm] = useState({ id: 0, position_id: '', code: '', name: '', description: '', is_active: true });
   const [roadmapMaterials, setRoadmapMaterials] = useState([]);
-  const [materialForm, setMaterialForm] = useState({ id: 0, competency_id: '', title: '', content: '', brief: '', target_user: 'staff', learning_objectives: '', style: 'ringkas', is_active: true });
+  const [materialForm, setMaterialForm] = useState({ id: 0, competency_id: '', title: '', content: '', brief: '', bloom_level: 'C2', learning_objectives: '', style: 'ringkas', is_active: true });
   const [materialLinkSuggestions, setMaterialLinkSuggestions] = useState([]);
   const [materialLinkQuery, setMaterialLinkQuery] = useState('');
   const [materialSuggestionIndex, setMaterialSuggestionIndex] = useState(0);
@@ -782,7 +782,7 @@ export default function Page() {
           competency_id: Number(materialForm.competency_id || 0),
           title: (materialForm.title || '').trim(),
           brief: materialForm.brief || '',
-          target_user: materialForm.target_user || 'staff',
+          bloom_level: materialForm.bloom_level || 'C2',
           learning_objectives: materialForm.learning_objectives || '',
           style: materialForm.style || 'ringkas',
         })
@@ -810,6 +810,7 @@ export default function Page() {
         competency_id: Number(materialForm.competency_id),
         title: (materialForm.title || '').trim(),
         content: materialForm.content || '',
+        bloom_level: materialForm.bloom_level || 'C2',
         is_active: !!materialForm.is_active,
       })
     });
@@ -817,7 +818,7 @@ export default function Page() {
     if (!res.ok) return showMsg(d.error || 'Gagal simpan materi roadmap', 'error');
     showMsg('Materi roadmap tersimpan ✅', 'success');
     const keepComp = materialForm.competency_id;
-    setMaterialForm({ id: 0, competency_id: keepComp, title: '', content: '', brief: '', target_user: 'staff', learning_objectives: '', style: 'ringkas', is_active: true });
+    setMaterialForm({ id: 0, competency_id: keepComp, title: '', content: '', brief: '', bloom_level: 'C2', learning_objectives: '', style: 'ringkas', is_active: true });
     setMaterialLinkSuggestions([]); setMaterialLinkQuery('');
     await loadRoadmapMaterials(Number(keepComp));
   }
@@ -992,7 +993,7 @@ export default function Page() {
     const found = roadmapMaterials.find(m => String(m.id) === String(nodeId));
     if (!found) return showMsg('Materi dari node ini tidak ditemukan', 'error');
     setRoadmapMenu('materials');
-    setMaterialForm({ id: found.id, competency_id: String(found.competency_id || ''), title: found.title || '', content: found.content || '', brief: '', target_user: 'staff', learning_objectives: '', style: 'ringkas', is_active: !!found.is_active });
+    setMaterialForm({ id: found.id, competency_id: String(found.competency_id || ''), title: found.title || '', content: found.content || '', brief: '', bloom_level: found.bloom_level || 'C2', learning_objectives: '', style: 'ringkas', is_active: !!found.is_active });
     setPendingFocusMaterial(true);
     if (found.competency_id) await loadRoadmapMaterials(Number(found.competency_id));
     showMsg(`Membuka materi: ${found.title}`, 'success');
@@ -4761,10 +4762,13 @@ export default function Page() {
                         <input ref={materialTitleInputRef} className="nk-input-sm" placeholder="Judul materi" value={materialForm.title} onChange={e => setMaterialForm(f => ({ ...f, title: e.target.value }))} />
                         <textarea className="nk-input-sm" placeholder="Deskripsi singkat materi (untuk AI generate draft)" value={materialForm.brief || ''} onChange={e => setMaterialForm(f => ({ ...f, brief: e.target.value }))} style={{ minHeight: 72 }} />
                         <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(180px,1fr))' }}>
-                          <select className="nk-input-sm" value={materialForm.target_user || 'staff'} onChange={e => setMaterialForm(f => ({ ...f, target_user: e.target.value }))}>
-                            <option value="staff">Target: Staff</option>
-                            <option value="supervisor">Target: Supervisor</option>
-                            <option value="manager">Target: Manager</option>
+                          <select className="nk-input-sm" value={materialForm.bloom_level || 'C2'} onChange={e => setMaterialForm(f => ({ ...f, bloom_level: e.target.value }))}>
+                            <option value="C1">Bloom: C1 Mengingat</option>
+                            <option value="C2">Bloom: C2 Memahami</option>
+                            <option value="C3">Bloom: C3 Menerapkan</option>
+                            <option value="C4">Bloom: C4 Menganalisis</option>
+                            <option value="C5">Bloom: C5 Mengevaluasi</option>
+                            <option value="C6">Bloom: C6 Mencipta</option>
                           </select>
                           <select className="nk-input-sm" value={materialForm.style || 'ringkas'} onChange={e => setMaterialForm(f => ({ ...f, style: e.target.value }))}>
                             <option value="ringkas">Gaya: Ringkas</option>
@@ -4804,24 +4808,25 @@ export default function Page() {
 
                       <div className="nk-table-wrap" style={{ marginTop: 12 }}>
                         <table className="nk-table">
-                          <thead><tr><th>Kompetensi</th><th>Judul Materi</th><th>Isi</th><th>Update</th><th>Aksi</th></tr></thead>
+                          <thead><tr><th>Kompetensi</th><th>Bloom</th><th>Judul Materi</th><th>Isi</th><th>Update</th><th>Aksi</th></tr></thead>
                           <tbody>
                             {roadmapMaterials.map(m => {
                               const comp = roadmapCompetencies.find(c => String(c.id) === String(m.competency_id));
                               return (
                                 <tr key={m.id}>
                                   <td>{comp ? `${comp.code} • ${comp.name}` : `#${m.competency_id}`}</td>
+                                  <td><span className="nk-badge">{m.bloom_level || 'C2'}</span></td>
                                   <td style={{ fontWeight:700 }}>{m.title}</td>
                                   <td style={{ maxWidth: 380, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{renderBacklinkBold((m.content || '').slice(0,180))}{(m.content||'').length>180?'...':''}</td>
                                   <td style={{ fontSize:12, color:'#94a3b8' }}>{m.updated_at ? new Date(m.updated_at).toLocaleString('id-ID') : '-'}</td>
                                   <td style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                                    <BtnSm onClick={() => setMaterialForm({ id:m.id, competency_id:String(m.competency_id), title:m.title || '', content:m.content || '', brief:'', target_user:'staff', learning_objectives:'', style:'ringkas', is_active: !!m.is_active })}>Edit</BtnSm>
+                                    <BtnSm onClick={() => setMaterialForm({ id:m.id, competency_id:String(m.competency_id), title:m.title || '', content:m.content || '', brief:'', bloom_level:m.bloom_level || 'C2', learning_objectives:'', style:'ringkas', is_active: !!m.is_active })}>Edit</BtnSm>
                                     <BtnSm danger onClick={() => deleteRoadmapMaterial(m.id)}>Hapus</BtnSm>
                                   </td>
                                 </tr>
                               );
                             })}
-                            {roadmapMaterials.length === 0 && <tr><td colSpan={5} className="nk-empty">Belum ada materi roadmap.</td></tr>}
+                            {roadmapMaterials.length === 0 && <tr><td colSpan={6} className="nk-empty">Belum ada materi roadmap.</td></tr>}
                           </tbody>
                         </table>
                       </div>

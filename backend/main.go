@@ -987,6 +987,7 @@ func (a *app) initDB(ctx context.Context) error {
 			competency_id  BIGINT NOT NULL REFERENCES roadmap_competencies(id) ON DELETE CASCADE,
 			title          TEXT NOT NULL,
 			content        TEXT NOT NULL DEFAULT '',
+			bloom_level    TEXT NOT NULL DEFAULT 'C2',
 			is_active      BOOLEAN NOT NULL DEFAULT TRUE,
 			created_by     BIGINT REFERENCES users(id) ON DELETE SET NULL,
 			updated_by     BIGINT REFERENCES users(id) ON DELETE SET NULL,
@@ -996,6 +997,9 @@ func (a *app) initDB(ctx context.Context) error {
 		)
 	`)
 	if err != nil { return err }
+	_, _ = a.db.ExecContext(ctx, `ALTER TABLE roadmap_materials ADD COLUMN IF NOT EXISTS bloom_level TEXT`)
+	_, _ = a.db.ExecContext(ctx, `UPDATE roadmap_materials SET bloom_level='C2' WHERE COALESCE(TRIM(bloom_level),'')=''`)
+	_, _ = a.db.ExecContext(ctx, `ALTER TABLE roadmap_materials ALTER COLUMN bloom_level SET DEFAULT 'C2'`)
 	_, _ = a.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS roadmap_materials_competency_idx ON roadmap_materials(competency_id)`)
 	// Roadmap extensions from previous iterations are disabled for now
 	_, _ = a.db.ExecContext(ctx, `DROP TABLE IF EXISTS roadmap_notes CASCADE`)
@@ -7005,7 +7009,7 @@ func (a *app) handleAdminGenerateRoadmapMaterial(w http.ResponseWriter, r *http.
 		CompetencyID        int64  `json:"competency_id"`
 		Title               string `json:"title"`
 		Brief               string `json:"brief"`
-		TargetUser          string `json:"target_user"`
+		BloomLevel          string `json:"bloom_level"`
 		LearningObjectives  string `json:"learning_objectives"`
 		Style               string `json:"style"`
 	}
@@ -7014,8 +7018,9 @@ func (a *app) handleAdminGenerateRoadmapMaterial(w http.ResponseWriter, r *http.
 	}
 	style := strings.TrimSpace(strings.ToLower(req.Style))
 	if style == "" { style = "ringkas" }
-	targetUser := strings.TrimSpace(req.TargetUser)
-	if targetUser == "" { targetUser = "staff" }
+	bloomLevel := strings.ToUpper(strings.TrimSpace(req.BloomLevel))
+	if bloomLevel == "" { bloomLevel = "C2" }
+	if bloomLevel != "C1" && bloomLevel != "C2" && bloomLevel != "C3" && bloomLevel != "C4" && bloomLevel != "C5" && bloomLevel != "C6" { bloomLevel = "C2" }
 	objectives := strings.TrimSpace(req.LearningObjectives)
 	if objectives == "" { objectives = "Memahami konsep dan mampu menerapkannya dalam pekerjaan sehari-hari." }
 
@@ -7043,7 +7048,7 @@ Tone: profesional, edukatif, engaging.
 Jika relevan, gunakan backlink materi terkait dengan format [[Judul Materi]].`
 
 	userPrompt := fmt.Sprintf("Judul materi: %q", strings.TrimSpace(req.Title))
-	userPrompt += "\nTarget audience: " + targetUser
+	userPrompt += "\nTarget level Taksonomi Bloom: " + bloomLevel
 	userPrompt += "\nTujuan pembelajaran: " + objectives
 	userPrompt += "\nGaya materi: " + style
 	if strings.TrimSpace(req.Brief) != "" {
@@ -8050,7 +8055,7 @@ func (a *app) handleAdminRoadmapMaterials(w http.ResponseWriter, r *http.Request
 	if r.Method == http.MethodGet {
 		competencyID, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("competency_id")), 10, 64)
 		q := `
-			SELECT rm.id,rm.competency_id,rc.position_id,rm.title,rm.content,rm.is_active,rm.updated_at
+			SELECT rm.id,rm.competency_id,rc.position_id,rm.title,rm.content,COALESCE(rm.bloom_level,'C2'),rm.is_active,rm.updated_at
 			FROM roadmap_materials rm
 			JOIN roadmap_competencies rc ON rc.id=rm.competency_id
 		`
@@ -8069,13 +8074,14 @@ func (a *app) handleAdminRoadmapMaterials(w http.ResponseWriter, r *http.Request
 			PositionID   int64  `json:"position_id"`
 			Title        string `json:"title"`
 			Content      string `json:"content"`
+			BloomLevel   string `json:"bloom_level"`
 			IsActive     bool   `json:"is_active"`
 			UpdatedAt    string `json:"updated_at"`
 		}
 		items := []item{}
 		for rows.Next() {
 			var it item; var t time.Time
-			if rows.Scan(&it.ID,&it.CompetencyID,&it.PositionID,&it.Title,&it.Content,&it.IsActive,&t)==nil {
+			if rows.Scan(&it.ID,&it.CompetencyID,&it.PositionID,&it.Title,&it.Content,&it.BloomLevel,&it.IsActive,&t)==nil {
 				if admin.Role != "super_admin" && !a.canAccessRoadmapPosition(r.Context(), admin, it.PositionID) { continue }
 				it.UpdatedAt = t.Format(time.RFC3339)
 				items = append(items, it)
@@ -8089,6 +8095,7 @@ func (a *app) handleAdminRoadmapMaterials(w http.ResponseWriter, r *http.Request
 			CompetencyID int64  `json:"competency_id"`
 			Title        string `json:"title"`
 			Content      string `json:"content"`
+			BloomLevel   string `json:"bloom_level"`
 			IsActive     *bool  `json:"is_active"`
 			Action       string `json:"action"`
 		}
@@ -8105,6 +8112,10 @@ func (a *app) handleAdminRoadmapMaterials(w http.ResponseWriter, r *http.Request
 			writeJSON(w,http.StatusOK,map[string]any{"ok":true}); return
 		}
 		req.Title = strings.TrimSpace(strings.ReplaceAll(req.Title, "\u00a0", " "))
+		req.BloomLevel = strings.ToUpper(strings.TrimSpace(req.BloomLevel))
+		if req.BloomLevel == "" { req.BloomLevel = "C2" }
+		allowedBloom := map[string]bool{"C1":true,"C2":true,"C3":true,"C4":true,"C5":true,"C6":true}
+		if !allowedBloom[req.BloomLevel] { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"bloom_level harus C1..C6"}); return }
 		if req.CompetencyID<=0 { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"kompetensi teknis wajib dipilih"}); return }
 		if req.Title=="" { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"judul materi wajib diisi"}); return }
 		var positionID int64
@@ -8114,9 +8125,9 @@ func (a *app) handleAdminRoadmapMaterials(w http.ResponseWriter, r *http.Request
 		if admin.Role != "super_admin" && !a.canAccessRoadmapPosition(r.Context(), admin, positionID) { writeJSON(w,http.StatusForbidden,map[string]string{"error":"kompetensi di luar kelompok admin"}); return }
 		active := true; if req.IsActive != nil { active = *req.IsActive }
 		if req.ID > 0 {
-			_, err = a.db.ExecContext(r.Context(), `UPDATE roadmap_materials SET competency_id=$1,title=$2,content=$3,is_active=$4,updated_by=$5,updated_at=NOW() WHERE id=$6`, req.CompetencyID, req.Title, req.Content, active, admin.ID, req.ID)
+			_, err = a.db.ExecContext(r.Context(), `UPDATE roadmap_materials SET competency_id=$1,title=$2,content=$3,bloom_level=$4,is_active=$5,updated_by=$6,updated_at=NOW() WHERE id=$7`, req.CompetencyID, req.Title, req.Content, req.BloomLevel, active, admin.ID, req.ID)
 		} else {
-			_, err = a.db.ExecContext(r.Context(), `INSERT INTO roadmap_materials(competency_id,title,content,is_active,created_by,updated_by) VALUES($1,$2,$3,$4,$5,$5)`, req.CompetencyID, req.Title, req.Content, active, admin.ID)
+			_, err = a.db.ExecContext(r.Context(), `INSERT INTO roadmap_materials(competency_id,title,content,bloom_level,is_active,created_by,updated_by) VALUES($1,$2,$3,$4,$5,$6,$6)`, req.CompetencyID, req.Title, req.Content, req.BloomLevel, active, admin.ID)
 		}
 		if err != nil {
 			errText := strings.ToLower(err.Error())
