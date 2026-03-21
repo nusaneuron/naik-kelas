@@ -4006,7 +4006,7 @@ export default function Page() {
                 <>
                   <AdminSection title="🕸️ Roadmap Belajar per Kategori">
                     <div style={{ display:'grid', gap:10 }}>
-                      <div style={{ display:'grid', gap:8, gridTemplateColumns:'1fr 1fr', maxWidth: 900 }}>
+                      <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))', maxWidth: 900 }}>
                         <select className="nk-input-sm" value={roadmapForm.category_id} onChange={e => setRoadmapForm(f => ({ ...f, category_id: e.target.value }))}>
                           <option value="">Pilih kategori</option>
                           {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -4037,7 +4037,7 @@ export default function Page() {
                         </div>
                       </div>
 
-                      <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
+                      <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10, overflow: 'hidden' }}>
                         <div style={{ fontWeight:700, marginBottom:8 }}>📝 Catatan Roadmap (khusus roadmap ini)</div>
                         {!roadmapForm.id ? (
                           <div className="nk-empty" style={{ margin:0 }}>Simpan dulu roadmap, lalu tambah catatan roadmap dengan backlink [[Judul Catatan]].</div>
@@ -4050,10 +4050,10 @@ export default function Page() {
                               </select>
                               <input className="nk-input-sm" placeholder="Judul catatan roadmap" value={roadmapNoteForm.title} onChange={e => setRoadmapNoteForm(f => ({ ...f, title: e.target.value }))} />
                               <textarea className="nk-input-sm" placeholder="Isi catatan roadmap... gunakan backlink seperti [[Prompt Engineering]]" value={roadmapNoteForm.content} onChange={e => setRoadmapNoteForm(f => ({ ...f, content: e.target.value }))} style={{ minHeight: 100 }} />
-                              <div style={{ display:'flex', justifyContent:'space-between', gap:8 }}>
+                              <div style={{ display:'flex', justifyContent:'space-between', gap:8, flexWrap:'wrap' }}>
                                 <BtnSm onClick={() => setRoadmapNoteForm({ id: 0, category_id: String(roadmapForm.category_id || ''), title: '', content: '' })}>Reset Catatan</BtnSm>
-                                <div style={{ display:'flex', gap:8 }}>
-                                  <BtnSm onClick={generateRoadmapFromNotes}>🕸️ Generate Graph dari Catatan</BtnSm>
+                                <div style={{ display:'flex', gap:8, flexWrap:'wrap', justifyContent:'flex-end', width:'100%', maxWidth: '100%' }}>
+                                  <BtnSm onClick={generateRoadmapFromNotes}>🕸️ Generate Graph</BtnSm>
                                   <BtnSm color="purple" onClick={saveRoadmapNote}>💾 Simpan Catatan</BtnSm>
                                 </div>
                               </div>
@@ -4065,7 +4065,7 @@ export default function Page() {
                                   {roadmapNotes.map(n => (
                                     <tr key={n.id}>
                                       <td>{n.title}</td>
-                                      <td style={{ maxWidth: 420, whiteSpace:'pre-wrap' }}>{(n.content || '').slice(0, 160)}{(n.content || '').length > 160 ? '...' : ''}</td>
+                                      <td style={{ maxWidth: 260, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{(n.content || '').slice(0, 120)}{(n.content || '').length > 120 ? '...' : ''}</td>
                                       <td style={{ fontSize:12, color:'#94a3b8' }}>{new Date(n.updated_at).toLocaleString('id-ID')}</td>
                                       <td><BtnSm onClick={() => setRoadmapNoteForm({ id: n.id, category_id: String(roadmapNoteForm.category_id || roadmapForm.category_id || ''), title: n.title || '', content: n.content || '' })}>Edit</BtnSm></td>
                                     </tr>
