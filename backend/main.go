@@ -243,6 +243,7 @@ func main() {
 	mux.HandleFunc("/admin/materials/generate", a.handleAdminGenerateMaterial)
 	mux.HandleFunc("/admin/roadmap/positions", a.handleAdminRoadmapPositions)
 	mux.HandleFunc("/admin/roadmap/competencies", a.handleAdminRoadmapCompetencies)
+	mux.HandleFunc("/admin/roadmap/materials", a.handleAdminRoadmapMaterials)
 	mux.HandleFunc("/admin/tryout-configs", a.handleAdminTryoutConfigs)
 	mux.HandleFunc("/participant/materials", a.handleParticipantMaterials)
 	mux.HandleFunc("/participant/materials/complete", a.handleParticipantMaterialComplete)
@@ -942,6 +943,22 @@ func (a *app) initDB(ctx context.Context) error {
 	`)
 	if err != nil { return err }
 	_, _ = a.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS roadmap_competencies_position_idx ON roadmap_competencies(position_id)`)
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS roadmap_materials (
+			id             BIGSERIAL PRIMARY KEY,
+			competency_id  BIGINT NOT NULL REFERENCES roadmap_competencies(id) ON DELETE CASCADE,
+			title          TEXT NOT NULL,
+			content        TEXT NOT NULL DEFAULT '',
+			is_active      BOOLEAN NOT NULL DEFAULT TRUE,
+			created_by     BIGINT REFERENCES users(id) ON DELETE SET NULL,
+			updated_by     BIGINT REFERENCES users(id) ON DELETE SET NULL,
+			created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE(competency_id, title)
+		)
+	`)
+	if err != nil { return err }
+	_, _ = a.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS roadmap_materials_competency_idx ON roadmap_materials(competency_id)`)
 	// Roadmap extensions from previous iterations are disabled for now
 	_, _ = a.db.ExecContext(ctx, `DROP TABLE IF EXISTS roadmap_notes CASCADE`)
 	_, _ = a.db.ExecContext(ctx, `DROP TABLE IF EXISTS roadmap_categories CASCADE`)
@@ -7696,6 +7713,92 @@ func (a *app) handleAdminRoadmapCompetencies(w http.ResponseWriter, r *http.Requ
 				writeJSON(w,http.StatusBadRequest,map[string]string{"error":"kode kompetensi sudah digunakan pada jabatan ini"}); return
 			}
 			writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal simpan kompetensi"}); return
+		}
+		writeJSON(w,http.StatusOK,map[string]any{"ok":true}); return
+	}
+	writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"})
+}
+
+func (a *app) handleAdminRoadmapMaterials(w http.ResponseWriter, r *http.Request) {
+	admin, err := a.requireRole(r.Context(), r, "admin", "super_admin")
+	if err != nil { writeJSON(w,http.StatusUnauthorized,map[string]string{"error":"unauthorized"}); return }
+	if r.Method == http.MethodGet {
+		competencyID, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("competency_id")), 10, 64)
+		q := `
+			SELECT rm.id,rm.competency_id,rc.position_id,rm.title,rm.content,rm.is_active,rm.updated_at
+			FROM roadmap_materials rm
+			JOIN roadmap_competencies rc ON rc.id=rm.competency_id
+		`
+		args := []any{}
+		if competencyID > 0 {
+			q += ` WHERE rm.competency_id=$1`
+			args = append(args, competencyID)
+		}
+		q += ` ORDER BY rm.updated_at DESC`
+		rows, err := a.db.QueryContext(r.Context(), q, args...)
+		if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"db error"}); return }
+		defer rows.Close()
+		type item struct {
+			ID           int64  `json:"id"`
+			CompetencyID int64  `json:"competency_id"`
+			PositionID   int64  `json:"position_id"`
+			Title        string `json:"title"`
+			Content      string `json:"content"`
+			IsActive     bool   `json:"is_active"`
+			UpdatedAt    string `json:"updated_at"`
+		}
+		items := []item{}
+		for rows.Next() {
+			var it item; var t time.Time
+			if rows.Scan(&it.ID,&it.CompetencyID,&it.PositionID,&it.Title,&it.Content,&it.IsActive,&t)==nil {
+				if admin.Role != "super_admin" && !a.canAccessRoadmapPosition(r.Context(), admin, it.PositionID) { continue }
+				it.UpdatedAt = t.Format(time.RFC3339)
+				items = append(items, it)
+			}
+		}
+		writeJSON(w,http.StatusOK,map[string]any{"items":items}); return
+	}
+	if r.Method == http.MethodPost {
+		var req struct {
+			ID           int64  `json:"id"`
+			CompetencyID int64  `json:"competency_id"`
+			Title        string `json:"title"`
+			Content      string `json:"content"`
+			IsActive     *bool  `json:"is_active"`
+			Action       string `json:"action"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req)!=nil { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"payload tidak valid"}); return }
+		if req.Action == "delete" {
+			if req.ID <= 0 { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"id wajib"}); return }
+			var positionID int64
+			_ = a.db.QueryRowContext(r.Context(), `SELECT rc.position_id FROM roadmap_materials rm JOIN roadmap_competencies rc ON rc.id=rm.competency_id WHERE rm.id=$1`, req.ID).Scan(&positionID)
+			if positionID <= 0 { writeJSON(w,http.StatusNotFound,map[string]string{"error":"materi tidak ditemukan"}); return }
+			if admin.Role != "super_admin" && !a.canAccessRoadmapPosition(r.Context(), admin, positionID) { writeJSON(w,http.StatusForbidden,map[string]string{"error":"materi di luar kelompok admin"}); return }
+			res, err := a.db.ExecContext(r.Context(), `DELETE FROM roadmap_materials WHERE id=$1`, req.ID)
+			if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal hapus materi"}); return }
+			af,_ := res.RowsAffected(); if af==0 { writeJSON(w,http.StatusNotFound,map[string]string{"error":"materi tidak ditemukan"}); return }
+			writeJSON(w,http.StatusOK,map[string]any{"ok":true}); return
+		}
+		req.Title = strings.TrimSpace(strings.ReplaceAll(req.Title, "\u00a0", " "))
+		if req.CompetencyID<=0 { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"kompetensi teknis wajib dipilih"}); return }
+		if req.Title=="" { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"judul materi wajib diisi"}); return }
+		var positionID int64
+		if err := a.db.QueryRowContext(r.Context(), `SELECT position_id FROM roadmap_competencies WHERE id=$1`, req.CompetencyID).Scan(&positionID); err != nil {
+			writeJSON(w,http.StatusBadRequest,map[string]string{"error":"kompetensi teknis tidak ditemukan"}); return
+		}
+		if admin.Role != "super_admin" && !a.canAccessRoadmapPosition(r.Context(), admin, positionID) { writeJSON(w,http.StatusForbidden,map[string]string{"error":"kompetensi di luar kelompok admin"}); return }
+		active := true; if req.IsActive != nil { active = *req.IsActive }
+		if req.ID > 0 {
+			_, err = a.db.ExecContext(r.Context(), `UPDATE roadmap_materials SET competency_id=$1,title=$2,content=$3,is_active=$4,updated_by=$5,updated_at=NOW() WHERE id=$6`, req.CompetencyID, req.Title, req.Content, active, admin.ID, req.ID)
+		} else {
+			_, err = a.db.ExecContext(r.Context(), `INSERT INTO roadmap_materials(competency_id,title,content,is_active,created_by,updated_by) VALUES($1,$2,$3,$4,$5,$5)`, req.CompetencyID, req.Title, req.Content, active, admin.ID)
+		}
+		if err != nil {
+			errText := strings.ToLower(err.Error())
+			if strings.Contains(errText, "unique") || strings.Contains(errText, "duplicate") {
+				writeJSON(w,http.StatusBadRequest,map[string]string{"error":"judul materi sudah digunakan pada kompetensi ini"}); return
+			}
+			writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal simpan materi"}); return
 		}
 		writeJSON(w,http.StatusOK,map[string]any{"ok":true}); return
 	}

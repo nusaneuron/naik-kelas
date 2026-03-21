@@ -85,3 +85,19 @@
   - Di section Roadmap Jabatan ditambahkan blok "Kompetensi Teknis per Jabatan".
   - Form input: pilih jabatan, kode kompetensi, nama kompetensi, deskripsi kompetensi.
   - Tabel kompetensi per jabatan + aksi edit/hapus.
+
+## 2026-03-21 — Roadmap Restart (Tahap Materi)
+### Scope
+- Menambahkan CRUD **Materi** yang terhubung ke **Kompetensi Teknis**.
+- Bentuk input seperti catatan permanen: judul + isi.
+- Isi materi mendukung teks backlink `[[...]]` untuk pondasi graph roadmap tahap berikutnya.
+
+### Perubahan
+- Backend:
+  - Tambah tabel `roadmap_materials` (`competency_id`, `title`, `content`) dengan unique `(competency_id, title)`.
+  - Tambah endpoint admin: `GET/POST /admin/roadmap/materials`.
+  - Validasi scope akses mengikuti jabatan/kelompok via relasi kompetensi -> jabatan.
+- Frontend:
+  - Tambah menu ketiga pada roadmap: `📘 Materi` (terpisah dari Jabatan dan Kompetensi).
+  - Form materi: pilih kompetensi, judul materi, isi materi.
+  - Tabel materi + aksi edit/hapus.

@@ -102,6 +102,8 @@ export default function Page() {
   const [noteForm, setNoteForm] = useState({ id: 0, category_id: '', title: '', content: '' });
   const [competencyForm, setCompetencyForm] = useState({ id: 0, position_id: '', code: '', name: '', description: '', is_active: true });
   const [roadmapCompetencies, setRoadmapCompetencies] = useState([]);
+  const [roadmapMaterials, setRoadmapMaterials] = useState([]);
+  const [materialForm, setMaterialForm] = useState({ id: 0, competency_id: '', title: '', content: '', is_active: true });
   const [roadmapMenu, setRoadmapMenu] = useState('positions');
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewingContrib, setReviewingContrib] = useState(null);
@@ -656,6 +658,44 @@ export default function Page() {
     if (competencyForm.position_id) await loadRoadmapCompetencies(Number(competencyForm.position_id));
   }
 
+  async function loadRoadmapMaterials(competencyId) {
+    const qs = competencyId ? `?competency_id=${competencyId}` : '';
+    const res = await fetch(`${apiBase}/admin/roadmap/materials${qs}`, { credentials: 'include' });
+    if (res.ok) setRoadmapMaterials((await res.json()).items || []);
+  }
+
+  async function saveRoadmapMaterial() {
+    if (!materialForm.competency_id) return showMsg('Kompetensi teknis wajib dipilih', 'error');
+    if (!(materialForm.title || '').trim()) return showMsg('Judul materi wajib diisi', 'error');
+    const res = await fetch(`${apiBase}/admin/roadmap/materials`, {
+      method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        id: Number(materialForm.id) || 0,
+        competency_id: Number(materialForm.competency_id),
+        title: (materialForm.title || '').trim(),
+        content: materialForm.content || '',
+        is_active: !!materialForm.is_active,
+      })
+    });
+    const d = await res.json().catch(()=>({}));
+    if (!res.ok) return showMsg(d.error || 'Gagal simpan materi roadmap', 'error');
+    showMsg('Materi roadmap tersimpan ✅', 'success');
+    const keepComp = materialForm.competency_id;
+    setMaterialForm({ id: 0, competency_id: keepComp, title: '', content: '', is_active: true });
+    await loadRoadmapMaterials(Number(keepComp));
+  }
+
+  async function deleteRoadmapMaterial(id) {
+    if (!confirm('Hapus materi ini?')) return;
+    const res = await fetch(`${apiBase}/admin/roadmap/materials`, {
+      method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'delete', id })
+    });
+    const d = await res.json().catch(()=>({}));
+    if (!res.ok) return showMsg(d.error || 'Gagal hapus materi roadmap', 'error');
+    showMsg('Materi roadmap dihapus ✅', 'success');
+    if (materialForm.competency_id) await loadRoadmapMaterials(Number(materialForm.competency_id));
+  }
+
   async function deleteRoadmapCategory(id) {
     if (!confirm('Hapus kategori roadmap ini? Catatan kategori ini juga terhapus.')) return;
     const res = await fetch(`${apiBase}/admin/roadmap/categories`, {
@@ -843,12 +883,14 @@ export default function Page() {
     } else if (section === 'kontribusi') {
       await refreshAdminContributions();
     } else if (section === 'roadmap') {
-      const [pRes, kRes] = await Promise.all([
+      const [pRes, kRes, mRes] = await Promise.all([
         fetch(`${apiBase}/admin/roadmap/positions`, { credentials: 'include' }),
         fetch(`${apiBase}/admin/roadmap/competencies`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/roadmap/materials`, { credentials: 'include' }),
       ]);
       if (pRes.ok) setRoadmapPositions((await pRes.json()).items || []);
       if (kRes.ok) setRoadmapCompetencies((await kRes.json()).items || []);
+      if (mRes.ok) setRoadmapMaterials((await mRes.json()).items || []);
     } else if (section === 'ai') {
       const [res, pRes] = await Promise.all([
         fetch(`${apiBase}/admin/ai-settings`, { credentials: 'include' }),
@@ -4219,6 +4261,7 @@ export default function Page() {
                     <div style={{ display:'flex', gap:8, marginBottom: 12, flexWrap:'wrap' }}>
                       <button onClick={() => setRoadmapMenu('positions')} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'positions' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'positions' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'positions' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>👔 Jabatan</button>
                       <button onClick={async () => { setRoadmapMenu('competencies'); await loadRoadmapCompetencies(competencyForm.position_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'competencies' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'competencies' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'competencies' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>🛠️ Kompetensi Teknis</button>
+                      <button onClick={async () => { setRoadmapMenu('materials'); await loadRoadmapMaterials(materialForm.competency_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'materials' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'materials' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'materials' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>📘 Materi</button>
                     </div>
 
                     {roadmapMenu === 'positions' && <>
@@ -4301,6 +4344,49 @@ export default function Page() {
                               </tr>
                             ))}
                             {roadmapCompetencies.length === 0 && <tr><td colSpan={6} className="nk-empty">Belum ada kompetensi teknis.</td></tr>}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>}
+
+                    {roadmapMenu === 'materials' && <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12, marginTop: 2 }}>
+                      <div style={{ fontWeight:700, marginBottom:8 }}>Materi per Kompetensi Teknis</div>
+                      <div style={{ display:'grid', gap:8 }}>
+                        <select className="nk-input-sm" value={materialForm.competency_id} onChange={async e => { const v=e.target.value; setMaterialForm(f => ({ ...f, competency_id: v })); await loadRoadmapMaterials(v); }}>
+                          <option value="">Pilih kompetensi teknis</option>
+                          {roadmapCompetencies.map(c => {
+                            const pos = roadmapPositions.find(p => String(p.id) === String(c.position_id));
+                            return <option key={c.id} value={c.id}>{pos?.code || '-'} • {c.code} • {c.name}</option>;
+                          })}
+                        </select>
+                        <input className="nk-input-sm" placeholder="Judul materi" value={materialForm.title} onChange={e => setMaterialForm(f => ({ ...f, title: e.target.value }))} />
+                        <textarea className="nk-input-sm" placeholder="Isi materi... boleh pakai backlink [[Judul Materi Lain]]" value={materialForm.content} onChange={e => setMaterialForm(f => ({ ...f, content: e.target.value }))} style={{ minHeight: 120 }} />
+                        <div style={{ display:'flex', justifyContent:'space-between', gap:8, flexWrap:'wrap' }}>
+                          <BtnSm onClick={() => setMaterialForm(f => ({ ...f, id:0, title:'', content:'' }))}>Reset</BtnSm>
+                          <BtnSm color="purple" onClick={saveRoadmapMaterial}>💾 Simpan Materi</BtnSm>
+                        </div>
+                      </div>
+
+                      <div className="nk-table-wrap" style={{ marginTop: 12 }}>
+                        <table className="nk-table">
+                          <thead><tr><th>Kompetensi</th><th>Judul Materi</th><th>Isi</th><th>Update</th><th>Aksi</th></tr></thead>
+                          <tbody>
+                            {roadmapMaterials.map(m => {
+                              const comp = roadmapCompetencies.find(c => String(c.id) === String(m.competency_id));
+                              return (
+                                <tr key={m.id}>
+                                  <td>{comp ? `${comp.code} • ${comp.name}` : `#${m.competency_id}`}</td>
+                                  <td style={{ fontWeight:700 }}>{m.title}</td>
+                                  <td style={{ maxWidth: 380, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{(m.content || '').slice(0,180)}{(m.content||'').length>180?'...':''}</td>
+                                  <td style={{ fontSize:12, color:'#94a3b8' }}>{m.updated_at ? new Date(m.updated_at).toLocaleString('id-ID') : '-'}</td>
+                                  <td style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                                    <BtnSm onClick={() => setMaterialForm({ id:m.id, competency_id:String(m.competency_id), title:m.title || '', content:m.content || '', is_active: !!m.is_active })}>Edit</BtnSm>
+                                    <BtnSm danger onClick={() => deleteRoadmapMaterial(m.id)}>Hapus</BtnSm>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                            {roadmapMaterials.length === 0 && <tr><td colSpan={5} className="nk-empty">Belum ada materi roadmap.</td></tr>}
                           </tbody>
                         </table>
                       </div>
