@@ -931,6 +931,7 @@ func (a *app) initDB(ctx context.Context) error {
 		CREATE TABLE IF NOT EXISTS roadmap_notes (
 			id            BIGSERIAL PRIMARY KEY,
 			roadmap_id    BIGINT NOT NULL REFERENCES category_roadmaps(id) ON DELETE CASCADE,
+			category_id   INT REFERENCES question_categories(id) ON DELETE SET NULL,
 			title         TEXT NOT NULL,
 			content       TEXT NOT NULL DEFAULT '',
 			created_by    BIGINT REFERENCES users(id) ON DELETE SET NULL,
@@ -942,6 +943,7 @@ func (a *app) initDB(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	_, _ = a.db.ExecContext(ctx, `ALTER TABLE roadmap_notes ADD COLUMN IF NOT EXISTS category_id INT REFERENCES question_categories(id) ON DELETE SET NULL`)
 
 	return nil
 }
@@ -7741,38 +7743,47 @@ func (a *app) handleAdminRoadmapNotes(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method == http.MethodGet {
 		roadmapID, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("roadmap_id")), 10, 64)
-		if roadmapID <= 0 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "roadmap_id wajib"})
+		categoryID, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("category_id")), 10, 64)
+		if roadmapID <= 0 && categoryID <= 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "roadmap_id atau category_id wajib"})
 			return
 		}
+		if roadmapID <= 0 && categoryID > 0 {
+			_ = a.db.QueryRowContext(r.Context(), `SELECT id FROM category_roadmaps WHERE category_id=$1 ORDER BY updated_at DESC LIMIT 1`, categoryID).Scan(&roadmapID)
+		}
+		if roadmapID <= 0 {
+			writeJSON(w, http.StatusOK, map[string]any{"items": []any{}})
+			return
+		}
+		if categoryID <= 0 {
+			_ = a.db.QueryRowContext(r.Context(), `SELECT category_id FROM category_roadmaps WHERE id=$1`, roadmapID).Scan(&categoryID)
+		}
 		if admin.Role != "super_admin" {
-			var catID int64
 			var gidA, gidC sql.NullInt64
-			_ = a.db.QueryRowContext(r.Context(), `SELECT category_id FROM category_roadmaps WHERE id=$1`, roadmapID).Scan(&catID)
 			_ = a.db.QueryRowContext(r.Context(), `SELECT group_id FROM participant_profiles WHERE user_id=$1`, admin.ID).Scan(&gidA)
-			_ = a.db.QueryRowContext(r.Context(), `SELECT group_id FROM question_categories WHERE id=$1`, catID).Scan(&gidC)
+			_ = a.db.QueryRowContext(r.Context(), `SELECT group_id FROM question_categories WHERE id=$1`, categoryID).Scan(&gidC)
 			if gidA.Valid != gidC.Valid || (gidA.Valid && gidA.Int64 != gidC.Int64) {
-				writeJSON(w, http.StatusForbidden, map[string]string{"error": "roadmap di luar kelompok admin"})
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": "kategori di luar kelompok admin"})
 				return
 			}
 		}
-		rows, err := a.db.QueryContext(r.Context(), `SELECT id,title,content,updated_at FROM roadmap_notes WHERE roadmap_id=$1 ORDER BY updated_at DESC`, roadmapID)
+		rows, err := a.db.QueryContext(r.Context(), `SELECT id,title,content,updated_at FROM roadmap_notes WHERE roadmap_id=$1 AND ($2=0 OR category_id=$2) ORDER BY updated_at DESC`, roadmapID, categoryID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
 			return
 		}
 		defer rows.Close()
 		type item struct {
-			ID int64 `json:"id"`
-			Title string `json:"title"`
-			Content string `json:"content"`
+			ID        int64  `json:"id"`
+			Title     string `json:"title"`
+			Content   string `json:"content"`
 			UpdatedAt string `json:"updated_at"`
 		}
 		items := []item{}
 		for rows.Next() {
 			var it item
 			var t time.Time
-			if rows.Scan(&it.ID,&it.Title,&it.Content,&t) == nil {
+			if rows.Scan(&it.ID, &it.Title, &it.Content, &t) == nil {
 				it.UpdatedAt = t.Format(time.RFC3339)
 				items = append(items, it)
 			}
@@ -7781,15 +7792,24 @@ func (a *app) handleAdminRoadmapNotes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodPost {
-		var req struct{ ID int64 `json:"id"`; RoadmapID int64 `json:"roadmap_id"`; Title string `json:"title"`; Content string `json:"content"` }
-		if json.NewDecoder(r.Body).Decode(&req) != nil || req.RoadmapID <= 0 || strings.TrimSpace(req.Title)=="" {
+		var req struct {
+			ID         int64  `json:"id"`
+			RoadmapID  int64  `json:"roadmap_id"`
+			CategoryID int64  `json:"category_id"`
+			Title      string `json:"title"`
+			Content    string `json:"content"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil || req.RoadmapID <= 0 || strings.TrimSpace(req.Title) == "" {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "roadmap_id dan title wajib diisi"})
 			return
 		}
+		if req.CategoryID <= 0 {
+			_ = a.db.QueryRowContext(r.Context(), `SELECT category_id FROM category_roadmaps WHERE id=$1`, req.RoadmapID).Scan(&req.CategoryID)
+		}
 		if req.ID > 0 {
-			_, err = a.db.ExecContext(r.Context(), `UPDATE roadmap_notes SET title=$1, content=$2, updated_by=$3, updated_at=NOW() WHERE id=$4 AND roadmap_id=$5`, strings.TrimSpace(req.Title), req.Content, admin.ID, req.ID, req.RoadmapID)
+			_, err = a.db.ExecContext(r.Context(), `UPDATE roadmap_notes SET category_id=$1, title=$2, content=$3, updated_by=$4, updated_at=NOW() WHERE id=$5 AND roadmap_id=$6`, req.CategoryID, strings.TrimSpace(req.Title), req.Content, admin.ID, req.ID, req.RoadmapID)
 		} else {
-			_, err = a.db.ExecContext(r.Context(), `INSERT INTO roadmap_notes(roadmap_id,title,content,created_by,updated_by) VALUES($1,$2,$3,$4,$4)`, req.RoadmapID, strings.TrimSpace(req.Title), req.Content, admin.ID)
+			_, err = a.db.ExecContext(r.Context(), `INSERT INTO roadmap_notes(roadmap_id,category_id,title,content,created_by,updated_by) VALUES($1,$2,$3,$4,$5,$5)`, req.RoadmapID, req.CategoryID, strings.TrimSpace(req.Title), req.Content, admin.ID)
 		}
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal simpan catatan roadmap"})
@@ -7811,12 +7831,12 @@ func (a *app) handleAdminGenerateRoadmapFromNotes(w http.ResponseWriter, r *http
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
 	}
-	var req struct{ RoadmapID int64 `json:"roadmap_id"` }
+	var req struct{ RoadmapID int64 `json:"roadmap_id"`; CategoryID int64 `json:"category_id"` }
 	if json.NewDecoder(r.Body).Decode(&req) != nil || req.RoadmapID <= 0 {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "roadmap_id wajib"})
 		return
 	}
-	rows, err := a.db.QueryContext(r.Context(), `SELECT id,title,content FROM roadmap_notes WHERE roadmap_id=$1 ORDER BY id ASC`, req.RoadmapID)
+	rows, err := a.db.QueryContext(r.Context(), `SELECT id,title,content FROM roadmap_notes WHERE roadmap_id=$1 AND ($2=0 OR category_id=$2) ORDER BY id ASC`, req.RoadmapID, req.CategoryID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db error"})
 		return
