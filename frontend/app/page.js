@@ -3979,7 +3979,10 @@ export default function Page() {
                             {adminGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                           </select>
                           <textarea className="nk-input-sm" placeholder="Deskripsi jabatan" value={positionForm.description} onChange={e => setPositionForm(f => ({ ...f, description: e.target.value }))} style={{ minHeight: 70, gridColumn:'1 / span 2' }} />
-                          <div style={{ gridColumn:'1 / span 2', display:'flex', justifyContent:'flex-end' }}><BtnSm color="purple" onClick={saveRoadmapPosition}>💾 Simpan Jabatan</BtnSm></div>
+                          <div style={{ gridColumn:'1 / span 2', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                            {!positionForm.name.trim() && <span style={{ fontSize:12, color:'#fca5a5' }}>⚠️ Nama jabatan wajib diisi</span>}
+                            <BtnSm color="purple" disabled={!positionForm.name.trim()} onClick={saveRoadmapPosition}>💾 Simpan Jabatan</BtnSm>
+                          </div>
                         </div>
                       </div>
 

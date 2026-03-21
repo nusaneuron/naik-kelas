@@ -7584,7 +7584,7 @@ func (a *app) handleAdminRoadmapPositions(w http.ResponseWriter, r *http.Request
 	}
 	if r.Method == http.MethodPost {
 		var req struct { ID int64 `json:"id"`; Name, Description string `json:"name","description"`; GroupID int64 `json:"group_id"`; IsActive *bool `json:"is_active"` }
-		if json.NewDecoder(r.Body).Decode(&req)!=nil || strings.TrimSpace(req.Name)=="" { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"name wajib diisi"}); return }
+		if json.NewDecoder(r.Body).Decode(&req)!=nil || strings.TrimSpace(req.Name)=="" { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"nama jabatan wajib diisi"}); return }
 		active := true; if req.IsActive != nil { active = *req.IsActive }
 		if admin.Role != "super_admin" {
 			req.GroupID = a.getAdminGroupIDFromUser(r.Context(), admin)
