@@ -115,6 +115,7 @@ export default function Page() {
   const [materialGraph, setMaterialGraph] = useState('{"nodes":[],"edges":[]}');
   const [materialUnknownBacklinks, setMaterialUnknownBacklinks] = useState([]);
   const [materialGraphFilter, setMaterialGraphFilter] = useState({ position_id: '', mode: 'material' });
+  const [refreshingGraphData, setRefreshingGraphData] = useState(false);
   const materialEditorRef = useRef(null);
   const materialTitleInputRef = useRef(null);
   const [pendingFocusMaterial, setPendingFocusMaterial] = useState(false);
@@ -935,6 +936,31 @@ export default function Page() {
     const local = buildMaterialGraphClient(positionId, mode);
     setMaterialGraph(local.graph || '{"nodes":[],"edges":[]}');
     setMaterialUnknownBacklinks(local.unknown || []);
+  }
+
+  async function refreshRoadmapGraphData() {
+    setRefreshingGraphData(true);
+    try {
+      const [pRes, kRes, mRes] = await Promise.all([
+        fetch(`${apiBase}/admin/roadmap/positions`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/roadmap/competencies`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/roadmap/materials`, { credentials: 'include' }),
+      ]);
+      const pItems = pRes.ok ? ((await pRes.json()).items || []) : roadmapPositions;
+      const kItems = kRes.ok ? ((await kRes.json()).items || []) : roadmapCompetencies;
+      const mItems = mRes.ok ? ((await mRes.json()).items || []) : roadmapMaterials;
+      if (pRes.ok) setRoadmapPositions(pItems);
+      if (kRes.ok) setRoadmapCompetencies(kItems);
+      if (mRes.ok) setRoadmapMaterials(mItems);
+      const g = buildMaterialGraphClient(materialGraphFilter.position_id || '', materialGraphFilter.mode || 'material', mItems, kItems);
+      setMaterialGraph(g.graph || '{"nodes":[],"edges":[]}');
+      setMaterialUnknownBacklinks(g.unknown || []);
+      showMsg('Graph roadmap direfresh ✅', 'success');
+    } catch {
+      showMsg('Gagal refresh data graph', 'error');
+    } finally {
+      setRefreshingGraphData(false);
+    }
   }
 
   async function openMaterialFromGraph(nodeId) {
@@ -4759,7 +4785,7 @@ export default function Page() {
 
                     {roadmapMenu === 'graph' && <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12, marginTop: 2 }}>
                       <div style={{ fontWeight:700, marginBottom:8 }}>Graph Materi (Backlink)</div>
-                      <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(240px,1fr))', marginBottom: 10 }}>
+                      <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))', marginBottom: 10 }}>
                         <select className="nk-input-sm" value={materialGraphFilter.position_id} onChange={async e => { const v=e.target.value; setMaterialGraphFilter(f => ({ ...f, position_id: v })); await loadRoadmapMaterialGraph(v, materialGraphFilter.mode || 'material'); }}>
                           <option value="">Semua jabatan</option>
                           {roadmapPositions.map(p => <option key={p.id} value={p.id}>{p.code} • {p.name}</option>)}
@@ -4768,6 +4794,10 @@ export default function Page() {
                           <option value="material">Mode: Materi</option>
                           <option value="competency">Mode: Kompetensi</option>
                         </select>
+                        <button onClick={refreshRoadmapGraphData} disabled={refreshingGraphData}
+                          style={{ border:'1px solid #334155', background: refreshingGraphData ? '#1e293b' : '#0b1220', color:'#cbd5e1', borderRadius:8, padding:'8px 10px', fontSize:12, fontWeight:700, cursor: refreshingGraphData ? 'not-allowed' : 'pointer' }}>
+                          {refreshingGraphData ? '⏳ Refreshing...' : '🔄 Refresh Data Graph'}
+                        </button>
                       </div>
                       {(() => {
                         const g = parseRoadmapGraph(materialGraph);
