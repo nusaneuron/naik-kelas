@@ -82,6 +82,8 @@ export default function Page() {
   // Admin Kontribusi
   const [adminContributions, setAdminContributions] = useState([]);
   const [adminContribFilter, setAdminContribFilter] = useState('pending');
+  const [adminRoadmaps, setAdminRoadmaps] = useState([]);
+  const [roadmapForm, setRoadmapForm] = useState({ id: 0, category_id: '', title: '', description: '', graph_json: '{"nodes":[],"edges":[]}', is_published: false });
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewingContrib, setReviewingContrib] = useState(null);
   const [reviewAction, setReviewAction] = useState('');
@@ -525,6 +527,27 @@ export default function Page() {
     }
   }
 
+  async function saveRoadmap() {
+    if (!roadmapForm.category_id || !roadmapForm.title.trim()) return showMsg('Kategori & judul roadmap wajib diisi', 'error');
+    const res = await fetch(`${apiBase}/admin/roadmaps`, {
+      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: Number(roadmapForm.id) || 0,
+        category_id: Number(roadmapForm.category_id),
+        title: roadmapForm.title.trim(),
+        description: roadmapForm.description || '',
+        graph_json: roadmapForm.graph_json || '{"nodes":[],"edges":[]}',
+        is_published: !!roadmapForm.is_published,
+      })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return showMsg(d.error || 'Gagal simpan roadmap', 'error');
+    showMsg('Roadmap berhasil disimpan ✅', 'success');
+    setRoadmapForm({ id: 0, category_id: '', title: '', description: '', graph_json: '{"nodes":[],"edges":[]}', is_published: false });
+    const rf = await fetch(`${apiBase}/admin/roadmaps`, { credentials: 'include' });
+    if (rf.ok) setAdminRoadmaps((await rf.json()).items || []);
+  }
+
   async function loadAdmin() {
     // Critical admin data — participants, categories, questions
     const [pRes, cRes, qRes] = await Promise.all([
@@ -607,6 +630,9 @@ export default function Page() {
       if (res.ok) setTryoutConfigs((await res.json()).configs || []);
     } else if (section === 'kontribusi') {
       await refreshAdminContributions();
+    } else if (section === 'roadmap') {
+      const res = await fetch(`${apiBase}/admin/roadmaps`, { credentials: 'include' });
+      if (res.ok) setAdminRoadmaps((await res.json()).items || []);
     } else if (section === 'ai') {
       const [res, pRes] = await Promise.all([
         fetch(`${apiBase}/admin/ai-settings`, { credentials: 'include' }),
@@ -2476,6 +2502,7 @@ export default function Page() {
                   ['bank', '📚', 'Bank Soal'],
                   ['tryout', '🎯', 'Tryout'],
                   ['materi', '📖', 'Materi'],
+                  ['roadmap', '🕸️', 'Roadmap'],
                   ['kontribusi', '💡', 'Kontribusi'],
                   ['redeem', '🎁', 'Redeem'],
                   ['refleksi', '📔', 'Refleksi'],
@@ -3902,6 +3929,47 @@ export default function Page() {
                     }).length === 0 && (
                       <p style={{ fontSize: 13, color: '#64748b' }}>Belum ada materi. Tambahkan di atas!</p>
                     )}
+                  </AdminSection>
+                </>
+              )}
+
+              {/* Admin — Roadmap Kategori */}
+              {adminSection === 'roadmap' && (
+                <>
+                  <AdminSection title="🕸️ Roadmap Belajar per Kategori">
+                    <div style={{ display:'grid', gap:10 }}>
+                      <div style={{ display:'grid', gap:8, gridTemplateColumns:'1fr 1fr', maxWidth: 900 }}>
+                        <select className="nk-input-sm" value={roadmapForm.category_id} onChange={e => setRoadmapForm(f => ({ ...f, category_id: e.target.value }))}>
+                          <option value="">Pilih kategori</option>
+                          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                        <input className="nk-input-sm" placeholder="Judul roadmap" value={roadmapForm.title} onChange={e => setRoadmapForm(f => ({ ...f, title: e.target.value }))} />
+                        <textarea className="nk-input-sm" placeholder="Deskripsi singkat" value={roadmapForm.description} onChange={e => setRoadmapForm(f => ({ ...f, description: e.target.value }))} style={{ minHeight: 74, gridColumn:'1 / span 2' }} />
+                        <textarea className="nk-input-sm" placeholder='Graph JSON, contoh: {"nodes":[],"edges":[]}' value={roadmapForm.graph_json} onChange={e => setRoadmapForm(f => ({ ...f, graph_json: e.target.value }))} style={{ minHeight: 110, gridColumn:'1 / span 2', fontFamily:'monospace' }} />
+                        <label style={{ display:'flex', alignItems:'center', gap:8, color:'#cbd5e1' }}><input type="checkbox" checked={!!roadmapForm.is_published} onChange={e => setRoadmapForm(f => ({ ...f, is_published: e.target.checked }))} /> Publish</label>
+                        <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+                          <BtnSm onClick={() => setRoadmapForm({ id: 0, category_id: '', title: '', description: '', graph_json: '{"nodes":[],"edges":[]}', is_published: false })}>Reset</BtnSm>
+                          <BtnSm color="purple" onClick={saveRoadmap}>💾 Simpan Roadmap</BtnSm>
+                        </div>
+                      </div>
+                      <div className="nk-table-wrap">
+                        <table className="nk-table">
+                          <thead><tr><th>Kategori</th><th>Judul</th><th>Status</th><th>Update</th><th>Aksi</th></tr></thead>
+                          <tbody>
+                            {adminRoadmaps.map(r => (
+                              <tr key={r.id}>
+                                <td>{r.category_name}</td>
+                                <td>{r.title}</td>
+                                <td>{r.is_published ? '✅ Published' : '📝 Draft'}</td>
+                                <td style={{ fontSize:12, color:'#94a3b8' }}>{new Date(r.updated_at).toLocaleString('id-ID')}</td>
+                                <td><BtnSm onClick={() => setRoadmapForm({ id: r.id, category_id: r.category_id, title: r.title || '', description: r.description || '', graph_json: r.graph_json || '{"nodes":[],"edges":[]}', is_published: !!r.is_published })}>Edit</BtnSm></td>
+                              </tr>
+                            ))}
+                            {adminRoadmaps.length === 0 && <tr><td colSpan={5} className="nk-empty">Belum ada roadmap.</td></tr>}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
                   </AdminSection>
                 </>
               )}
