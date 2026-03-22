@@ -6208,7 +6208,7 @@ func (a *app) syncNoteLinks(ctx context.Context, noteID, userID int64, content s
 // GET  /participant/notes          → list semua notes user (+ tags)
 // GET  /participant/notes?id=X     → single note dengan content
 // POST /participant/notes          → create | update | delete
-func (a *app) generateContributionMaterial(ctx context.Context, title, source string, bubbleCount int) (string, error) {
+func (a *app) generateContributionMaterial(ctx context.Context, actorUserID int64, title, source string, bubbleCount int) (string, error) {
 	if bubbleCount <= 0 || bubbleCount > 8 {
 		bubbleCount = 3
 	}
@@ -6232,7 +6232,7 @@ Output HARUS berupa JSON array of strings.
 Setiap item = satu bubble chat Telegram, total tepat sesuai jumlah bubble yang diminta.`
 	userPrompt := fmt.Sprintf("Judul materi: %s\n\nSumber kontribusi peserta:\n%s\n\nBuat tepat %d bubble chat.", title, source, bubbleCount)
 
-	content, err := a.aiChat(withAIUsage(ctx, 0, "contribution_generate"), systemPrompt, userPrompt, 2200, 0.7)
+	content, err := a.aiChat(withAIUsage(ctx, actorUserID, "contribution_generate"), systemPrompt, userPrompt, 2200, 0.7)
 	if err != nil { return "", err }
 
 	var bubbles []string
@@ -7120,8 +7120,12 @@ func (a *app) aiChat(ctx context.Context, systemPrompt, userPrompt string, maxTo
 		usageUserID = v
 		tokensPerCredit := a.getTokensPerCredit(ctx)
 		credits := a.getUserCredits(ctx, usageUserID)
-		if credits*float64(tokensPerCredit) < 1 {
-			return "", errors.New("saldo credit AI tidak cukup")
+		availableTokens := int64(credits * float64(tokensPerCredit))
+		estPromptTokens := int64(len([]rune(systemPrompt+"\n"+userPrompt)) / 4)
+		estNeedTokens := estPromptTokens + int64(maxTokens)
+		if estNeedTokens < 1 { estNeedTokens = 1 }
+		if availableTokens < estNeedTokens {
+			return "", fmt.Errorf("saldo credit AI tidak cukup (butuh ~%d token, tersedia %d)", estNeedTokens, availableTokens)
 		}
 	}
 
@@ -11154,7 +11158,7 @@ func (a *app) handleAdminReviewContribution(w http.ResponseWriter, r *http.Reque
 	materialTitle := title + " (Kontribusi)"
 	materialContent := content
 	if req.Action == "approve" && req.ApproveMode == "ai" {
-		generated, gErr := a.generateContributionMaterial(r.Context(), title, content, req.BubbleCount)
+		generated, gErr := a.generateContributionMaterial(r.Context(), admin.ID, title, content, req.BubbleCount)
 		if gErr != nil {
 			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "gagal generate AI: " + gErr.Error()})
 			return
