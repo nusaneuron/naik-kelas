@@ -249,6 +249,7 @@ export default function Page() {
   });
   const [aiProfiles, setAiProfiles] = useState([]);
   const [aiUsageStats, setAiUsageStats] = useState({ today_tokens: 0, month_tokens: 0, top_features: [], model_breakdown: [], top_users: [] });
+  const [aiUsageRange, setAiUsageRange] = useState('month');
   const [aiProfileForm, setAiProfileForm] = useState({ id: 0, name: '', provider: 'sumopod', base_url: 'https://ai.sumopod.com/v1/chat/completions', api_key: '', model: 'gpt-4o-mini', temperature: 0.7, max_tokens: 2000 });
   const aiProviderPresets = {
     sumopod: { base_url: 'https://ai.sumopod.com/v1/chat/completions', model: 'gpt-4o-mini' },
@@ -393,6 +394,14 @@ export default function Page() {
     }, 80);
     return () => clearTimeout(t);
   }, [participantRoadmapMaterialDetail?.id]);
+
+  useEffect(() => {
+    if (adminSection !== 'ai') return;
+    (async () => {
+      const uRes = await fetch(`${apiBase}/admin/ai-usage/stats?range=${encodeURIComponent(aiUsageRange)}`, { credentials: 'include' });
+      if (uRes.ok) setAiUsageStats(await uRes.json());
+    })();
+  }, [aiUsageRange, adminSection]);
 
   async function loadSection(section) {
     if (loadedSections[section]) return;
@@ -1275,7 +1284,7 @@ export default function Page() {
       const [res, pRes, uRes] = await Promise.all([
         fetch(`${apiBase}/admin/ai-settings`, { credentials: 'include' }),
         fetch(`${apiBase}/admin/ai-profiles`, { credentials: 'include' }),
-        fetch(`${apiBase}/admin/ai-usage/stats`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/ai-usage/stats?range=${encodeURIComponent(aiUsageRange)}`, { credentials: 'include' }),
       ]);
       if (res.ok) setAiSettings(await res.json());
       else showMsg('Gagal load AI settings', 'error');
@@ -4356,6 +4365,19 @@ export default function Page() {
                 <AdminSection title="🤖 AI Settings & Profiles (Super Admin)">
                   <div style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 12, background: '#0f172a', marginBottom: 12 }}>
                     <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700 }}>Token Usage</p>
+                    <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:8 }}>
+                      {[
+                        {k:'today', t:'Hari ini'},
+                        {k:'7d', t:'7 Hari'},
+                        {k:'30d', t:'30 Hari'},
+                        {k:'month', t:'Bulan ini'},
+                      ].map(x => (
+                        <button key={x.k} onClick={() => setAiUsageRange(x.k)}
+                          style={{ border: aiUsageRange===x.k ? '1px solid #8b5cf6' : '1px solid #334155', background: aiUsageRange===x.k ? 'rgba(139,92,246,0.18)' : 'transparent', color: aiUsageRange===x.k ? '#c4b5fd' : '#94a3b8', borderRadius:999, padding:'4px 10px', fontSize:11, cursor:'pointer' }}>
+                          {x.t}
+                        </button>
+                      ))}
+                    </div>
                     <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px,1fr))', gap:8 }}>
                       <div style={{ border:'1px solid #23324a', borderRadius:8, padding:'8px 10px', display:'flex', justifyContent:'space-between', gap:8 }}><span style={{ color:'#94a3b8', fontSize:12 }}>Hari ini</span><b>{aiUsageStats?.today_tokens || 0}</b></div>
                       <div style={{ border:'1px solid #23324a', borderRadius:8, padding:'8px 10px', display:'flex', justifyContent:'space-between', gap:8 }}><span style={{ color:'#94a3b8', fontSize:12 }}>Bulan ini</span><b>{aiUsageStats?.month_tokens || 0}</b></div>

@@ -7161,13 +7161,27 @@ func (a *app) handleAdminAIUsageStats(w http.ResponseWriter, r *http.Request) {
 	if err != nil { writeJSON(w, http.StatusUnauthorized, map[string]string{"error":"unauthorized"}); return }
 	if !isSuperAdmin(u) { writeJSON(w, http.StatusForbidden, map[string]string{"error":"hanya super_admin"}); return }
 	if r.Method != http.MethodGet { writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error":"method not allowed"}); return }
+	rng := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("range")))
+	whereFrom := "date_trunc('month', NOW())"
+	switch rng {
+	case "today":
+		whereFrom = "date_trunc('day', NOW())"
+	case "7d":
+		whereFrom = "NOW() - interval '7 days'"
+	case "30d":
+		whereFrom = "NOW() - interval '30 days'"
+	case "month", "":
+		whereFrom = "date_trunc('month', NOW())"
+	default:
+		whereFrom = "date_trunc('month', NOW())"
+	}
 	var today, month int64
 	_ = a.db.QueryRowContext(r.Context(), `SELECT COALESCE(SUM(total_tokens),0) FROM ai_usage_logs WHERE created_at >= date_trunc('day', NOW())`).Scan(&today)
-	_ = a.db.QueryRowContext(r.Context(), `SELECT COALESCE(SUM(total_tokens),0) FROM ai_usage_logs WHERE created_at >= date_trunc('month', NOW())`).Scan(&month)
+	_ = a.db.QueryRowContext(r.Context(), `SELECT COALESCE(SUM(total_tokens),0) FROM ai_usage_logs WHERE created_at >= `+whereFrom).Scan(&month)
 	rows, _ := a.db.QueryContext(r.Context(), `
 		SELECT feature, COALESCE(SUM(total_tokens),0) tok
 		FROM ai_usage_logs
-		WHERE created_at >= date_trunc('month', NOW())
+		WHERE created_at >= `+whereFrom+`
 		GROUP BY feature
 		ORDER BY tok DESC
 		LIMIT 5
@@ -7183,7 +7197,7 @@ func (a *app) handleAdminAIUsageStats(w http.ResponseWriter, r *http.Request) {
 	mRows, _ := a.db.QueryContext(r.Context(), `
 		SELECT provider, model, COALESCE(SUM(total_tokens),0) tok
 		FROM ai_usage_logs
-		WHERE created_at >= date_trunc('month', NOW())
+		WHERE created_at >= `+whereFrom+`
 		GROUP BY provider, model
 		ORDER BY tok DESC
 		LIMIT 8
@@ -7202,7 +7216,7 @@ func (a *app) handleAdminAIUsageStats(w http.ResponseWriter, r *http.Request) {
 		SELECT COALESCE(u.full_name, u.email, CONCAT('user#', l.user_id::text)) AS uname, COALESCE(SUM(l.total_tokens),0) tok
 		FROM ai_usage_logs l
 		LEFT JOIN users u ON u.id = l.user_id
-		WHERE l.created_at >= date_trunc('month', NOW()) AND l.user_id IS NOT NULL
+		WHERE l.created_at >= `+whereFrom+` AND l.user_id IS NOT NULL
 		GROUP BY l.user_id, uname
 		ORDER BY tok DESC
 		LIMIT 8
