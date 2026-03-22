@@ -1004,6 +1004,14 @@ func (a *app) initDB(ctx context.Context) error {
 	_, _ = a.db.ExecContext(ctx, `UPDATE roadmap_materials SET bloom_level='C2' WHERE COALESCE(TRIM(bloom_level),'')=''`)
 	_, _ = a.db.ExecContext(ctx, `ALTER TABLE roadmap_materials ALTER COLUMN bloom_level SET DEFAULT 'C2'`)
 	_, _ = a.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS roadmap_materials_competency_idx ON roadmap_materials(competency_id)`)
+	// Sync bridge categories group_id from roadmap position group (for existing lrmc-*/rmc-* rows)
+	_, _ = a.db.ExecContext(ctx, `
+		UPDATE question_categories qc
+		SET group_id = rp.group_id
+		FROM roadmap_competencies rc
+		JOIN roadmap_positions rp ON rp.id = rc.position_id
+		WHERE (qc.code = CONCAT('lrmc-', rc.id) OR qc.code = CONCAT('rmc-', rc.id))
+	`)
 	// Roadmap extensions from previous iterations are disabled for now
 	_, _ = a.db.ExecContext(ctx, `DROP TABLE IF EXISTS roadmap_notes CASCADE`)
 	_, _ = a.db.ExecContext(ctx, `DROP TABLE IF EXISTS roadmap_categories CASCADE`)
@@ -7245,17 +7253,23 @@ Jika relevan, gunakan backlink materi terkait dengan format [[Judul Materi]].`
 func (a *app) ensureLearningCategoryFromRoadmapCompetency(ctx context.Context, competencyID int64) (int64, error) {
 	if competencyID <= 0 { return 0, fmt.Errorf("invalid competency id") }
 	var compName string
-	if err := a.db.QueryRowContext(ctx, `SELECT name FROM roadmap_competencies WHERE id=$1`, competencyID).Scan(&compName); err != nil {
+	var positionGroupID sql.NullInt64
+	if err := a.db.QueryRowContext(ctx, `
+		SELECT rc.name, rp.group_id
+		FROM roadmap_competencies rc
+		JOIN roadmap_positions rp ON rp.id=rc.position_id
+		WHERE rc.id=$1
+	`, competencyID).Scan(&compName, &positionGroupID); err != nil {
 		return 0, err
 	}
 	code := fmt.Sprintf("lrmc-%d", competencyID)
 	var catID int64
 	err := a.db.QueryRowContext(ctx, `SELECT id FROM question_categories WHERE code=$1`, code).Scan(&catID)
 	if err == nil && catID > 0 {
-		_, _ = a.db.ExecContext(ctx, `UPDATE question_categories SET name=$1,is_active=TRUE,updated_at=NOW() WHERE id=$2`, compName, catID)
+		_, _ = a.db.ExecContext(ctx, `UPDATE question_categories SET name=$1,group_id=$2,is_active=TRUE,updated_at=NOW() WHERE id=$3`, compName, positionGroupID, catID)
 		return catID, nil
 	}
-	err = a.db.QueryRowContext(ctx, `INSERT INTO question_categories(code,name,is_active) VALUES($1,$2,TRUE) RETURNING id`, code, compName).Scan(&catID)
+	err = a.db.QueryRowContext(ctx, `INSERT INTO question_categories(code,name,group_id,is_active) VALUES($1,$2,$3,TRUE) RETURNING id`, code, compName, positionGroupID).Scan(&catID)
 	if err != nil { return 0, err }
 	return catID, nil
 }
