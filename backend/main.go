@@ -7229,6 +7229,45 @@ func (a *app) handleAdminAIUsageStats(w http.ResponseWriter, r *http.Request) {
 			if uRows.Scan(&uid,&uname,&tok)==nil { topUsers = append(topUsers, map[string]any{"user_id":uid,"user":uname,"tokens":tok}) }
 		}
 	}
+	trendRows, _ := a.db.QueryContext(r.Context(), `
+		SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') d, COALESCE(SUM(total_tokens),0) tok
+		FROM ai_usage_logs
+		WHERE created_at >= `+whereFrom+`
+		GROUP BY date_trunc('day', created_at)
+		ORDER BY date_trunc('day', created_at) ASC
+	`)
+	dailyTrend := []map[string]any{}
+	if trendRows != nil {
+		defer trendRows.Close()
+		for trendRows.Next() {
+			var d string; var tok int64
+			if trendRows.Scan(&d,&tok)==nil { dailyTrend = append(dailyTrend, map[string]any{"date":d,"tokens":tok}) }
+		}
+	}
+	userRows, _ := a.db.QueryContext(r.Context(), `
+		SELECT l.user_id, COALESCE(u.full_name, u.email, CONCAT('user#', l.user_id::text)) AS uname,
+			COALESCE(SUM(l.total_tokens),0) total_tok,
+			COALESCE(SUM(l.prompt_tokens),0) prompt_tok,
+			COALESCE(SUM(l.completion_tokens),0) completion_tok,
+			COUNT(*) call_count
+		FROM ai_usage_logs l
+		LEFT JOIN users u ON u.id = l.user_id
+		WHERE l.created_at >= `+whereFrom+` AND l.user_id IS NOT NULL
+		GROUP BY l.user_id, uname
+		ORDER BY total_tok DESC
+		LIMIT 50
+	`)
+	userTable := []map[string]any{}
+	if userRows != nil {
+		defer userRows.Close()
+		for userRows.Next() {
+			var uid, totalTok, promptTok, completionTok, callCount int64
+			var uname string
+			if userRows.Scan(&uid, &uname, &totalTok, &promptTok, &completionTok, &callCount) == nil {
+				userTable = append(userTable, map[string]any{"user_id":uid, "user":uname, "total_tokens":totalTok, "prompt_tokens":promptTok, "completion_tokens":completionTok, "calls":callCount})
+			}
+		}
+	}
 	userDetail := map[string]any{}
 	if userID, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("user_id")), 10, 64); userID > 0 {
 		var uname string
@@ -7266,9 +7305,24 @@ func (a *app) handleAdminAIUsageStats(w http.ResponseWriter, r *http.Request) {
 				if pmRows.Scan(&provider,&model,&tok)==nil { models = append(models, map[string]any{"provider":provider,"model":model,"tokens":tok}) }
 			}
 		}
-		userDetail = map[string]any{"user_id":userID,"user":uname,"features":features,"models":models}
+		uTrendRows, _ := a.db.QueryContext(r.Context(), `
+			SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') d, COALESCE(SUM(total_tokens),0) tok
+			FROM ai_usage_logs
+			WHERE user_id=$1 AND created_at >= `+whereFrom+`
+			GROUP BY date_trunc('day', created_at)
+			ORDER BY date_trunc('day', created_at) ASC
+		`, userID)
+		userDailyTrend := []map[string]any{}
+		if uTrendRows != nil {
+			defer uTrendRows.Close()
+			for uTrendRows.Next() {
+				var d string; var tok int64
+				if uTrendRows.Scan(&d,&tok)==nil { userDailyTrend = append(userDailyTrend, map[string]any{"date":d,"tokens":tok}) }
+			}
+		}
+		userDetail = map[string]any{"user_id":userID,"user":uname,"features":features,"models":models,"daily_trend":userDailyTrend}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"today_tokens":today,"month_tokens":month,"top_features":top,"model_breakdown":modelBreakdown,"top_users":topUsers,"user_detail":userDetail})
+	writeJSON(w, http.StatusOK, map[string]any{"today_tokens":today,"month_tokens":month,"top_features":top,"model_breakdown":modelBreakdown,"top_users":topUsers,"user_table":userTable,"daily_trend":dailyTrend,"user_detail":userDetail})
 }
 
 func (a *app) handleAdminAIProfiles(w http.ResponseWriter, r *http.Request) {

@@ -248,7 +248,7 @@ export default function Page() {
     api_key_masked: '', model: 'gpt-4o-mini', temperature: 0.7, max_tokens: 2000, is_active: true,
   });
   const [aiProfiles, setAiProfiles] = useState([]);
-  const [aiUsageStats, setAiUsageStats] = useState({ today_tokens: 0, month_tokens: 0, top_features: [], model_breakdown: [], top_users: [], user_detail: {} });
+  const [aiUsageStats, setAiUsageStats] = useState({ today_tokens: 0, month_tokens: 0, top_features: [], model_breakdown: [], top_users: [], user_table: [], daily_trend: [], user_detail: {} });
   const [aiUsageRange, setAiUsageRange] = useState('month');
   const [aiUsageUserId, setAiUsageUserId] = useState(0);
   const [aiProfileForm, setAiProfileForm] = useState({ id: 0, name: '', provider: 'sumopod', base_url: 'https://ai.sumopod.com/v1/chat/completions', api_key: '', model: 'gpt-4o-mini', temperature: 0.7, max_tokens: 2000 });
@@ -4408,6 +4408,19 @@ export default function Page() {
                         </div>
                       </div>
                     )}
+                    {Array.isArray(aiUsageStats?.daily_trend) && aiUsageStats.daily_trend.length > 0 && (
+                      <div style={{ marginTop:10 }}>
+                        <div style={{ marginBottom:6, fontSize:12, color:'#94a3b8' }}>Trend harian (global)</div>
+                        <div style={{ display:'flex', alignItems:'end', gap:4, height:54, border:'1px solid #23324a', borderRadius:8, padding:'6px 8px', overflowX:'auto' }}>
+                          {(() => {
+                            const maxTok = Math.max(1, ...aiUsageStats.daily_trend.map(x => Number(x.tokens || 0)));
+                            return aiUsageStats.daily_trend.map((x, i) => (
+                              <div key={`${x.date}-${i}`} title={`${x.date}: ${x.tokens}`} style={{ width:12, minWidth:12, height: `${Math.max(8, Math.round((Number(x.tokens||0)/maxTok)*40))}px`, background:'#8b5cf6', borderRadius:4, opacity:0.9 }} />
+                            ));
+                          })()}
+                        </div>
+                      </div>
+                    )}
                     {aiUsageStats?.user_detail?.user && (
                       <div style={{ marginTop:10, border:'1px solid #23324a', borderRadius:8, padding:'8px 10px', fontSize:12, color:'#cbd5e1' }}>
                         <div style={{ fontWeight:700, marginBottom:6 }}>Detail User: {aiUsageStats.user_detail.user}</div>
@@ -4415,8 +4428,44 @@ export default function Page() {
                           <div style={{ color:'#94a3b8', marginBottom:4 }}>Fitur: {aiUsageStats.user_detail.features.map((x,i)=>`${i+1}. ${x.feature} (${x.tokens})`).join(' • ')}</div>
                         )}
                         {Array.isArray(aiUsageStats?.user_detail?.models) && aiUsageStats.user_detail.models.length > 0 && (
-                          <div style={{ color:'#94a3b8' }}>Model: {aiUsageStats.user_detail.models.map((x,i)=>`${i+1}. ${x.provider}/${x.model} (${x.tokens})`).join(' • ')}</div>
+                          <div style={{ color:'#94a3b8', marginBottom:6 }}>Model: {aiUsageStats.user_detail.models.map((x,i)=>`${i+1}. ${x.provider}/${x.model} (${x.tokens})`).join(' • ')}</div>
                         )}
+                        {Array.isArray(aiUsageStats?.user_detail?.daily_trend) && aiUsageStats.user_detail.daily_trend.length > 0 && (
+                          <div>
+                            <div style={{ marginBottom:4, fontSize:11, color:'#94a3b8' }}>Trend harian user</div>
+                            <div style={{ display:'flex', alignItems:'end', gap:4, height:50, border:'1px solid #23324a', borderRadius:8, padding:'6px 8px', overflowX:'auto' }}>
+                              {(() => {
+                                const maxTok = Math.max(1, ...aiUsageStats.user_detail.daily_trend.map(x => Number(x.tokens || 0)));
+                                return aiUsageStats.user_detail.daily_trend.map((x, i) => (
+                                  <div key={`${x.date}-${i}`} title={`${x.date}: ${x.tokens}`} style={{ width:10, minWidth:10, height: `${Math.max(8, Math.round((Number(x.tokens||0)/maxTok)*36))}px`, background:'#22d3ee', borderRadius:4, opacity:0.9 }} />
+                                ));
+                              })()}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {Array.isArray(aiUsageStats?.user_table) && aiUsageStats.user_table.length > 0 && (
+                      <div style={{ marginTop:10 }}>
+                        <div style={{ marginBottom:6, fontSize:12, color:'#94a3b8' }}>Tabel detail per-user</div>
+                        <div className="nk-table-wrap" style={{ maxHeight: 260 }}>
+                          <table className="nk-table" style={{ minWidth: 760 }}>
+                            <thead><tr><th>User</th><th>Total</th><th>Prompt</th><th>Completion</th><th>Calls</th><th>Aksi</th></tr></thead>
+                            <tbody>
+                              {aiUsageStats.user_table.slice(0, 20).map((u, i) => (
+                                <tr key={`${u.user_id}-${i}`}>
+                                  <td style={{ fontWeight: 600 }}>{u.user || '-'}</td>
+                                  <td>{u.total_tokens || 0}</td>
+                                  <td>{u.prompt_tokens || 0}</td>
+                                  <td>{u.completion_tokens || 0}</td>
+                                  <td>{u.calls || 0}</td>
+                                  <td><button onClick={() => setAiUsageUserId(Number(u.user_id || 0))} style={{ border:'1px solid #334155', background:'transparent', color:'#cbd5e1', borderRadius:8, padding:'3px 8px', fontSize:11, cursor:'pointer' }}>Detail</button></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     )}
                   </div>
