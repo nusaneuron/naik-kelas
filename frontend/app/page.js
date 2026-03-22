@@ -68,6 +68,10 @@ export default function Page() {
   const [participantUnknownBacklinks, setParticipantUnknownBacklinks] = useState([]);
   const [participantRoadmapMaterialDetail, setParticipantRoadmapMaterialDetail] = useState(null);
   const [participantRoadmapHistory, setParticipantRoadmapHistory] = useState([]);
+  const [participantRagQuestion, setParticipantRagQuestion] = useState('');
+  const [participantRagAnswer, setParticipantRagAnswer] = useState('');
+  const [participantRagSources, setParticipantRagSources] = useState([]);
+  const [participantRagLoading, setParticipantRagLoading] = useState(false);
   const [myReflections, setMyReflections] = useState([]);
   const [reflectionDraft, setReflectionDraft] = useState('');
   const [reflectionSaving, setReflectionSaving] = useState(false);
@@ -115,6 +119,7 @@ export default function Page() {
   const [materialUnknownBacklinks, setMaterialUnknownBacklinks] = useState([]);
   const [materialGraphFilter, setMaterialGraphFilter] = useState({ position_id: '', mode: 'material' });
   const [refreshingGraphData, setRefreshingGraphData] = useState(false);
+  const [roadmapRagReindexing, setRoadmapRagReindexing] = useState(false);
   const [generatingRoadmapMaterial, setGeneratingRoadmapMaterial] = useState(false);
   const materialEditorRef = useRef(null);
   const materialTitleInputRef = useRef(null);
@@ -328,6 +333,23 @@ export default function Page() {
       setParticipantRoadmapHistory(prev => [...prev, participantRoadmapMaterialDetail]);
     }
     setParticipantRoadmapMaterialDetail(d);
+  }
+
+  async function askParticipantRoadmapRAG() {
+    if (!(participantRagQuestion || '').trim()) return;
+    setParticipantRagLoading(true);
+    try {
+      const res = await fetch(`${apiBase}/participant/roadmap/rag/ask`, {
+        method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ question: participantRagQuestion.trim(), position_id: Number(participantRoadmapFilter.position_id || 0), top_k: 4 })
+      });
+      const d = await res.json().catch(()=>({}));
+      if (!res.ok) return showMsg(d.error || 'Gagal tanya roadmap AI', 'error');
+      setParticipantRagAnswer(d.answer || '');
+      setParticipantRagSources(d.sources || []);
+    } finally {
+      setParticipantRagLoading(false);
+    }
   }
 
   async function openParticipantRoadmapMaterialByTitle(title) {
@@ -978,6 +1000,18 @@ export default function Page() {
     const local = buildMaterialGraphClient(positionId, mode);
     setMaterialGraph(local.graph || '{"nodes":[],"edges":[]}');
     setMaterialUnknownBacklinks(local.unknown || []);
+  }
+
+  async function reindexRoadmapRAG() {
+    setRoadmapRagReindexing(true);
+    try {
+      const res = await fetch(`${apiBase}/admin/roadmap/rag/reindex`, { method:'POST', credentials:'include' });
+      const d = await res.json().catch(()=>({}));
+      if (!res.ok) return showMsg(d.error || 'Gagal reindex RAG roadmap', 'error');
+      showMsg(`RAG roadmap reindex selesai (${d.chunks || 0} chunks) ✅`, 'success');
+    } finally {
+      setRoadmapRagReindexing(false);
+    }
   }
 
   async function refreshRoadmapGraphData() {
@@ -2846,6 +2880,24 @@ export default function Page() {
                       {(() => { const g = parseRoadmapGraph(participantRoadmapGraph); return g.error ? <div className="nk-empty" style={{ margin:0 }}>{g.error}</div> : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={openParticipantRoadmapMaterial} />; })()}
                       {participantUnknownBacklinks.length > 0 && (
                         <div className="nk-empty" style={{ marginTop:8, color:'#fbbf24' }}>⚠️ Referensi belum ditemukan: {participantUnknownBacklinks.slice(0,8).join(', ')}{participantUnknownBacklinks.length > 8 ? ` (+${participantUnknownBacklinks.length - 8})` : ''}</div>
+                      )}
+                    </div>
+
+                    <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12 }}>
+                      <div style={{ fontWeight:700, marginBottom:8 }}>🤖 Tanya Roadmap (RAG)</div>
+                      <textarea className="nk-input-sm" placeholder="Tanyakan materi roadmap..." value={participantRagQuestion} onChange={e => setParticipantRagQuestion(e.target.value)} style={{ minHeight: 80 }} />
+                      <div style={{ display:'flex', justifyContent:'flex-end', marginTop:8 }}>
+                        <BtnSm onClick={askParticipantRoadmapRAG} disabled={participantRagLoading || !(participantRagQuestion || '').trim()}>{participantRagLoading ? '⏳ Memproses...' : 'Tanya AI'}</BtnSm>
+                      </div>
+                      {participantRagAnswer && (
+                        <div style={{ marginTop:10, border:'1px solid #243246', borderRadius:8, padding:10 }}>
+                          <div style={{ whiteSpace:'pre-wrap', color:'#cbd5e1' }}>{participantRagAnswer}</div>
+                          {participantRagSources.length > 0 && (
+                            <div style={{ marginTop:8, fontSize:11, color:'#94a3b8' }}>
+                              Sumber: {participantRagSources.map((s, i) => s.title ? `${i+1}. ${s.title}` : null).filter(Boolean).join(' • ')}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
 
@@ -4897,7 +4949,10 @@ export default function Page() {
                     </div>}
 
                     {roadmapMenu === 'graph' && <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12, marginTop: 2 }}>
-                      <div style={{ fontWeight:700, marginBottom:8 }}>Graph Materi (Backlink)</div>
+                      <div style={{ display:'flex', justifyContent:'space-between', gap:8, alignItems:'center', marginBottom:8, flexWrap:'wrap' }}>
+                        <div style={{ fontWeight:700 }}>Graph Materi (Backlink)</div>
+                        <BtnSm onClick={reindexRoadmapRAG} disabled={roadmapRagReindexing}>{roadmapRagReindexing ? '⏳ Reindexing...' : '🧠 Reindex RAG'}</BtnSm>
+                      </div>
                       <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))', marginBottom: 10 }}>
                         <select className="nk-input-sm" value={materialGraphFilter.position_id} onChange={async e => { const v=e.target.value; setMaterialGraphFilter(f => ({ ...f, position_id: v })); await loadRoadmapMaterialGraph(v, materialGraphFilter.mode || 'material'); }}>
                           <option value="">Semua jabatan</option>
