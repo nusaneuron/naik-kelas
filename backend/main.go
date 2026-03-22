@@ -3125,7 +3125,6 @@ func (a *app) syncTelegramBotCommands(ctx context.Context) error {
 		{"command": "daftar", "description": "📝 Daftar sebagai peserta baru"},
 		{"command": "cek", "description": "🔍 Cek status pendaftaranmu"},
 		{"command": "materi", "description": "📚 Belajar materi per kategori"},
-		{"command": "roadmap", "description": "🕸️ Buka roadmap jabatan & materi"},
 		{"command": "quiz", "description": "🧠 Latihan soal per kategori"},
 		{"command": "tryout", "description": "🚀 Simulasi tryout soal acak"},
 		{"command": "leaderbot", "description": "🏆 Papan ranking tryout tercepat"},
