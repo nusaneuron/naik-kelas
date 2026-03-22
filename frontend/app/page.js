@@ -251,7 +251,7 @@ export default function Page() {
   const [aiUsageStats, setAiUsageStats] = useState({ today_tokens: 0, month_tokens: 0, top_features: [], model_breakdown: [], top_users: [], user_table: [], daily_trend: [], user_detail: {} });
   const [aiUsageRange, setAiUsageRange] = useState('month');
   const [aiUsageUserId, setAiUsageUserId] = useState(0);
-  const [aiCreditConfig, setAiCreditConfig] = useState({ tokens_per_credit: 1000, balances: [] });
+  const [aiCreditConfig, setAiCreditConfig] = useState({ tokens_per_credit: 1000, balances: [], logs: [] });
   const [aiCreditTopup, setAiCreditTopup] = useState({ user_id: '', credits: '', reason: '' });
   const [aiCreditUserQuery, setAiCreditUserQuery] = useState('');
   const [aiCreditUserHits, setAiCreditUserHits] = useState([]);
@@ -4563,6 +4563,25 @@ export default function Page() {
                             </tr>
                           ))}</tbody>
                         </table>
+                      </div>
+                    )}
+                    {Array.isArray(aiCreditConfig?.logs) && aiCreditConfig.logs.length > 0 && (
+                      <div style={{ marginTop:10 }}>
+                        <div style={{ marginBottom:6, fontSize:12, color:'#94a3b8' }}>Histori credit</div>
+                        <div className="nk-table-wrap" style={{ maxHeight: 240 }}>
+                          <table className="nk-table" style={{ minWidth: 760 }}>
+                            <thead><tr><th>Waktu</th><th>User</th><th>Delta</th><th>Reason</th><th>By</th></tr></thead>
+                            <tbody>{aiCreditConfig.logs.slice(0, 80).map((l,i)=>(
+                              <tr key={`${l.id||i}`}>
+                                <td style={{ color:'#94a3b8', fontSize:12 }}>{new Date(l.created_at).toLocaleString('id-ID')}</td>
+                                <td>{l.user || '-'}</td>
+                                <td><span className={`nk-badge ${Number(l.delta_credits||0) >= 0 ? 'nk-badge-green' : 'nk-badge-red'}`}>{Number(l.delta_credits||0) >= 0 ? '+' : ''}{Number(l.delta_credits||0).toFixed(3)}</span></td>
+                                <td style={{ color:'#cbd5e1' }}>{l.reason || '-'}</td>
+                                <td style={{ color:'#94a3b8' }}>{l.admin || '-'}</td>
+                              </tr>
+                            ))}</tbody>
+                          </table>
+                        </div>
                       </div>
                     )}
                   </div>

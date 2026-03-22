@@ -7441,7 +7441,34 @@ func (a *app) handleAdminAICredits(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"tokens_per_credit":tokensPerCredit, "balances":balances})
+		lRows, _ := a.db.QueryContext(r.Context(), `
+			SELECT l.id, l.user_id,
+				COALESCE(p.name, u.phone, CONCAT('user#', l.user_id::text)) uname,
+				l.delta_credits::float8, l.reason,
+				COALESCE(ap.name, au.phone, CONCAT('admin#', l.created_by::text)) admin_name,
+				l.created_at
+			FROM ai_credit_logs l
+			LEFT JOIN users u ON u.id=l.user_id
+			LEFT JOIN participant_profiles p ON p.user_id=l.user_id
+			LEFT JOIN users au ON au.id=l.created_by
+			LEFT JOIN participant_profiles ap ON ap.user_id=l.created_by
+			ORDER BY l.created_at DESC
+			LIMIT 200
+		`)
+		logs := []map[string]any{}
+		if lRows != nil {
+			defer lRows.Close()
+			for lRows.Next() {
+				var id, uid int64
+				var uname, reason, adminName string
+				var delta float64
+				var createdAt time.Time
+				if lRows.Scan(&id, &uid, &uname, &delta, &reason, &adminName, &createdAt) == nil {
+					logs = append(logs, map[string]any{"id":id, "user_id":uid, "user":uname, "delta_credits":delta, "reason":reason, "admin":adminName, "created_at":createdAt})
+				}
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"tokens_per_credit":tokensPerCredit, "balances":balances, "logs":logs})
 	case http.MethodPost:
 		var req struct {
 			Action string `json:"action"`
