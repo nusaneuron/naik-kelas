@@ -8271,23 +8271,34 @@ func (a *app) rebuildRoadmapRAGIndex(ctx context.Context) (int64, int64, int64, 
 		ORDER BY rm.id ASC
 	`)
 	if err != nil { return 0, 0, 0, "", err }
-	defer rows.Close()
+	type matRow struct {
+		materialID   int64
+		title        string
+		content      string
+		bloom        string
+		competencyID int64
+		positionID   int64
+		groupID      sql.NullInt64
+	}
+	allRows := []matRow{}
+	for rows.Next() {
+		var r matRow
+		if rows.Scan(&r.materialID, &r.title, &r.content, &r.bloom, &r.competencyID, &r.positionID, &r.groupID) != nil { continue }
+		allRows = append(allRows, r)
+	}
+	rows.Close()
 	var inserted int64
 	var materialsUsed int64
 	var failed int64
 	sampleErr := ""
-	for rows.Next() {
-		var materialID, competencyID, positionID int64
-		var groupID sql.NullInt64
-		var title, content, bloom string
-		if rows.Scan(&materialID, &title, &content, &bloom, &competencyID, &positionID, &groupID) != nil { continue }
-		chunks := splitRoadmapContentIntoChunks(content, 900)
+	for _, r := range allRows {
+		chunks := splitRoadmapContentIntoChunks(r.content, 900)
 		if len(chunks) > 0 { materialsUsed++ }
 		for i, ch := range chunks {
 			_, err := tx.ExecContext(ctx, `
 				INSERT INTO roadmap_rag_chunks(material_id,position_id,competency_id,group_id,title,chunk_text,chunk_order,bloom_level)
 				VALUES($1,$2,$3,$4,$5,$6,$7,$8)
-			`, materialID, positionID, competencyID, groupID, title, ch, i+1, bloom)
+			`, r.materialID, r.positionID, r.competencyID, r.groupID, r.title, ch, i+1, r.bloom)
 			if err == nil {
 				inserted++
 			} else {
