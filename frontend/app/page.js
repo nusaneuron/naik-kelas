@@ -566,7 +566,6 @@ export default function Page() {
     setReviewingContrib(contrib);
     setReviewAction(action);
     setReviewApproveMode('direct');
-    setReviewBubbleCount(3);
     setReviewFeedback('');
     setShowReviewModal(true);
   }
