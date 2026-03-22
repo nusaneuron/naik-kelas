@@ -3701,7 +3701,7 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		b.WriteString("📘 *Roadmap Materi*\n")
 		b.WriteString(fmt.Sprintf("Jabatan: *%s*\n\n", escapeMD(picked.Title)))
 		for i, m := range items {
-			b.WriteString(fmt.Sprintf("%d\. %s\n", i+1, escapeMD(m.Title)))
+			b.WriteString(fmt.Sprintf("%d. %s\n", i+1, escapeMD(m.Title)))
 		}
 		b.WriteString("\nKetik nomor materi untuk membaca.")
 		return b.String(), "roadmap_choose_material"
@@ -3793,7 +3793,7 @@ handleCommands:
 		a.mu.Unlock()
 		var b strings.Builder
 		b.WriteString("🕸️ *Roadmap Jabatan*\n\nPilih jabatan:\n")
-		for i, p := range positions { b.WriteString(fmt.Sprintf("%d\. %s\n", i+1, escapeMD(p.Title))) }
+		for i, p := range positions { b.WriteString(fmt.Sprintf("%d. %s\n", i+1, escapeMD(p.Title))) }
 		b.WriteString("\nKetik nomor jabatan yang ingin dibuka.")
 		return b.String(), "roadmap_choose_position"
 	}
