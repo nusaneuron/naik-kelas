@@ -72,7 +72,6 @@ export default function Page() {
   const [participantRagAnswer, setParticipantRagAnswer] = useState('');
   const [participantRagSources, setParticipantRagSources] = useState([]);
   const [participantRagLoading, setParticipantRagLoading] = useState(false);
-  const [participantFocusReading, setParticipantFocusReading] = useState(false);
   const [myReflections, setMyReflections] = useState([]);
   const [reflectionDraft, setReflectionDraft] = useState('');
   const [reflectionSaving, setReflectionSaving] = useState(false);
@@ -124,6 +123,7 @@ export default function Page() {
   const [generatingRoadmapMaterial, setGeneratingRoadmapMaterial] = useState(false);
   const materialEditorRef = useRef(null);
   const materialTitleInputRef = useRef(null);
+  const participantMaterialTopRef = useRef(null);
   const [pendingFocusMaterial, setPendingFocusMaterial] = useState(false);
   const [roadmapMenu, setRoadmapMenu] = useState('positions');
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -384,6 +384,14 @@ export default function Page() {
     }, 120);
     return () => clearTimeout(t);
   }, [pendingFocusMaterial, roadmapMenu]);
+
+  useEffect(() => {
+    if (!participantRoadmapMaterialDetail) return;
+    const t = setTimeout(() => {
+      try { participantMaterialTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
+    }, 80);
+    return () => clearTimeout(t);
+  }, [participantRoadmapMaterialDetail?.id]);
 
   async function loadSection(section) {
     if (loadedSections[section]) return;
@@ -2913,7 +2921,7 @@ export default function Page() {
                     </div>
 
                     {participantRoadmapMaterialDetail && (
-                      <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12 }}>
+                      <div ref={participantMaterialTopRef} style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12 }}>
                         <div style={{ display:'flex', justifyContent:'space-between', gap:8, alignItems:'center', marginBottom:8, flexWrap:'wrap' }}>
                           <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
                             <div style={{ fontWeight:700 }}>📘 Baca Materi</div>
@@ -2923,21 +2931,14 @@ export default function Page() {
                                 setParticipantRoadmapHistory(prev => prev.slice(0, -1));
                               }} style={{ background:'#334155', fontSize:11 }}>← Kembali</BtnSm>
                             )}
-                            <BtnSm onClick={() => setParticipantFocusReading(v => !v)} style={{ background: participantFocusReading ? '#7c3aed' : '#334155', fontSize:11 }}>
-                              {participantFocusReading ? '🧘 Fokus ON' : '🧘 Mode Fokus'}
-                            </BtnSm>
                           </div>
                           <span className="nk-badge">{participantRoadmapMaterialDetail.bloom_level || 'C2'}</span>
                         </div>
                         <div style={{ fontSize:16, fontWeight:700, marginBottom:8 }}>{participantRoadmapMaterialDetail.title}</div>
                         <div style={{
                           color:'#cbd5e1',
-                          lineHeight: participantFocusReading ? 1.9 : 1.7,
-                          fontSize: participantFocusReading ? 16 : 14,
-                          letterSpacing: participantFocusReading ? '0.2px' : 'normal',
-                          background: participantFocusReading ? 'rgba(15,23,42,0.55)' : 'transparent',
-                          padding: participantFocusReading ? '10px 12px' : 0,
-                          borderRadius: participantFocusReading ? 10 : 0,
+                          lineHeight: 1.7,
+                          fontSize: 14,
                         }}
                           onClick={async e => {
                             const bl = e.target.closest('[data-backlink]');
