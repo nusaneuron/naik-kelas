@@ -248,7 +248,7 @@ export default function Page() {
     api_key_masked: '', model: 'gpt-4o-mini', temperature: 0.7, max_tokens: 2000, is_active: true,
   });
   const [aiProfiles, setAiProfiles] = useState([]);
-  const [aiUsageStats, setAiUsageStats] = useState({ today_tokens: 0, month_tokens: 0, top_features: [] });
+  const [aiUsageStats, setAiUsageStats] = useState({ today_tokens: 0, month_tokens: 0, top_features: [], model_breakdown: [] });
   const [aiProfileForm, setAiProfileForm] = useState({ id: 0, name: '', provider: 'sumopod', base_url: 'https://ai.sumopod.com/v1/chat/completions', api_key: '', model: 'gpt-4o-mini', temperature: 0.7, max_tokens: 2000 });
   const aiProviderPresets = {
     sumopod: { base_url: 'https://ai.sumopod.com/v1/chat/completions', model: 'gpt-4o-mini' },
@@ -4363,6 +4363,11 @@ export default function Page() {
                     {Array.isArray(aiUsageStats?.top_features) && aiUsageStats.top_features.length > 0 && (
                       <div style={{ marginTop:8, fontSize:12, color:'#94a3b8' }}>
                         Top fitur: {aiUsageStats.top_features.map((x,i)=>`${i+1}. ${x.feature} (${x.tokens})`).join(' • ')}
+                      </div>
+                    )}
+                    {Array.isArray(aiUsageStats?.model_breakdown) && aiUsageStats.model_breakdown.length > 0 && (
+                      <div style={{ marginTop:8, fontSize:12, color:'#94a3b8' }}>
+                        Provider/Model: {aiUsageStats.model_breakdown.map((x,i)=>`${i+1}. ${x.provider}/${x.model} (${x.tokens})`).join(' • ')}
                       </div>
                     )}
                   </div>

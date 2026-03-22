@@ -7161,7 +7161,25 @@ func (a *app) handleAdminAIUsageStats(w http.ResponseWriter, r *http.Request) {
 			if rows.Scan(&f,&tok)==nil { top = append(top, map[string]any{"feature":f,"tokens":tok}) }
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"today_tokens":today,"month_tokens":month,"top_features":top})
+	mRows, _ := a.db.QueryContext(r.Context(), `
+		SELECT provider, model, COALESCE(SUM(total_tokens),0) tok
+		FROM ai_usage_logs
+		WHERE created_at >= date_trunc('month', NOW())
+		GROUP BY provider, model
+		ORDER BY tok DESC
+		LIMIT 8
+	`)
+	modelBreakdown := []map[string]any{}
+	if mRows != nil {
+		defer mRows.Close()
+		for mRows.Next() {
+			var provider, model string; var tok int64
+			if mRows.Scan(&provider, &model, &tok)==nil {
+				modelBreakdown = append(modelBreakdown, map[string]any{"provider":provider,"model":model,"tokens":tok})
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"today_tokens":today,"month_tokens":month,"top_features":top,"model_breakdown":modelBreakdown})
 }
 
 func (a *app) handleAdminAIProfiles(w http.ResponseWriter, r *http.Request) {
