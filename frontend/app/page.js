@@ -355,8 +355,14 @@ export default function Page() {
         method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ question: participantRagQuestion.trim(), position_id: Number(participantRoadmapFilter.position_id || 0), top_k: 4 })
       });
-      const d = await res.json().catch(()=>({}));
-      if (!res.ok) return showMsg(formatAICreditError(d.error || 'Gagal tanya roadmap AI'), 'error');
+      let d = {};
+      let raw = '';
+      try {
+        d = await res.json();
+      } catch {
+        raw = await res.text().catch(() => '');
+      }
+      if (!res.ok) return showMsg(formatAICreditError(d.error || raw || `Gagal tanya roadmap AI (HTTP ${res.status})`), 'error');
       setParticipantRagAnswer(d.answer || '');
       setParticipantRagSources(d.sources || []);
     } finally {
