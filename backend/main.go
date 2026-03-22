@@ -6142,13 +6142,27 @@ func (a *app) generateContributionMaterial(ctx context.Context, title, source st
 	if bubbleCount <= 0 || bubbleCount > 8 {
 		bubbleCount = 3
 	}
-	systemPrompt := `Kamu adalah asisten editor materi pembelajaran.
-Ubah catatan mentah menjadi materi belajar yang lebih rapi, terstruktur, dan mudah dipahami.
-Format output HARUS berupa JSON array of strings, setiap item adalah satu bubble materi.
-Gunakan Bahasa Indonesia, ringkas, jelas, boleh pakai markdown (**bold**, bullet, heading).`
-	userPrompt := fmt.Sprintf("Judul materi: %s\n\nCatatan sumber:\n%s\n\nBuat %d bubble.", title, source, bubbleCount)
+	systemPrompt := `Anda adalah ahli penyusun materi roadmap pembelajaran internal perusahaan.
+Ubah catatan mentah kontribusi peserta menjadi materi yang rapi, praktis, dan siap kirim ke Telegram.
 
-	content, err := a.aiChat(ctx, systemPrompt, userPrompt, 2000, 0.7)
+Aturan wajib:
+- Gunakan Bahasa Indonesia
+- Gunakan tone profesional, edukatif, engaging
+- Hindari teori berlebihan, fokus penerapan kerja nyata
+- Jika relevan, gunakan backlink [[Judul Materi Terkait]]
+
+Struktur isi yang diinginkan (boleh dibagi antar bubble):
+1) Deskripsi Singkat
+2) Konsep Utama (bertahap)
+3) Contoh Kasus
+4) Tips Praktis
+5) Kesimpulan/Refleksi
+
+Output HARUS berupa JSON array of strings.
+Setiap item = satu bubble chat Telegram, total tepat sesuai jumlah bubble yang diminta.`
+	userPrompt := fmt.Sprintf("Judul materi: %s\n\nSumber kontribusi peserta:\n%s\n\nBuat tepat %d bubble chat.", title, source, bubbleCount)
+
+	content, err := a.aiChat(ctx, systemPrompt, userPrompt, 2200, 0.7)
 	if err != nil { return "", err }
 
 	var bubbles []string
@@ -6158,6 +6172,8 @@ Gunakan Bahasa Indonesia, ringkas, jelas, boleh pakai markdown (**bold**, bullet
 		_ = json.Unmarshal([]byte(content[start:end+1]), &bubbles)
 	}
 	if len(bubbles) == 0 { bubbles = []string{content} }
+	if len(bubbles) > bubbleCount { bubbles = bubbles[:bubbleCount] }
+	for len(bubbles) < bubbleCount { bubbles = append(bubbles, "") }
 	b, _ := json.Marshal(bubbles)
 	return string(b), nil
 }
