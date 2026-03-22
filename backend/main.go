@@ -3117,6 +3117,7 @@ func (a *app) syncTelegramBotCommands(ctx context.Context) error {
 		{"command": "daftar", "description": "📝 Daftar sebagai peserta baru"},
 		{"command": "cek", "description": "🔍 Cek status pendaftaranmu"},
 		{"command": "materi", "description": "📚 Belajar materi per kategori"},
+		{"command": "roadmap", "description": "🕸️ Buka roadmap jabatan & materi"},
 		{"command": "quiz", "description": "🧠 Latihan soal per kategori"},
 		{"command": "tryout", "description": "🚀 Simulasi tryout soal acak"},
 		{"command": "leaderbot", "description": "🏆 Papan ranking tryout tercepat"},
@@ -3666,6 +3667,56 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		return fmt.Sprintf("✅ *Feedback diterima\\!*\n\nPenilaian: %s\n\n%s", stars, thankMsg[hashIdx%len(thankMsg)]), "idle"
 	}
 
+	if s.State == "roadmap_choose_position" {
+		idx, err := strconv.Atoi(strings.TrimSpace(text))
+		if err != nil || idx <= 0 || idx > len(s.MateriList) {
+			return "Ketik nomor jabatan yang valid ya 🙏", "roadmap_choose_position"
+		}
+		picked := s.MateriList[idx-1]
+		rows, err := a.db.QueryContext(ctx, `
+			SELECT rm.id, rm.title, rm.content, COALESCE(rm.bloom_level,'C2')
+			FROM roadmap_materials rm
+			JOIN roadmap_competencies rc ON rc.id=rm.competency_id
+			WHERE rc.position_id=$1 AND rm.is_active=TRUE
+			ORDER BY rm.updated_at DESC LIMIT 20
+		`, picked.ID)
+		if err != nil {
+			return "Maaf, belum bisa ambil materi roadmap sekarang 🙏", "idle"
+		}
+		defer rows.Close()
+		items := []botMateriItem{}
+		for rows.Next() {
+			var it botMateriItem
+			if rows.Scan(&it.ID, &it.Title, &it.Content, &it.Type) == nil {
+				items = append(items, it)
+			}
+		}
+		if len(items) == 0 { return "Belum ada materi roadmap untuk jabatan ini.", "idle" }
+		s.MateriCategoryID = picked.ID
+		s.MateriList = items
+		s.State = "roadmap_choose_material"
+		s.UpdatedAt = time.Now()
+		a.mu.Lock(); a.botSessions[uid] = s; a.mu.Unlock()
+		var b strings.Builder
+		b.WriteString("📘 *Roadmap Materi*\n")
+		b.WriteString(fmt.Sprintf("Jabatan: *%s*\n\n", escapeMD(picked.Title)))
+		for i, m := range items {
+			b.WriteString(fmt.Sprintf("%d\. %s\n", i+1, escapeMD(m.Title)))
+		}
+		b.WriteString("\nKetik nomor materi untuk membaca.")
+		return b.String(), "roadmap_choose_material"
+	}
+
+	if s.State == "roadmap_choose_material" {
+		idx, err := strconv.Atoi(strings.TrimSpace(text))
+		if err != nil || idx <= 0 || idx > len(s.MateriList) {
+			return "Ketik nomor materi yang valid ya 🙏", "roadmap_choose_material"
+		}
+		m := s.MateriList[idx-1]
+		html := "§HTML§" + markdownToTelegramHTML(fmt.Sprintf("# %s\n\n%s", m.Title, m.Content))
+		return html, "roadmap_choose_material"
+	}
+
 handleCommands:
 	if lower == "/batal" {
 		a.resetSession(uid)
@@ -3701,6 +3752,52 @@ handleCommands:
 		a.mu.Unlock()
 		return "Siap, Nala bantu cek ✅\nKirim nomor HP yang ingin dicek ya.", "check_phone"
 	}
+	if lower == "/roadmap" {
+		registered, err := a.isRegisteredBotUser(ctx, uid)
+		if err != nil {
+			return "Maaf, Nala lagi kesulitan cek akunmu 🙏\nCoba lagi sebentar ya.", "idle"
+		}
+		if !registered {
+			return "Sebelum akses roadmap, kamu perlu daftar dulu ya ✨\nKetik /daftar untuk registrasi.", "idle"
+		}
+		webUID2, _ := a.resolveWebUserIDByExternal(ctx, uid)
+		groupID2 := a.getUserGroupID(ctx, webUID2)
+		q := `SELECT id, code, name FROM roadmap_positions WHERE is_active=TRUE`
+		args := []any{}
+		if groupID2 > 0 {
+			q += ` AND (group_id IS NULL OR group_id=$1)`
+			args = append(args, groupID2)
+		} else {
+			q += ` AND group_id IS NULL`
+		}
+		q += ` ORDER BY name ASC`
+		rows, err := a.db.QueryContext(ctx, q, args...)
+		if err != nil { return "Maaf, roadmap belum tersedia saat ini 🙏", "idle" }
+		defer rows.Close()
+		positions := []botMateriItem{}
+		for rows.Next() {
+			var id int
+			var code, name string
+			if rows.Scan(&id, &code, &name) == nil {
+				positions = append(positions, botMateriItem{ID: id, Title: fmt.Sprintf("%s • %s", code, name)})
+			}
+		}
+		if len(positions) == 0 {
+			return "Belum ada roadmap yang tersedia untuk kelompokmu saat ini.", "idle"
+		}
+		a.mu.Lock()
+		s.State = "roadmap_choose_position"
+		s.MateriList = positions
+		s.UpdatedAt = time.Now()
+		a.botSessions[uid] = s
+		a.mu.Unlock()
+		var b strings.Builder
+		b.WriteString("🕸️ *Roadmap Jabatan*\n\nPilih jabatan:\n")
+		for i, p := range positions { b.WriteString(fmt.Sprintf("%d\. %s\n", i+1, escapeMD(p.Title))) }
+		b.WriteString("\nKetik nomor jabatan yang ingin dibuka.")
+		return b.String(), "roadmap_choose_position"
+	}
+
 	if lower == "/materi" {
 		registered, err := a.isRegisteredBotUser(ctx, uid)
 		if err != nil {
