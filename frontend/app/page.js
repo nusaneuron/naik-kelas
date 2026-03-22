@@ -356,7 +356,7 @@ export default function Page() {
         body: JSON.stringify({ question: participantRagQuestion.trim(), position_id: Number(participantRoadmapFilter.position_id || 0), top_k: 4 })
       });
       const d = await res.json().catch(()=>({}));
-      if (!res.ok) return showMsg(d.error || 'Gagal tanya roadmap AI', 'error');
+      if (!res.ok) return showMsg(formatAICreditError(d.error || 'Gagal tanya roadmap AI'), 'error');
       setParticipantRagAnswer(d.answer || '');
       setParticipantRagSources(d.sources || []);
     } finally {
@@ -857,7 +857,7 @@ export default function Page() {
         })
       });
       const d = await res.json().catch(()=>({}));
-      if (!res.ok) return showMsg(d.error || 'Gagal generate materi AI', 'error');
+      if (!res.ok) return showMsg(formatAICreditError(d.error || 'Gagal generate materi AI'), 'error');
       setMaterialForm(f => ({ ...f, content: d.draft_content || f.content }));
       showMsg('Draft materi AI siap ✅', 'success');
     } finally {
@@ -1469,6 +1469,20 @@ export default function Page() {
     setTimeout(() => setActionMsg(''), 5000);
   }
 
+  function formatAICreditError(msg) {
+    const s = String(msg || '').trim();
+    if (!s.includes('saldo credit AI tidak cukup')) return s || 'Saldo credit AI tidak cukup.';
+    const readNum = (key) => {
+      const m = s.match(new RegExp(`${key}=([0-9]+(?:\\.[0-9]+)?)`));
+      return m ? Number(m[1]) : null;
+    };
+    const needC = readNum('need_credits');
+    const haveC = readNum('available_credits');
+    const needT = readNum('need_tokens');
+    const haveT = readNum('available_tokens');
+    return `Saldo credit AI tidak cukup.${needC != null ? ` Butuh ~${needC.toFixed(3)} credit` : ''}${haveC != null ? `, saldo ${haveC.toFixed(3)} credit` : ''}${needT != null ? ` (estimasi ${Math.round(needT)} token` : ''}${haveT != null ? `, tersedia ${Math.round(haveT)} token` : ''}${needT != null ? ')' : ''}.`;
+  }
+
   async function resetPassword(userId) {
     setBusy(true); setActionMsg('');
     await fetch(`${apiBase}/admin/participants/reset-password`, {
@@ -1685,7 +1699,7 @@ export default function Page() {
       body: JSON.stringify({ action: 'test' })
     });
     const d = await res.json().catch(() => ({}));
-    if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Tes AI gagal.'); setBusy(false); return; }
+    if (!res.ok) { setActionType('error'); setActionMsg(formatAICreditError(d.error || 'Tes AI gagal.')); setBusy(false); return; }
     setActionType('success'); setActionMsg(`Tes AI OK: ${d.result || 'berhasil'}`); setBusy(false);
   }
 

@@ -7125,7 +7125,9 @@ func (a *app) aiChat(ctx context.Context, systemPrompt, userPrompt string, maxTo
 		estNeedTokens := estPromptTokens + int64(maxTokens)
 		if estNeedTokens < 1 { estNeedTokens = 1 }
 		if availableTokens < estNeedTokens {
-			return "", fmt.Errorf("saldo credit AI tidak cukup (butuh ~%d token, tersedia %d)", estNeedTokens, availableTokens)
+			needCredits := float64(estNeedTokens) / float64(tokensPerCredit)
+			haveCredits := credits
+			return "", fmt.Errorf("saldo credit AI tidak cukup | need_tokens=%d | available_tokens=%d | need_credits=%.3f | available_credits=%.3f", estNeedTokens, availableTokens, needCredits, haveCredits)
 		}
 	}
 
