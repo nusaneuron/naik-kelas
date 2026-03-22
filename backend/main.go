@@ -6770,7 +6770,7 @@ Output langsung JSON array saja.`
 		userPrompt = fmt.Sprintf("Kategori: %s\n\n", catName) + userPrompt
 	}
 
-	content, err2 := a.aiChat(withAIUsage(ctx, admin.ID, "question_generate"), systemPrompt, userPrompt, 3000, 0.6)
+	content, err2 := a.aiChat(withAIUsage(ctx, adminUser.ID, "question_generate"), systemPrompt, userPrompt, 3000, 0.6)
 	if err2 != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "gagal hubungi AI: " + err2.Error()})
 		return
@@ -7329,7 +7329,7 @@ Contoh format: ["bubble 1 content", "bubble 2 content", "bubble 3 content"]`
 	}
 	userPrompt += fmt.Sprintf("\n\nBagi menjadi %d bubble pesan yang mengalir secara natural.", req.BubbleCount)
 
-	content, errAI := a.aiChat(withAIUsage(r.Context(), admin.ID, "material_generate"), systemPrompt, userPrompt, 2000, 0.7)
+	content, errAI := a.aiChat(withAIUsage(r.Context(), adminUserM.ID, "material_generate"), systemPrompt, userPrompt, 2000, 0.7)
 	if errAI != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "gagal hubungi AI: " + errAI.Error()})
 		return
