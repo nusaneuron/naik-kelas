@@ -3700,10 +3700,16 @@ func (a *app) processBotText(ctx context.Context, uid, displayName, text string)
 		var b strings.Builder
 		b.WriteString("📘 *Roadmap Materi*\n")
 		b.WriteString(fmt.Sprintf("Jabatan: *%s*\n\n", escapeMD(picked.Title)))
-		for i, m := range items {
+		maxShow := len(items)
+		if maxShow > 25 { maxShow = 25 }
+		for i := 0; i < maxShow; i++ {
+			m := items[i]
 			b.WriteString(fmt.Sprintf("%d. %s\n", i+1, escapeMD(m.Title)))
 		}
-		b.WriteString("\nKetik nomor materi untuk membaca.")
+		if len(items) > maxShow {
+			b.WriteString(fmt.Sprintf("\n… %d materi lainnya disembunyikan untuk menjaga pesan tetap ringan.", len(items)-maxShow))
+		}
+		b.WriteString("\n\nKetik nomor materi untuk membaca.")
 		return b.String(), "roadmap_choose_material"
 	}
 
@@ -3798,8 +3804,16 @@ handleCommands:
 		a.mu.Unlock()
 		var b strings.Builder
 		b.WriteString("🕸️ *Roadmap Jabatan*\n\nPilih jabatan:\n")
-		for i, p := range positions { b.WriteString(fmt.Sprintf("%d. %s\n", i+1, escapeMD(p.Title))) }
-		b.WriteString("\nKetik nomor jabatan yang ingin dibuka.")
+		maxShow := len(positions)
+		if maxShow > 20 { maxShow = 20 }
+		for i := 0; i < maxShow; i++ {
+			p := positions[i]
+			b.WriteString(fmt.Sprintf("%d. %s\n", i+1, escapeMD(p.Title)))
+		}
+		if len(positions) > maxShow {
+			b.WriteString(fmt.Sprintf("\n… %d jabatan lainnya disembunyikan untuk menjaga pesan tetap ringan.", len(positions)-maxShow))
+		}
+		b.WriteString("\n\nKetik nomor jabatan yang ingin dibuka.")
 		return b.String(), "roadmap_choose_position"
 	}
 
