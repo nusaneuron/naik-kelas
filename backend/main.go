@@ -7428,6 +7428,55 @@ func (a *app) handleAdminMaterials(w http.ResponseWriter, r *http.Request) {
 			}
 			writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 
+		case "send_test":
+			if req.ID == 0 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id wajib diisi"})
+				return
+			}
+			var tgUID string
+			if err := a.db.QueryRowContext(ctx, `SELECT telegram_user_id FROM telegram_links WHERE user_id=$1 LIMIT 1`, adminUserM.ID).Scan(&tgUID); err != nil || strings.TrimSpace(tgUID) == "" {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "akun admin belum terhubung Telegram"})
+				return
+			}
+			chatID, err := strconv.ParseInt(strings.TrimSpace(tgUID), 10, 64)
+			if err != nil || chatID == 0 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "telegram_user_id tidak valid"})
+				return
+			}
+			var title, mtype, content string
+			if err := a.db.QueryRowContext(ctx, `SELECT title,type,content FROM learning_materials WHERE id=$1`, req.ID).Scan(&title, &mtype, &content); err != nil {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "materi/chat tidak ditemukan"})
+				return
+			}
+			if mtype != "text" {
+				msg := fmt.Sprintf("🧪 Test Chat: %s\n%s", title, content)
+				if sendErr := a.sendTelegramMessage(ctx, chatID, msg, "idle"); sendErr != nil {
+					writeJSON(w, http.StatusBadGateway, map[string]string{"error": "gagal kirim test ke Telegram"})
+					return
+				}
+				writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+				return
+			}
+			bubbles := []string{}
+			var arr []string
+			if json.Unmarshal([]byte(content), &arr) == nil && len(arr) > 0 {
+				for _, x := range arr { if strings.TrimSpace(x) != "" { bubbles = append(bubbles, x) } }
+			} else if strings.TrimSpace(content) != "" {
+				bubbles = []string{content}
+			}
+			if len(bubbles) == 0 { bubbles = []string{"(chat kosong)"} }
+			_ = a.sendTelegramMessage(ctx, chatID, fmt.Sprintf("🧪 Test Chat: %s", title), "idle")
+			for i, b := range bubbles {
+				html := markdownToTelegramHTML(b)
+				if html == "" { html = b }
+				if sendErr := a.sendTelegramHTMLMessage(ctx, chatID, html); sendErr != nil {
+					// fallback plain text
+					_ = a.sendTelegramMessage(ctx, chatID, b, "idle")
+				}
+				if i < len(bubbles)-1 { time.Sleep(200 * time.Millisecond) }
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true, "sent": len(bubbles)})
+
 		default:
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "action tidak valid"})
 		}
