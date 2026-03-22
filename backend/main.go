@@ -704,6 +704,7 @@ func (a *app) initDB(ctx context.Context) error {
 	_, _ = a.db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS ai_usage_logs (
 			id BIGSERIAL PRIMARY KEY,
+			user_id BIGINT,
 			provider TEXT NOT NULL DEFAULT '',
 			model TEXT NOT NULL DEFAULT '',
 			prompt_tokens INT NOT NULL DEFAULT 0,
@@ -713,6 +714,7 @@ func (a *app) initDB(ctx context.Context) error {
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)
 	`)
+	_, _ = a.db.ExecContext(ctx, `ALTER TABLE ai_usage_logs ADD COLUMN IF NOT EXISTS user_id BIGINT`)
 	_, _ = a.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS ai_usage_logs_created_idx ON ai_usage_logs(created_at DESC)`)
 
 	// Badges
@@ -6197,7 +6199,7 @@ Output HARUS berupa JSON array of strings.
 Setiap item = satu bubble chat Telegram, total tepat sesuai jumlah bubble yang diminta.`
 	userPrompt := fmt.Sprintf("Judul materi: %s\n\nSumber kontribusi peserta:\n%s\n\nBuat tepat %d bubble chat.", title, source, bubbleCount)
 
-	content, err := a.aiChat(ctx, systemPrompt, userPrompt, 2200, 0.7)
+	content, err := a.aiChat(withAIUsage(ctx, 0, "contribution_generate"), systemPrompt, userPrompt, 2200, 0.7)
 	if err != nil { return "", err }
 
 	var bubbles []string
@@ -6768,7 +6770,7 @@ Output langsung JSON array saja.`
 		userPrompt = fmt.Sprintf("Kategori: %s\n\n", catName) + userPrompt
 	}
 
-	content, err2 := a.aiChat(ctx, systemPrompt, userPrompt, 3000, 0.6)
+	content, err2 := a.aiChat(withAIUsage(ctx, admin.ID, "question_generate"), systemPrompt, userPrompt, 3000, 0.6)
 	if err2 != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "gagal hubungi AI: " + err2.Error()})
 		return
@@ -7025,6 +7027,19 @@ func (a *app) getActiveAISetting(ctx context.Context) (aiProviderSetting, error)
 	return cfg, nil
 }
 
+type ctxAIUsageKey string
+
+const (
+	ctxAIUserIDKey  ctxAIUsageKey = "ai_user_id"
+	ctxAIFeatureKey ctxAIUsageKey = "ai_feature"
+)
+
+func withAIUsage(ctx context.Context, userID int64, feature string) context.Context {
+	ctx = context.WithValue(ctx, ctxAIUserIDKey, userID)
+	ctx = context.WithValue(ctx, ctxAIFeatureKey, feature)
+	return ctx
+}
+
 func (a *app) aiChat(ctx context.Context, systemPrompt, userPrompt string, maxTokens int, temperature float64) (string, error) {
 	cfg, err := a.getActiveAISetting(ctx)
 	if err != nil {
@@ -7082,10 +7097,14 @@ func (a *app) aiChat(ctx context.Context, systemPrompt, userPrompt string, maxTo
 		completionTokens = len([]rune(answer)) / 4
 		totalTokens = promptTokens + completionTokens
 	}
+	feature := "general"
+	if v, ok := ctx.Value(ctxAIFeatureKey).(string); ok && strings.TrimSpace(v) != "" { feature = strings.TrimSpace(v) }
+	var userID any = nil
+	if v, ok := ctx.Value(ctxAIUserIDKey).(int64); ok && v > 0 { userID = v }
 	_, _ = a.db.ExecContext(ctx, `
-		INSERT INTO ai_usage_logs(provider,model,prompt_tokens,completion_tokens,total_tokens,feature)
-		VALUES($1,$2,$3,$4,$5,$6)
-	`, cfg.Provider, cfg.Model, promptTokens, completionTokens, totalTokens, "general")
+		INSERT INTO ai_usage_logs(user_id,provider,model,prompt_tokens,completion_tokens,total_tokens,feature)
+		VALUES($1,$2,$3,$4,$5,$6,$7)
+	`, userID, cfg.Provider, cfg.Model, promptTokens, completionTokens, totalTokens, feature)
 	return answer, nil
 }
 
@@ -7179,7 +7198,24 @@ func (a *app) handleAdminAIUsageStats(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"today_tokens":today,"month_tokens":month,"top_features":top,"model_breakdown":modelBreakdown})
+	uRows, _ := a.db.QueryContext(r.Context(), `
+		SELECT COALESCE(u.full_name, u.email, CONCAT('user#', l.user_id::text)) AS uname, COALESCE(SUM(l.total_tokens),0) tok
+		FROM ai_usage_logs l
+		LEFT JOIN users u ON u.id = l.user_id
+		WHERE l.created_at >= date_trunc('month', NOW()) AND l.user_id IS NOT NULL
+		GROUP BY l.user_id, uname
+		ORDER BY tok DESC
+		LIMIT 8
+	`)
+	topUsers := []map[string]any{}
+	if uRows != nil {
+		defer uRows.Close()
+		for uRows.Next() {
+			var uname string; var tok int64
+			if uRows.Scan(&uname,&tok)==nil { topUsers = append(topUsers, map[string]any{"user":uname,"tokens":tok}) }
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"today_tokens":today,"month_tokens":month,"top_features":top,"model_breakdown":modelBreakdown,"top_users":topUsers})
 }
 
 func (a *app) handleAdminAIProfiles(w http.ResponseWriter, r *http.Request) {
@@ -7279,7 +7315,7 @@ Contoh format: ["bubble 1 content", "bubble 2 content", "bubble 3 content"]`
 	}
 	userPrompt += fmt.Sprintf("\n\nBagi menjadi %d bubble pesan yang mengalir secara natural.", req.BubbleCount)
 
-	content, errAI := a.aiChat(r.Context(), systemPrompt, userPrompt, 2000, 0.7)
+	content, errAI := a.aiChat(withAIUsage(r.Context(), admin.ID, "material_generate"), systemPrompt, userPrompt, 2000, 0.7)
 	if errAI != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "gagal hubungi AI: " + errAI.Error()})
 		return
@@ -7364,7 +7400,7 @@ Jika relevan, gunakan backlink materi terkait dengan format [[Judul Materi]].`
 		}
 	}
 	userPrompt += "\n\nBatasi total panjang sekitar 700-1100 kata."
-	content, errAI := a.aiChat(r.Context(), systemPrompt, userPrompt, 2200, 0.7)
+	content, errAI := a.aiChat(withAIUsage(r.Context(), admin.ID, "roadmap_generate"), systemPrompt, userPrompt, 2200, 0.7)
 	if errAI != nil { writeJSON(w, http.StatusBadGateway, map[string]string{"error":"gagal hubungi AI: " + errAI.Error()}); return }
 	writeJSON(w, http.StatusOK, map[string]any{"draft_content": strings.TrimSpace(content)})
 }
@@ -8503,7 +8539,7 @@ Aturan wajib:
 - Untuk setiap poin penting, sertakan sitasi [n] yang merujuk ke sumber konteks.
 - Gunakan Bahasa Indonesia ringkas, jelas, dan aplikatif.`
 	userPrompt := fmt.Sprintf("Pertanyaan: %s\n\nKonteks:\n%s\n\nJawab dalam bullet list singkat jika perlu dan sertakan sitasi [1], [2], dst pada kalimat yang relevan.", strings.TrimSpace(req.Question), strings.Join(ctxParts, "\n\n---\n\n"))
-	ans, aiErr := a.aiChat(r.Context(), systemPrompt, userPrompt, 900, 0.2)
+	ans, aiErr := a.aiChat(withAIUsage(r.Context(), u.ID, "rag_ask"), systemPrompt, userPrompt, 900, 0.2)
 	if aiErr != nil { writeJSON(w,http.StatusBadGateway,map[string]string{"error":"gagal generate jawaban rag: " + aiErr.Error()}); return }
 	ans = strings.TrimSpace(ans)
 	if !strings.Contains(ans, "[") {
