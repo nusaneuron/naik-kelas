@@ -4341,10 +4341,6 @@ export default function Page() {
                           <div style={{ fontWeight: 700, marginBottom: 2 }}>{c.name}</div>
                           <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>{c.code}</div>
                           <div style={{ fontSize: 11, marginBottom: 10 }}>{c.group_name ? <span className="nk-badge nk-badge-purple">🏢 {c.group_name}</span> : <span className="nk-badge" style={{ background: '#1e293b', color: '#64748b' }}>🌐 Global</span>}</div>
-                          <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                            <BtnSm disabled={busy} onClick={() => startEditCategory(c)}>Edit</BtnSm>
-                            <BtnSm disabled={busy} onClick={() => deleteCategory(c.id)} danger>Hapus</BtnSm>
-                          </div>
                           <div style={{ fontSize:11, color:'#64748b' }}>Sumber: Roadmap (otomatis) • Ubah kelompok utama dari menu Roadmap Jabatan.</div>
                         </div>
                       ))}
