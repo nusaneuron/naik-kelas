@@ -1008,7 +1008,7 @@ export default function Page() {
       const res = await fetch(`${apiBase}/admin/roadmap/rag/reindex`, { method:'POST', credentials:'include' });
       const d = await res.json().catch(()=>({}));
       if (!res.ok) return showMsg(d.error || 'Gagal reindex RAG roadmap', 'error');
-      showMsg(`RAG roadmap reindex selesai (${d.chunks || 0} chunks) ✅`, 'success');
+      showMsg(`RAG roadmap reindex selesai ✅\nMateri terindeks: ${d.materials || 0}\nTotal chunks: ${d.chunks || 0}`, 'success');
     } finally {
       setRoadmapRagReindexing(false);
     }
