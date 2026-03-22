@@ -1852,7 +1852,6 @@ export default function Page() {
     : [
         ['profil', '👤', 'Profil'],
         ['catatan', '📝', 'Catatan'],
-        ['materi', '📚', 'Materi'],
         ['roadmap', '🕸️', 'Roadmap'],
         ['quiz', '🧠', 'Quiz & Tryout'],
         ['redeem', '🎁', 'Redeem'],
