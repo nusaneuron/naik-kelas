@@ -203,6 +203,8 @@ export default function Page() {
   const [qAiGenerated, setQAiGenerated] = useState([]);
   const [qAiChecked, setQAiChecked] = useState([]);
   const [qAiSaving, setQAiSaving] = useState(false);
+  const [chatRoadmapCompId, setChatRoadmapCompId] = useState('');
+  const [chatRoadmapMaterialId, setChatRoadmapMaterialId] = useState('');
 
   // Notes
   const [notes, setNotes] = useState([]);
@@ -1698,6 +1700,30 @@ export default function Page() {
     setActionType('success'); setActionMsg(`Klaim ${action === 'approve' ? 'disetujui' : 'ditolak'}.`); setBusy(false);
   }
 
+  function splitRoadmapMaterialToBubbles(content, maxLen = 700) {
+    const text = String(content || '').replace(/\r/g, '').trim();
+    if (!text) return [''];
+    const paras = text.split(/\n\n+/).map(x => x.trim()).filter(Boolean);
+    const out = [];
+    let cur = '';
+    for (const p of paras) {
+      if (!cur) { cur = p; continue; }
+      if ((cur + '\n\n' + p).length <= maxLen) cur += '\n\n' + p;
+      else { out.push(cur); cur = p; }
+    }
+    if (cur) out.push(cur);
+    return out.slice(0, 20);
+  }
+
+  function importRoadmapMaterialToChat() {
+    const m = roadmapMaterials.find(x => String(x.id) === String(chatRoadmapMaterialId || ''));
+    if (!m) return showMsg('Pilih materi roadmap dulu', 'error');
+    setMateriType('text');
+    setMateriTitle(m.title || '');
+    setMateriBubbles(splitRoadmapMaterialToBubbles(m.content || ''));
+    showMsg('Materi roadmap berhasil dimuat ke Chat ✅', 'success');
+  }
+
   // ── Materi functions ─────────────────────────────────────
   async function saveMateri() {
     setBusy(true); setActionMsg('');
@@ -1705,7 +1731,9 @@ export default function Page() {
     const body = {
       action: isEdit ? 'update' : 'create',
       ...(isEdit && { id: Number(editingMateriId) }),
-      category_id: Number(materiCatId), title: materiTitle,
+      category_id: Number(materiCatId) || 0,
+      roadmap_competency_id: Number(chatRoadmapCompId) || 0,
+      title: materiTitle,
       type: materiType,
       content: materiType === 'text'
         ? (materiBubbles.filter(b => b.trim()).length > 1
@@ -1728,12 +1756,16 @@ export default function Page() {
 
   function resetMateriForm() {
     setEditingMateriId(''); setMateriCatId(''); setMateriTitle('');
+    setChatRoadmapCompId(''); setChatRoadmapMaterialId('');
     setMateriType('text'); setMateriContent(''); setMateriExp('10');
     setMateriOrder('0'); setMateriActive(true); setMateriBubbles(['']);
   }
 
   function startEditMateri(m) {
     setEditingMateriId(String(m.id)); setMateriCatId(String(m.category_id));
+    const cat = categories.find(c => String(c.id) === String(m.category_id));
+    const mm = String(cat?.code || '').match(/^lrmc-(\d+)$/);
+    setChatRoadmapCompId(mm ? mm[1] : '');
     setMateriTitle(m.title); setMateriType(m.type);
     // Parse bubbles jika JSON array
     if (m.type === 'text' && m.content?.startsWith('[')) {
@@ -3125,7 +3157,7 @@ export default function Page() {
                   ['peserta', '👥', 'Peserta'],
                   ['bank', '📚', 'Bank Soal'],
                   ['tryout', '🎯', 'Tryout'],
-                  ['materi', '📖', 'Materi'],
+                  ['materi', '💬', 'Chat'],
                   ['roadmap', '🧭', 'Roadmap Jabatan'],
                   ['kontribusi', '💡', 'Kontribusi'],
                   ['redeem', '🎁', 'Redeem'],
@@ -4306,9 +4338,25 @@ export default function Page() {
                           </select>
                         </div>
                       </div>
+                      <div style={{ border:'1px dashed #334155', borderRadius:10, padding:10, marginBottom: 10 }}>
+                        <div style={{ fontSize:12, fontWeight:700, color:'#93c5fd', marginBottom:8 }}>Bridge Roadmap → Chat Telegram</div>
+                        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                          <select value={chatRoadmapCompId} onChange={e => { const v=e.target.value; setChatRoadmapCompId(v); setChatRoadmapMaterialId(''); }} className="nk-input-sm" style={{ width:'100%' }}>
+                            <option value="">Pilih kompetensi roadmap</option>
+                            {roadmapCompetencies.map(c => <option key={c.id} value={c.id}>{c.code} • {c.name}</option>)}
+                          </select>
+                          <select value={chatRoadmapMaterialId} onChange={e => setChatRoadmapMaterialId(e.target.value)} className="nk-input-sm" style={{ width:'100%' }}>
+                            <option value="">Pilih materi roadmap</option>
+                            {roadmapMaterials.filter(m => !chatRoadmapCompId || String(m.competency_id) === String(chatRoadmapCompId)).map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
+                          </select>
+                        </div>
+                        <div style={{ marginTop:8, display:'flex', justifyContent:'flex-end' }}>
+                          <BtnSm onClick={importRoadmapMaterialToChat} disabled={!chatRoadmapMaterialId}>↘ Muat & Pecah Jadi Chat</BtnSm>
+                        </div>
+                      </div>
                       <div style={{ marginBottom: 10 }}>
-                        <label style={fieldLbl}>Judul Materi</label>
-                        <input value={materiTitle} onChange={e => setMateriTitle(e.target.value)} placeholder="Judul materi..." className="nk-input-sm" style={{ width: "100%" }} />
+                        <label style={fieldLbl}>Judul Materi / Judul Chat</label>
+                        <input value={materiTitle} onChange={e => setMateriTitle(e.target.value)} placeholder="Judul materi/chat..." className="nk-input-sm" style={{ width: "100%" }} />
                       </div>
                       {/* AI Generate Button */}
                       {materiType === 'text' && (

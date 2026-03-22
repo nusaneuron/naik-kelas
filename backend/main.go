@@ -7242,6 +7242,24 @@ Jika relevan, gunakan backlink materi terkait dengan format [[Judul Materi]].`
 	writeJSON(w, http.StatusOK, map[string]any{"draft_content": strings.TrimSpace(content)})
 }
 
+func (a *app) ensureLearningCategoryFromRoadmapCompetency(ctx context.Context, competencyID int64) (int64, error) {
+	if competencyID <= 0 { return 0, fmt.Errorf("invalid competency id") }
+	var compName string
+	if err := a.db.QueryRowContext(ctx, `SELECT name FROM roadmap_competencies WHERE id=$1`, competencyID).Scan(&compName); err != nil {
+		return 0, err
+	}
+	code := fmt.Sprintf("lrmc-%d", competencyID)
+	var catID int64
+	err := a.db.QueryRowContext(ctx, `SELECT id FROM question_categories WHERE code=$1`, code).Scan(&catID)
+	if err == nil && catID > 0 {
+		_, _ = a.db.ExecContext(ctx, `UPDATE question_categories SET name=$1,is_active=TRUE,updated_at=NOW() WHERE id=$2`, compName, catID)
+		return catID, nil
+	}
+	err = a.db.QueryRowContext(ctx, `INSERT INTO question_categories(code,name,is_active) VALUES($1,$2,TRUE) RETURNING id`, code, compName).Scan(&catID)
+	if err != nil { return 0, err }
+	return catID, nil
+}
+
 func (a *app) handleAdminMaterials(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	adminUserM, err := a.requireRole(ctx, r, "admin")
@@ -7311,10 +7329,11 @@ func (a *app) handleAdminMaterials(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodPost {
 		var req struct {
-			Action     string `json:"action"`
-			ID         int    `json:"id"`
-			CategoryID int    `json:"category_id"`
-			Title      string `json:"title"`
+			Action              string `json:"action"`
+			ID                  int    `json:"id"`
+			CategoryID          int    `json:"category_id"`
+			RoadmapCompetencyID int64  `json:"roadmap_competency_id"`
+			Title               string `json:"title"`
 			Type       string `json:"type"`
 			Content    string `json:"content"`
 			ExpReward  int    `json:"exp_reward"`
@@ -7324,6 +7343,14 @@ func (a *app) handleAdminMaterials(w http.ResponseWriter, r *http.Request) {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 			return
+		}
+		if (req.Action == "create" || req.Action == "update") && req.CategoryID == 0 && req.RoadmapCompetencyID > 0 {
+			cid, mErr := a.ensureLearningCategoryFromRoadmapCompetency(ctx, req.RoadmapCompetencyID)
+			if mErr != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kompetensi roadmap tidak valid"})
+				return
+			}
+			req.CategoryID = int(cid)
 		}
 
 		// Validasi: admin biasa tidak boleh tambah materi ke kategori global
