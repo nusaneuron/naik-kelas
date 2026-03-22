@@ -4511,11 +4511,11 @@ export default function Page() {
                             );
                           })}
                           {/* Tombol tambah bubble + counter */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap:'wrap' }}>
                             <button type="button"
                               disabled={materiBubbles.length >= 20}
                               onClick={() => setMateriBubbles(prev => [...prev, ''])}
-                              style={{ flex: 1, background: materiBubbles.length >= 20 ? 'rgba(51,65,85,0.3)' : 'rgba(99,102,241,0.1)', border: `1px dashed ${materiBubbles.length >= 20 ? '#334155' : 'rgba(99,102,241,0.4)'}`, borderRadius: 8, color: materiBubbles.length >= 20 ? '#475569' : '#818cf8', padding: '8px 16px', fontSize: 13, cursor: materiBubbles.length >= 20 ? 'not-allowed' : 'pointer' }}>
+                              style={{ flex: '1 1 220px', minWidth: 0, background: materiBubbles.length >= 20 ? 'rgba(51,65,85,0.3)' : 'rgba(99,102,241,0.1)', border: `1px dashed ${materiBubbles.length >= 20 ? '#334155' : 'rgba(99,102,241,0.4)'}`, borderRadius: 8, color: materiBubbles.length >= 20 ? '#475569' : '#818cf8', padding: '8px 16px', fontSize: 13, cursor: materiBubbles.length >= 20 ? 'not-allowed' : 'pointer' }}>
                               {materiBubbles.length >= 20 ? '🚫 Batas maksimal tercapai' : '+ Tambah Pesan'}
                             </button>
                             <span style={{ fontSize: 12, color: materiBubbles.length >= 18 ? '#f87171' : '#475569', whiteSpace: 'nowrap', fontWeight: 600 }}>
@@ -4528,7 +4528,8 @@ export default function Page() {
                             <summary style={{ fontSize: 12, color: '#64748b', cursor: 'pointer', userSelect: 'none' }}>📖 Panduan format Markdown (klik untuk buka)</summary>
                             <div style={{ background: '#0a1628', border: '1px solid #1e2d45', borderRadius: 8, padding: 14, marginTop: 8, fontSize: 12, lineHeight: 1.8 }}>
                               <p style={{ fontWeight: 700, color: '#94a3b8', margin: '0 0 8px' }}>✍️ Cara penulisan teks di Telegram:</p>
-                              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                              <div style={{ width:'100%', overflowX:'auto' }}>
+                              <table style={{ width: '100%', minWidth: 560, borderCollapse: 'collapse' }}>
                                 <thead><tr style={{ color: '#475569', borderBottom: '1px solid #1e2d45' }}><th style={{ textAlign: 'left', padding: '4px 8px' }}>Yang kamu tulis</th><th style={{ textAlign: 'left', padding: '4px 8px' }}>Tampil di Telegram</th></tr></thead>
                                 <tbody>{[
                                   ['**teks**', '𝐭𝐞𝐤𝐬 (tebal/bold)'],
@@ -4550,13 +4551,14 @@ export default function Page() {
                                   </tr>
                                 ))}</tbody>
                               </table>
+                              </div>
                               <p style={{ margin: '10px 0 4px', color: '#475569' }}>💡 <b style={{ color: '#94a3b8' }}>Tips:</b> Blok di baris kosong = paragraf baru. Kamu bisa pakai tombol toolbar di atas untuk format otomatis.</p>
                             </div>
                           </details>
                         </>) : <input value={materiContent} onChange={e => setMateriContent(e.target.value)} placeholder="https://..." className="nk-input-sm" style={{ width: "100%" }} />
                         }
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px,1fr))', gap: 10, marginBottom: 12 }}>
                         <div>
                           <label style={fieldLbl}>EXP Reward</label>
                           <input type="number" value={materiExp} onChange={e => setMateriExp(e.target.value)} className="nk-input-sm" style={{ width: "100%" }} />
@@ -4605,8 +4607,8 @@ export default function Page() {
                       .map(m => {
                         const typeIcon = { text: '📖', video: '🎬', audio: '🎵' }[m.type] || '📄';
                         return (
-                          <div key={m.id} style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 10, padding: '12px 14px', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                            <div style={{ flex: 1 }}>
+                          <div key={m.id} style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 10, padding: '12px 14px', marginBottom: 8, display: 'flex', flexDirection:'column', gap: 10, overflow:'hidden' }}>
+                            <div style={{ minWidth: 0 }}>
                               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
                                 <span>{typeIcon}</span>
                                 <span style={{ fontWeight: 600, fontSize: 14 }}>{m.title}</span>
@@ -4614,13 +4616,13 @@ export default function Page() {
                                 {m.group_name ? <span className="nk-badge" style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', fontSize: 11 }}>🏢 {m.group_name}</span> : <span className="nk-badge" style={{ background: '#1e293b', color: '#64748b', fontSize: 11 }}>🌐 Global</span>}
                                 {!m.is_active && <span className="nk-badge" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171', fontSize: 11 }}>Nonaktif</span>}
                               </div>
-                              <div style={{ fontSize: 12, color: '#64748b', display: 'flex', gap: 12 }}>
+                              <div style={{ fontSize: 12, color: '#64748b', display: 'flex', gap: 12, flexWrap:'wrap' }}>
                                 <span>+{m.exp_reward} EXP</span>
                                 <span>Urutan: {m.order_no}</span>
                                 <span>Selesai oleh: {m.completed_count} peserta</span>
                               </div>
                             </div>
-                            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                            <div style={{ display: 'flex', gap: 6, flexWrap:'wrap', width:'100%' }}>
                               <BtnSm onClick={() => startEditMateri(m)} style={{ background: '#1e40af', fontSize: 12 }}>Edit</BtnSm>
                               <BtnSm onClick={() => sendMateriTestTelegram(m.id)} style={{ background: '#0f766e', fontSize: 12 }}>Test Telegram</BtnSm>
                               <BtnSm onClick={() => previewPublishMateriTelegram(m.id)} style={{ background: '#334155', fontSize: 12 }}>Preview Recipient</BtnSm>
