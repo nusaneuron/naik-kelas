@@ -7478,14 +7478,21 @@ func (a *app) handleAdminMaterials(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			// send_publish -> kirim ke peserta berdasarkan group jabatan roadmap (code lrmc-<competency_id>)
-			if !strings.HasPrefix(catCode, "lrmc-") {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "chat ini belum terhubung ke kompetensi roadmap"})
+			// send_publish/preview_publish -> kirim ke peserta berdasarkan bridge code kompetensi roadmap
+			var compID int64
+			if strings.HasPrefix(catCode, "lrmc-") {
+				compID, _ = strconv.ParseInt(strings.TrimPrefix(catCode, "lrmc-"), 10, 64)
+			} else if strings.HasPrefix(catCode, "rmc-") {
+				// backward compatibility: bridge lama bank-soal
+				compID, _ = strconv.ParseInt(strings.TrimPrefix(catCode, "rmc-"), 10, 64)
+			} else {
+				writeJSON(w, http.StatusBadRequest, map[string]string{
+					"error": fmt.Sprintf("chat '%s' belum terhubung ke kompetensi roadmap (category code saat ini: '%s'). Gunakan bridge dari dropdown kompetensi roadmap lalu simpan ulang.", title, catCode),
+				})
 				return
 			}
-			compID, _ := strconv.ParseInt(strings.TrimPrefix(catCode, "lrmc-"), 10, 64)
 			if compID <= 0 {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kode bridge roadmap tidak valid"})
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("kode bridge roadmap tidak valid: '%s'", catCode)})
 				return
 			}
 			var groupID sql.NullInt64
@@ -7512,7 +7519,9 @@ func (a *app) handleAdminMaterials(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if len(recipients) == 0 {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error":"tidak ada peserta telegram aktif untuk target ini"}); return
+				gidTxt := "global"
+				if groupID.Valid { gidTxt = fmt.Sprintf("group_id=%d", groupID.Int64) }
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("tidak ada peserta telegram aktif untuk target ini (kompetensi_id=%d, %s)", compID, gidTxt)}); return
 			}
 			if req.Action == "preview_publish" {
 				writeJSON(w, http.StatusOK, map[string]any{
