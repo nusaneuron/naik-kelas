@@ -8257,11 +8257,11 @@ func splitRoadmapContentIntoChunks(content string, targetLen int) []string {
 	return out
 }
 
-func (a *app) rebuildRoadmapRAGIndex(ctx context.Context) (int64, int64, error) {
+func (a *app) rebuildRoadmapRAGIndex(ctx context.Context) (int64, int64, int64, string, error) {
 	tx, err := a.db.BeginTx(ctx, nil)
-	if err != nil { return 0, 0, err }
+	if err != nil { return 0, 0, 0, "", err }
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `DELETE FROM roadmap_rag_chunks`); err != nil { return 0, 0, err }
+	if _, err := tx.ExecContext(ctx, `DELETE FROM roadmap_rag_chunks`); err != nil { return 0, 0, 0, "", err }
 	rows, err := tx.QueryContext(ctx, `
 		SELECT rm.id, rm.title, rm.content, COALESCE(rm.bloom_level,'C2'), rc.id, rc.position_id, rp.group_id
 		FROM roadmap_materials rm
@@ -8270,10 +8270,12 @@ func (a *app) rebuildRoadmapRAGIndex(ctx context.Context) (int64, int64, error) 
 		WHERE rm.is_active=TRUE
 		ORDER BY rm.id ASC
 	`)
-	if err != nil { return 0, 0, err }
+	if err != nil { return 0, 0, 0, "", err }
 	defer rows.Close()
 	var inserted int64
 	var materialsUsed int64
+	var failed int64
+	sampleErr := ""
 	for rows.Next() {
 		var materialID, competencyID, positionID int64
 		var groupID sql.NullInt64
@@ -8286,11 +8288,16 @@ func (a *app) rebuildRoadmapRAGIndex(ctx context.Context) (int64, int64, error) 
 				INSERT INTO roadmap_rag_chunks(material_id,position_id,competency_id,group_id,title,chunk_text,chunk_order,bloom_level)
 				VALUES($1,$2,$3,$4,$5,$6,$7,$8)
 			`, materialID, positionID, competencyID, groupID, title, ch, i+1, bloom)
-			if err == nil { inserted++ }
+			if err == nil {
+				inserted++
+			} else {
+				failed++
+				if sampleErr == "" { sampleErr = err.Error() }
+			}
 		}
 	}
-	if err := tx.Commit(); err != nil { return 0, 0, err }
-	return inserted, materialsUsed, nil
+	if err := tx.Commit(); err != nil { return 0, 0, 0, "", err }
+	return inserted, materialsUsed, failed, sampleErr, nil
 }
 
 func (a *app) retrieveRoadmapRAGChunks(ctx context.Context, u authUser, question string, positionID int64, topK int) ([]map[string]any, error) {
@@ -8344,9 +8351,9 @@ func (a *app) handleAdminRoadmapRAGReindex(w http.ResponseWriter, r *http.Reques
 	_, err := a.requireRole(r.Context(), r, "admin", "super_admin")
 	if err != nil { writeJSON(w,http.StatusUnauthorized,map[string]string{"error":"unauthorized"}); return }
 	if r.Method != http.MethodPost { writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"}); return }
-	cnt, mats, err := a.rebuildRoadmapRAGIndex(r.Context())
+	cnt, mats, failed, sampleErr, err := a.rebuildRoadmapRAGIndex(r.Context())
 	if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal rebuild rag index: " + err.Error()}); return }
-	writeJSON(w,http.StatusOK,map[string]any{"ok":true,"chunks":cnt,"materials":mats})
+	writeJSON(w,http.StatusOK,map[string]any{"ok":true,"chunks":cnt,"materials":mats,"failed":failed,"sample_error":sampleErr})
 }
 
 func (a *app) handleParticipantRoadmapRAGAsk(w http.ResponseWriter, r *http.Request) {

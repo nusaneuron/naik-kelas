@@ -1008,7 +1008,8 @@ export default function Page() {
       const res = await fetch(`${apiBase}/admin/roadmap/rag/reindex`, { method:'POST', credentials:'include' });
       const d = await res.json().catch(()=>({}));
       if (!res.ok) return showMsg(d.error || 'Gagal reindex RAG roadmap', 'error');
-      showMsg(`RAG roadmap reindex selesai ✅\nMateri terindeks: ${d.materials || 0}\nTotal chunks: ${d.chunks || 0}`, 'success');
+      const extra = (d.failed || 0) > 0 ? `\nInsert gagal: ${d.failed}\nContoh error: ${d.sample_error || '-'}` : '';
+      showMsg(`RAG roadmap reindex selesai ✅\nMateri terindeks: ${d.materials || 0}\nTotal chunks: ${d.chunks || 0}${extra}`, (d.failed || 0) > 0 ? 'error' : 'success');
     } finally {
       setRoadmapRagReindexing(false);
     }
