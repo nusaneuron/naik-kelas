@@ -302,14 +302,16 @@ export default function Page() {
 
   // ── CRITICAL: hanya data yang diperlukan saat halaman buka ──────────────────
   async function loadParticipant() {
-    const [mRes, pRes, matRes] = await Promise.all([
+    const [mRes, pRes, matRes, cRes] = await Promise.all([
       fetch(`${apiBase}/participant/me`, { credentials: 'include' }),
       fetch(`${apiBase}/participant/points`, { credentials: 'include' }),
       fetch(`${apiBase}/participant/materials`, { credentials: 'include' }),
+      fetch(`${apiBase}/participant/ai-credits/balance`, { credentials: 'include' }),
     ]);
     if (mRes.ok) { const pd = await mRes.json(); setProfile(pd); if (pd.reflection_reminder_time) setReflectionReminderTime(pd.reflection_reminder_time); }
     if (pRes.ok) setMyPoints((await pRes.json()).balance || 0);
     if (matRes.ok) setMyMaterials((await matRes.json()).items || []);
+    if (cRes.ok) setMyAICredit(await cRes.json());
   }
 
   // ── LAZY: load data per section saat dikunjungi ──────────────────────────────
