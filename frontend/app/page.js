@@ -325,6 +325,26 @@ export default function Page() {
     setParticipantRoadmapMaterialDetail(d);
   }
 
+  async function openParticipantRoadmapMaterialByTitle(title) {
+    const t = String(title || '').trim().toLowerCase();
+    if (!t) return;
+    // try from current graph first
+    try {
+      const g = JSON.parse(participantRoadmapGraph || '{"nodes":[],"edges":[]}');
+      const n = (g.nodes || []).find(x => String(x.title || '').trim().toLowerCase() === t);
+      if (n?.id) return openParticipantRoadmapMaterial(n.id);
+    } catch {}
+    // fallback: fetch material-mode graph unfiltered and resolve by title
+    const res = await fetch(`${apiBase}/participant/roadmap/materials-graph?mode=material`, { credentials: 'include' });
+    if (!res.ok) return;
+    const d = await res.json().catch(() => ({}));
+    try {
+      const g = JSON.parse(d.graph_json || '{"nodes":[],"edges":[]}');
+      const n = (g.nodes || []).find(x => String(x.title || '').trim().toLowerCase() === t);
+      if (n?.id) await openParticipantRoadmapMaterial(n.id);
+    } catch {}
+  }
+
   useEffect(() => {
     if (!pendingFocusMaterial || roadmapMenu !== 'materials') return;
     const t = setTimeout(() => {
@@ -2828,7 +2848,14 @@ export default function Page() {
                           <span className="nk-badge">{participantRoadmapMaterialDetail.bloom_level || 'C2'}</span>
                         </div>
                         <div style={{ fontSize:16, fontWeight:700, marginBottom:8 }}>{participantRoadmapMaterialDetail.title}</div>
-                        <div style={{ color:'#cbd5e1', lineHeight:1.7 }} dangerouslySetInnerHTML={{ __html: renderMD(participantRoadmapMaterialDetail.content || '-') }} />
+                        <div style={{ color:'#cbd5e1', lineHeight:1.7 }}
+                          onClick={async e => {
+                            const bl = e.target.closest('[data-backlink]');
+                            if (!bl) return;
+                            const title = bl.getAttribute('data-backlink');
+                            await openParticipantRoadmapMaterialByTitle(title);
+                          }}
+                          dangerouslySetInnerHTML={{ __html: renderMD(participantRoadmapMaterialDetail.content || '-') }} />
                       </div>
                     )}
                   </div>
