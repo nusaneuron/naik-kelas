@@ -4321,8 +4321,8 @@ export default function Page() {
               {/* Admin — Materi */}
               {adminSection === 'materi' && (
                 <>
-                  <AdminSection title="📂 Kategori Materi">
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+                  <AdminSection title="📂 Materi Kompetensi">
+                    <div style={{ display: 'none', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
                       <input className="nk-input-sm" placeholder="Kode" style={{ flex: '1 1 80px', maxWidth: 120 }} value={newCategoryCode} onChange={(e) => setNewCategoryCode(e.target.value)} />
                       <input className="nk-input-sm" placeholder="Nama kategori materi" style={{ flex: '2 1 140px' }} value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
                       <select className="nk-input-sm" style={{ flex: '1 1 120px' }} value={newCategoryGroupId} onChange={e => setNewCategoryGroupId(e.target.value)}>
@@ -4333,7 +4333,7 @@ export default function Page() {
                       {editingCategoryId && <BtnSm disabled={busy} onClick={() => { setEditingCategoryId(''); setNewCategoryCode(''); setNewCategoryName(''); setNewCategoryGroupId(''); }}>Batal</BtnSm>}
                     </div>
                     <div className="nk-grid-auto" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
-                      {categories.map((c) => (
+                      {categories.filter(c => /^lrmc-|^rmc-/.test(String(c.code || ''))).map((c) => (
                         <div key={c.id} style={{
                           border: '1px solid #1e2d45', borderRadius: 12,
                           padding: '14px 16px', background: '#0f172a'
@@ -4341,13 +4341,10 @@ export default function Page() {
                           <div style={{ fontWeight: 700, marginBottom: 2 }}>{c.name}</div>
                           <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>{c.code}</div>
                           <div style={{ fontSize: 11, marginBottom: 10 }}>{c.group_name ? <span className="nk-badge nk-badge-purple">🏢 {c.group_name}</span> : <span className="nk-badge" style={{ background: '#1e293b', color: '#64748b' }}>🌐 Global</span>}</div>
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <BtnSm disabled={busy} onClick={() => startEditCategory(c)}>Edit</BtnSm>
-                            <BtnSm disabled={busy} onClick={() => deleteCategory(c.id)} danger>Hapus</BtnSm>
-                          </div>
+                          <div style={{ fontSize:11, color:'#64748b' }}>Sumber: Roadmap (otomatis)</div>
                         </div>
                       ))}
-                      {!categories.length && <div className="nk-empty">Belum ada kategori materi.</div>}
+                      {categories.filter(c => /^lrmc-|^rmc-/.test(String(c.code || ''))).length === 0 && <div className="nk-empty">Belum ada materi kompetensi dari roadmap.</div>}
                     </div>
                   </AdminSection>
 
@@ -4359,10 +4356,10 @@ export default function Page() {
                       </p>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
                         <div>
-                          <label style={fieldLbl}>Kategori</label>
+                          <label style={fieldLbl}>Materi Kompetensi (otomatis dari roadmap)</label>
                           <select value={materiCatId} onChange={e => setMateriCatId(e.target.value)} className="nk-input-sm" style={{ width: "100%" }}>
-                            <option value="">-- Pilih Kategori --</option>
-                            {adminCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            <option value="">-- Pilih Materi Kompetensi --</option>
+                            {adminCategories.filter(c => /^lrmc-|^rmc-/.test(String(c.code || ''))).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                           </select>
                         </div>
                         <div>
@@ -4574,7 +4571,7 @@ export default function Page() {
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <BtnSm onClick={saveMateri} disabled={busy || !materiTitle || !materiCatId}>
+                        <BtnSm onClick={saveMateri} disabled={busy || !materiTitle || (!materiCatId && !chatRoadmapCompId)}>
                           {editingMateriId ? 'Simpan Perubahan' : 'Tambah Materi'}
                         </BtnSm>
                         {editingMateriId && <BtnSm onClick={resetMateriForm} style={{ background: '#334155' }}>Batal Edit</BtnSm>}
