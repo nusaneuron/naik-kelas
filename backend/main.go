@@ -10392,12 +10392,13 @@ func (a *app) handleAdminReviewContribution(w http.ResponseWriter, r *http.Reque
 	// Get contribution info
 	var contributorID int64
 	var categoryID int
-	var title, content, currentStatus string
+	var title, content, currentStatus, categoryCode string
 	err = a.db.QueryRowContext(r.Context(), `
-		SELECT contributor_id, category_id, title, content, status 
-		FROM material_contributions 
-		WHERE id = $1
-	`, req.ContributionID).Scan(&contributorID, &categoryID, &title, &content, &currentStatus)
+		SELECT mc.contributor_id, mc.category_id, mc.title, mc.content, mc.status, COALESCE(qc.code,'')
+		FROM material_contributions mc
+		JOIN question_categories qc ON qc.id = mc.category_id
+		WHERE mc.id = $1
+	`, req.ContributionID).Scan(&contributorID, &categoryID, &title, &content, &currentStatus, &categoryCode)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "kontribusi tidak ditemukan"})
 		return
@@ -10458,7 +10459,7 @@ func (a *app) handleAdminReviewContribution(w http.ResponseWriter, r *http.Reque
 	// Award exp to contributor
 	a.awardExpTx(r.Context(), tx, contributorID, expRule, fmt.Sprintf("contribution:%d", req.ContributionID))
 
-	// If approved, add to learning_materials
+	// If approved, add to learning_materials and bridge to roadmap_materials when category is roadmap-linked
 	if req.Action == "approve" {
 		// Get max order_no for this category
 		var maxOrder int
@@ -10471,6 +10472,22 @@ func (a *app) handleAdminReviewContribution(w http.ResponseWriter, r *http.Reque
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal tambah ke materi"})
 			return
+		}
+
+		// Auto-sync to roadmap_materials if category bridge code is lrmc-*/rmc-*
+		var roadmapCompID int64
+		if strings.HasPrefix(categoryCode, "lrmc-") {
+			roadmapCompID, _ = strconv.ParseInt(strings.TrimPrefix(categoryCode, "lrmc-"), 10, 64)
+		} else if strings.HasPrefix(categoryCode, "rmc-") {
+			roadmapCompID, _ = strconv.ParseInt(strings.TrimPrefix(categoryCode, "rmc-"), 10, 64)
+		}
+		if roadmapCompID > 0 {
+			_, _ = tx.ExecContext(r.Context(), `
+				INSERT INTO roadmap_materials (competency_id, title, content, bloom_level, is_active, created_by, updated_by)
+				VALUES ($1, $2, $3, 'C2', TRUE, $4, $4)
+				ON CONFLICT (competency_id, title)
+				DO UPDATE SET content=EXCLUDED.content, updated_by=EXCLUDED.updated_by, updated_at=NOW(), is_active=TRUE
+			`, roadmapCompID, title, content, admin.ID)
 		}
 	}
 
