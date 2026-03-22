@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/mail"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -254,6 +255,8 @@ func main() {
 	mux.HandleFunc("/participant/roadmap/positions", a.handleParticipantRoadmapPositions)
 	mux.HandleFunc("/participant/roadmap/materials-graph", a.handleParticipantRoadmapMaterialsGraph)
 	mux.HandleFunc("/participant/roadmap/material", a.handleParticipantRoadmapMaterialDetail)
+	mux.HandleFunc("/participant/roadmap/rag/ask", a.handleParticipantRoadmapRAGAsk)
+	mux.HandleFunc("/admin/roadmap/rag/reindex", a.handleAdminRoadmapRAGReindex)
 
 	// Material Contributions
 	mux.HandleFunc("/participant/categories", a.handleParticipantCategories)
@@ -1004,6 +1007,25 @@ func (a *app) initDB(ctx context.Context) error {
 	_, _ = a.db.ExecContext(ctx, `UPDATE roadmap_materials SET bloom_level='C2' WHERE COALESCE(TRIM(bloom_level),'')=''`)
 	_, _ = a.db.ExecContext(ctx, `ALTER TABLE roadmap_materials ALTER COLUMN bloom_level SET DEFAULT 'C2'`)
 	_, _ = a.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS roadmap_materials_competency_idx ON roadmap_materials(competency_id)`)
+	_, err = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS roadmap_rag_chunks (
+			id            BIGSERIAL PRIMARY KEY,
+			material_id   BIGINT NOT NULL REFERENCES roadmap_materials(id) ON DELETE CASCADE,
+			position_id   BIGINT NOT NULL,
+			competency_id BIGINT NOT NULL,
+			group_id      INT,
+			title         TEXT NOT NULL,
+			chunk_text    TEXT NOT NULL,
+			chunk_order   INT NOT NULL DEFAULT 0,
+			bloom_level   TEXT NOT NULL DEFAULT 'C2',
+			created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil { return err }
+	_, _ = a.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS roadmap_rag_chunks_position_idx ON roadmap_rag_chunks(position_id)`)
+	_, _ = a.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS roadmap_rag_chunks_competency_idx ON roadmap_rag_chunks(competency_id)`)
+	_, _ = a.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS roadmap_rag_chunks_group_idx ON roadmap_rag_chunks(group_id)`)
 	// Sync bridge categories group_id from roadmap position group (for existing lrmc-*/rmc-* rows)
 	_, _ = a.db.ExecContext(ctx, `
 		UPDATE question_categories qc
@@ -8208,6 +8230,143 @@ func buildGraphFromRoadmapMaterials(materials []struct{ ID int64; Title, Content
 	for u := range unknownSet { unknown = append(unknown, u) }
 	b, _ := json.Marshal(map[string]any{"nodes": nodes, "edges": edges})
 	return string(b), unknown
+}
+
+func splitRoadmapContentIntoChunks(content string, targetLen int) []string {
+	if targetLen <= 0 { targetLen = 900 }
+	text := strings.TrimSpace(strings.ReplaceAll(content, "\r", ""))
+	if text == "" { return []string{} }
+	paras := []string{}
+	for _, p := range strings.Split(text, "\n\n") {
+		p = strings.TrimSpace(p)
+		if p != "" { paras = append(paras, p) }
+	}
+	if len(paras) == 0 { paras = []string{text} }
+	out := []string{}
+	cur := ""
+	for _, p := range paras {
+		if cur == "" { cur = p; continue }
+		if len(cur)+2+len(p) <= targetLen {
+			cur += "\n\n" + p
+		} else {
+			out = append(out, cur)
+			cur = p
+		}
+	}
+	if strings.TrimSpace(cur) != "" { out = append(out, cur) }
+	return out
+}
+
+func (a *app) rebuildRoadmapRAGIndex(ctx context.Context) (int64, error) {
+	tx, err := a.db.BeginTx(ctx, nil)
+	if err != nil { return 0, err }
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM roadmap_rag_chunks`); err != nil { return 0, err }
+	rows, err := tx.QueryContext(ctx, `
+		SELECT rm.id, rm.title, rm.content, COALESCE(rm.bloom_level,'C2'), rc.id, rc.position_id, rp.group_id
+		FROM roadmap_materials rm
+		JOIN roadmap_competencies rc ON rc.id=rm.competency_id
+		JOIN roadmap_positions rp ON rp.id=rc.position_id
+		WHERE rm.is_active=TRUE
+		ORDER BY rm.id ASC
+	`)
+	if err != nil { return 0, err }
+	defer rows.Close()
+	var inserted int64
+	for rows.Next() {
+		var materialID, competencyID, positionID int64
+		var groupID sql.NullInt64
+		var title, content, bloom string
+		if rows.Scan(&materialID, &title, &content, &bloom, &competencyID, &positionID, &groupID) != nil { continue }
+		chunks := splitRoadmapContentIntoChunks(content, 900)
+		for i, ch := range chunks {
+			_, err := tx.ExecContext(ctx, `
+				INSERT INTO roadmap_rag_chunks(material_id,position_id,competency_id,group_id,title,chunk_text,chunk_order,bloom_level)
+				VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+			`, materialID, positionID, competencyID, groupID, title, ch, i+1, bloom)
+			if err == nil { inserted++ }
+		}
+	}
+	if err := tx.Commit(); err != nil { return 0, err }
+	return inserted, nil
+}
+
+func (a *app) retrieveRoadmapRAGChunks(ctx context.Context, u authUser, question string, positionID int64, topK int) ([]map[string]any, error) {
+	if topK <= 0 || topK > 8 { topK = 4 }
+	q := `SELECT material_id,position_id,competency_id,group_id,title,chunk_text,chunk_order,bloom_level FROM roadmap_rag_chunks WHERE 1=1`
+	args := []any{}
+	if positionID > 0 { q += ` AND position_id=$1`; args = append(args, positionID) }
+	if u.Role != "super_admin" {
+		gid := a.participantRoadmapGroupID(ctx, u)
+		if gid > 0 {
+			q += fmt.Sprintf(` AND (group_id IS NULL OR group_id=$%d)`, len(args)+1)
+			args = append(args, gid)
+		} else {
+			q += ` AND group_id IS NULL`
+		}
+	}
+	q += ` ORDER BY id DESC LIMIT 400`
+	rows, err := a.db.QueryContext(ctx, q, args...)
+	if err != nil { return nil, err }
+	defer rows.Close()
+	terms := []string{}
+	for _, t := range strings.Fields(strings.ToLower(question)) {
+		t = strings.Trim(t, " ,.!?:;\"'()[]{}")
+		if len(t) >= 3 { terms = append(terms, t) }
+	}
+	type scored struct { score int; row map[string]any }
+	all := []scored{}
+	for rows.Next() {
+		var materialID, posID, compID int64
+		var groupID sql.NullInt64
+		var title, chunkText, bloom string
+		var chunkOrder int
+		if rows.Scan(&materialID,&posID,&compID,&groupID,&title,&chunkText,&chunkOrder,&bloom) != nil { continue }
+		text := strings.ToLower(title + "\n" + chunkText)
+		score := 0
+		for _, t := range terms { if strings.Contains(text, t) { score++ } }
+		if score == 0 && len(terms) > 0 { continue }
+		all = append(all, scored{score: score, row: map[string]any{
+			"material_id": materialID, "position_id": posID, "competency_id": compID, "title": title,
+			"chunk_text": chunkText, "chunk_order": chunkOrder, "bloom_level": bloom,
+		}})
+	}
+	sort.Slice(all, func(i, j int) bool { return all[i].score > all[j].score })
+	if len(all) > topK { all = all[:topK] }
+	out := []map[string]any{}
+	for _, x := range all { out = append(out, x.row) }
+	return out, nil
+}
+
+func (a *app) handleAdminRoadmapRAGReindex(w http.ResponseWriter, r *http.Request) {
+	_, err := a.requireRole(r.Context(), r, "admin", "super_admin")
+	if err != nil { writeJSON(w,http.StatusUnauthorized,map[string]string{"error":"unauthorized"}); return }
+	if r.Method != http.MethodPost { writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"}); return }
+	cnt, err := a.rebuildRoadmapRAGIndex(r.Context())
+	if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal rebuild rag index: " + err.Error()}); return }
+	writeJSON(w,http.StatusOK,map[string]any{"ok":true,"chunks":cnt})
+}
+
+func (a *app) handleParticipantRoadmapRAGAsk(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant", "admin", "super_admin")
+	if err != nil { writeJSON(w,http.StatusUnauthorized,map[string]string{"error":"unauthorized"}); return }
+	if r.Method != http.MethodPost { writeJSON(w,http.StatusMethodNotAllowed,map[string]string{"error":"method not allowed"}); return }
+	var req struct { Question string `json:"question"`; PositionID int64 `json:"position_id"`; TopK int `json:"top_k"` }
+	if json.NewDecoder(r.Body).Decode(&req) != nil || strings.TrimSpace(req.Question) == "" {
+		writeJSON(w,http.StatusBadRequest,map[string]string{"error":"question wajib diisi"}); return
+	}
+	chunks, err := a.retrieveRoadmapRAGChunks(r.Context(), u, req.Question, req.PositionID, req.TopK)
+	if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal retrieval rag"}); return }
+	if len(chunks) == 0 { writeJSON(w,http.StatusOK,map[string]any{"answer":"Belum ada referensi roadmap yang relevan untuk pertanyaan ini.","sources":[]any{}}); return }
+	var ctxParts []string
+	for i, c := range chunks {
+		ctxParts = append(ctxParts, fmt.Sprintf("[%d] %s (Bloom %v)\n%s", i+1, c["title"], c["bloom_level"], c["chunk_text"]))
+	}
+	systemPrompt := `Anda adalah asisten pembelajaran internal perusahaan. Jawab hanya berdasarkan konteks yang diberikan. Jika tidak ada di konteks, katakan tidak ditemukan. Gunakan Bahasa Indonesia ringkas dan jelas.`
+	userPrompt := fmt.Sprintf("Pertanyaan: %s\n\nKonteks:\n%s\n\nJawab singkat dan sertakan referensi [1],[2] bila dipakai.", strings.TrimSpace(req.Question), strings.Join(ctxParts, "\n\n---\n\n"))
+	ans, aiErr := a.aiChat(r.Context(), systemPrompt, userPrompt, 900, 0.2)
+	if aiErr != nil { writeJSON(w,http.StatusBadGateway,map[string]string{"error":"gagal generate jawaban rag: " + aiErr.Error()}); return }
+	writeJSON(w,http.StatusOK,map[string]any{"answer": strings.TrimSpace(ans), "sources": chunks})
 }
 
 func (a *app) handleParticipantRoadmapPositions(w http.ResponseWriter, r *http.Request) {
