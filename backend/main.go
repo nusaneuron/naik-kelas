@@ -7428,7 +7428,7 @@ func (a *app) handleAdminMaterials(w http.ResponseWriter, r *http.Request) {
 			}
 			writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 
-		case "send_test", "send_publish":
+		case "send_test", "send_publish", "preview_publish":
 			if req.ID == 0 {
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id wajib diisi"})
 				return
@@ -7513,6 +7513,17 @@ func (a *app) handleAdminMaterials(w http.ResponseWriter, r *http.Request) {
 			}
 			if len(recipients) == 0 {
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error":"tidak ada peserta telegram aktif untuk target ini"}); return
+			}
+			if req.Action == "preview_publish" {
+				writeJSON(w, http.StatusOK, map[string]any{
+					"ok": true,
+					"title": title,
+					"target_group_id": func() any { if groupID.Valid { return groupID.Int64 }; return nil }(),
+					"recipient_count": len(recipients),
+					"bubble_count": len(bubbles),
+					"estimated_messages": len(recipients) * len(bubbles),
+				})
+				return
 			}
 			sentUsers := 0
 			for _, chatID := range recipients {

@@ -205,6 +205,7 @@ export default function Page() {
   const [qAiSaving, setQAiSaving] = useState(false);
   const [chatRoadmapCompId, setChatRoadmapCompId] = useState('');
   const [chatRoadmapMaterialId, setChatRoadmapMaterialId] = useState('');
+  const [chatPublishPreview, setChatPublishPreview] = useState(null);
 
   // Notes
   const [notes, setNotes] = useState([]);
@@ -1788,6 +1789,18 @@ export default function Page() {
     setActionType('success'); setActionMsg(`Test chat Telegram terkirim (${d.sent || 1} pesan).`); setBusy(false);
   }
 
+  async function previewPublishMateriTelegram(id) {
+    setBusy(true);
+    const res = await fetch(`${apiBase}/admin/materials`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ action: 'preview_publish', id }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal preview publish.'); setBusy(false); return; }
+    setChatPublishPreview({ id, ...d });
+    setActionType('success'); setActionMsg(`Preview siap: ${d.recipient_count || 0} peserta, ${d.bubble_count || 0} bubble.`); setBusy(false);
+  }
+
   async function publishMateriTelegram(id) {
     if (!confirm('Kirim chat ini ke peserta sesuai group jabatan roadmap?')) return;
     setBusy(true);
@@ -1797,6 +1810,7 @@ export default function Page() {
     });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal publish chat Telegram.'); setBusy(false); return; }
+    setChatPublishPreview(null);
     setActionType('success'); setActionMsg(`Publish berhasil. Peserta terkirim: ${d.sent_users || 0}, total pesan: ${d.sent_messages || 0}.`); setBusy(false);
   }
 
@@ -4609,8 +4623,14 @@ export default function Page() {
                             <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                               <BtnSm onClick={() => startEditMateri(m)} style={{ background: '#1e40af', fontSize: 12 }}>Edit</BtnSm>
                               <BtnSm onClick={() => sendMateriTestTelegram(m.id)} style={{ background: '#0f766e', fontSize: 12 }}>Test Telegram</BtnSm>
+                              <BtnSm onClick={() => previewPublishMateriTelegram(m.id)} style={{ background: '#334155', fontSize: 12 }}>Preview Recipient</BtnSm>
                               <BtnSm onClick={() => publishMateriTelegram(m.id)} style={{ background: '#9333ea', fontSize: 12 }}>Publish Peserta</BtnSm>
                               <BtnSm onClick={() => deleteMateri(m.id)} style={{ background: '#7f1d1d', fontSize: 12 }}>Hapus</BtnSm>
+                              {chatPublishPreview && chatPublishPreview.id === m.id && (
+                                <div style={{ width:'100%', fontSize:11, color:'#cbd5e1', marginTop:4 }}>
+                                  👥 {chatPublishPreview.recipient_count || 0} peserta • 💬 {chatPublishPreview.bubble_count || 0} bubble • 📤 estimasi {chatPublishPreview.estimated_messages || 0} pesan
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
