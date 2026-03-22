@@ -5047,7 +5047,7 @@ export default function Page() {
                         {reviewAction === 'approve' && (
                           <div style={{ marginBottom: 14 }}>
                             <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: '#cbd5e1' }}>
-                              ⚙️ Mode Persetujuan
+                              ⚙️ Mode Persetujuan Roadmap
                             </label>
                             <div style={{ display: 'flex', gap: 8 }}>
                               <button
@@ -5060,7 +5060,7 @@ export default function Page() {
                                   fontSize: 12, cursor: 'pointer'
                                 }}
                               >
-                                ✅ Langsung jadi materi
+                                ✅ Langsung jadi chat roadmap
                               </button>
                               <button
                                 onClick={() => setReviewApproveMode('ai')}
@@ -5072,7 +5072,7 @@ export default function Page() {
                                   fontSize: 12, cursor: 'pointer'
                                 }}
                               >
-                                🤖 Generate AI dulu
+                                🤖 Generate AI sesuai roadmap
                               </button>
                             </div>
                             {reviewApproveMode === 'ai' && (
@@ -5152,7 +5152,7 @@ export default function Page() {
                           >
                             {reviewLoading ? '⏳ Memproses...' : 
                              (reviewAction === 'approve'
-                               ? (reviewApproveMode === 'ai' ? '🤖 Setujui + Generate AI' : '✅ Setujui Langsung')
+                               ? (reviewApproveMode === 'ai' ? '🤖 Setujui + Generate Roadmap' : '✅ Setujui Langsung')
                                : '❌ Tolak')}
                           </button>
                         </div>
