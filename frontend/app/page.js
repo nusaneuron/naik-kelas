@@ -2841,7 +2841,8 @@ export default function Page() {
                     </div>
 
                     <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
-                      <div style={{ fontWeight:700, marginBottom:8 }}>Graph Materi (Backlink)</div>
+                      <div style={{ fontWeight:700, marginBottom:6 }}>Graph Materi (Backlink)</div>
+                      <div style={{ fontSize:12, color:'#94a3b8', marginBottom:8 }}>Silakan klik node jika ingin melihat detail materi.</div>
                       {(() => { const g = parseRoadmapGraph(participantRoadmapGraph); return g.error ? <div className="nk-empty" style={{ margin:0 }}>{g.error}</div> : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={openParticipantRoadmapMaterial} />; })()}
                       {participantUnknownBacklinks.length > 0 && (
                         <div className="nk-empty" style={{ marginTop:8, color:'#fbbf24' }}>⚠️ Referensi belum ditemukan: {participantUnknownBacklinks.slice(0,8).join(', ')}{participantUnknownBacklinks.length > 8 ? ` (+${participantUnknownBacklinks.length - 8})` : ''}</div>
