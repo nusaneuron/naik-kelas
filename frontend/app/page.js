@@ -1788,6 +1788,18 @@ export default function Page() {
     setActionType('success'); setActionMsg(`Test chat Telegram terkirim (${d.sent || 1} pesan).`); setBusy(false);
   }
 
+  async function publishMateriTelegram(id) {
+    if (!confirm('Kirim chat ini ke peserta sesuai group jabatan roadmap?')) return;
+    setBusy(true);
+    const res = await fetch(`${apiBase}/admin/materials`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ action: 'send_publish', id }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal publish chat Telegram.'); setBusy(false); return; }
+    setActionType('success'); setActionMsg(`Publish berhasil. Peserta terkirim: ${d.sent_users || 0}, total pesan: ${d.sent_messages || 0}.`); setBusy(false);
+  }
+
   async function deleteMateri(id) {
     if (!confirm('Hapus materi ini?')) return;
     setBusy(true);
@@ -4597,6 +4609,7 @@ export default function Page() {
                             <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                               <BtnSm onClick={() => startEditMateri(m)} style={{ background: '#1e40af', fontSize: 12 }}>Edit</BtnSm>
                               <BtnSm onClick={() => sendMateriTestTelegram(m.id)} style={{ background: '#0f766e', fontSize: 12 }}>Test Telegram</BtnSm>
+                              <BtnSm onClick={() => publishMateriTelegram(m.id)} style={{ background: '#9333ea', fontSize: 12 }}>Publish Peserta</BtnSm>
                               <BtnSm onClick={() => deleteMateri(m.id)} style={{ background: '#7f1d1d', fontSize: 12 }}>Hapus</BtnSm>
                             </div>
                           </div>

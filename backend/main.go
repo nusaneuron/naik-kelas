@@ -7428,54 +7428,101 @@ func (a *app) handleAdminMaterials(w http.ResponseWriter, r *http.Request) {
 			}
 			writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 
-		case "send_test":
+		case "send_test", "send_publish":
 			if req.ID == 0 {
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id wajib diisi"})
 				return
 			}
-			var tgUID string
-			if err := a.db.QueryRowContext(ctx, `SELECT telegram_user_id FROM telegram_links WHERE user_id=$1 LIMIT 1`, adminUserM.ID).Scan(&tgUID); err != nil || strings.TrimSpace(tgUID) == "" {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "akun admin belum terhubung Telegram"})
-				return
-			}
-			chatID, err := strconv.ParseInt(strings.TrimSpace(tgUID), 10, 64)
-			if err != nil || chatID == 0 {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "telegram_user_id tidak valid"})
-				return
-			}
-			var title, mtype, content string
-			if err := a.db.QueryRowContext(ctx, `SELECT title,type,content FROM learning_materials WHERE id=$1`, req.ID).Scan(&title, &mtype, &content); err != nil {
+			var title, mtype, content, catCode string
+			if err := a.db.QueryRowContext(ctx, `
+				SELECT lm.title,lm.type,lm.content,COALESCE(qc.code,'')
+				FROM learning_materials lm
+				JOIN question_categories qc ON qc.id=lm.category_id
+				WHERE lm.id=$1
+			`, req.ID).Scan(&title, &mtype, &content, &catCode); err != nil {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "materi/chat tidak ditemukan"})
 				return
 			}
-			if mtype != "text" {
-				msg := fmt.Sprintf("🧪 Test Chat: %s\n%s", title, content)
-				if sendErr := a.sendTelegramMessage(ctx, chatID, msg, "idle"); sendErr != nil {
-					writeJSON(w, http.StatusBadGateway, map[string]string{"error": "gagal kirim test ke Telegram"})
-					return
-				}
-				writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-				return
-			}
 			bubbles := []string{}
-			var arr []string
-			if json.Unmarshal([]byte(content), &arr) == nil && len(arr) > 0 {
-				for _, x := range arr { if strings.TrimSpace(x) != "" { bubbles = append(bubbles, x) } }
-			} else if strings.TrimSpace(content) != "" {
-				bubbles = []string{content}
+			if mtype != "text" {
+				if strings.TrimSpace(content) != "" { bubbles = []string{content} }
+			} else {
+				var arr []string
+				if json.Unmarshal([]byte(content), &arr) == nil && len(arr) > 0 {
+					for _, x := range arr { if strings.TrimSpace(x) != "" { bubbles = append(bubbles, x) } }
+				} else if strings.TrimSpace(content) != "" {
+					bubbles = []string{content}
+				}
 			}
 			if len(bubbles) == 0 { bubbles = []string{"(chat kosong)"} }
-			_ = a.sendTelegramMessage(ctx, chatID, fmt.Sprintf("🧪 Test Chat: %s", title), "idle")
-			for i, b := range bubbles {
-				html := markdownToTelegramHTML(b)
-				if html == "" { html = b }
-				if sendErr := a.sendTelegramHTMLMessage(ctx, chatID, html); sendErr != nil {
-					// fallback plain text
-					_ = a.sendTelegramMessage(ctx, chatID, b, "idle")
+
+			if req.Action == "send_test" {
+				var tgUID string
+				if err := a.db.QueryRowContext(ctx, `SELECT telegram_user_id FROM telegram_links WHERE user_id=$1 LIMIT 1`, adminUserM.ID).Scan(&tgUID); err != nil || strings.TrimSpace(tgUID) == "" {
+					writeJSON(w, http.StatusBadRequest, map[string]string{"error": "akun admin belum terhubung Telegram"})
+					return
 				}
-				if i < len(bubbles)-1 { time.Sleep(200 * time.Millisecond) }
+				chatID, err := strconv.ParseInt(strings.TrimSpace(tgUID), 10, 64)
+				if err != nil || chatID == 0 {
+					writeJSON(w, http.StatusBadRequest, map[string]string{"error": "telegram_user_id tidak valid"})
+					return
+				}
+				_ = a.sendTelegramMessage(ctx, chatID, fmt.Sprintf("🧪 Test Chat: %s", title), "idle")
+				for i, b := range bubbles {
+					html := markdownToTelegramHTML(b)
+					if html == "" { html = b }
+					if sendErr := a.sendTelegramHTMLMessage(ctx, chatID, html); sendErr != nil { _ = a.sendTelegramMessage(ctx, chatID, b, "idle") }
+					if i < len(bubbles)-1 { time.Sleep(200 * time.Millisecond) }
+				}
+				writeJSON(w, http.StatusOK, map[string]any{"ok": true, "sent": len(bubbles)})
+				return
 			}
-			writeJSON(w, http.StatusOK, map[string]any{"ok": true, "sent": len(bubbles)})
+
+			// send_publish -> kirim ke peserta berdasarkan group jabatan roadmap (code lrmc-<competency_id>)
+			m := regexp.MustCompile(`^lrmc-(\d+)$`).FindStringSubmatch(catCode)
+			if len(m) < 2 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "chat ini belum terhubung ke kompetensi roadmap"})
+				return
+			}
+			compID, _ := strconv.ParseInt(m[1], 10, 64)
+			var groupID sql.NullInt64
+			_ = a.db.QueryRowContext(ctx, `SELECT rp.group_id FROM roadmap_competencies rc JOIN roadmap_positions rp ON rp.id=rc.position_id WHERE rc.id=$1`, compID).Scan(&groupID)
+			q := `
+				SELECT tl.telegram_user_id
+				FROM telegram_links tl
+				JOIN participant_profiles pp ON pp.user_id = tl.user_id
+				WHERE 1=1
+			`
+			args := []any{}
+			if groupID.Valid {
+				q += ` AND pp.group_id = $1`
+				args = append(args, groupID.Int64)
+			}
+			rows, err := a.db.QueryContext(ctx, q, args...)
+			if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]string{"error":"gagal ambil penerima"}); return }
+			defer rows.Close()
+			recipients := []int64{}
+			for rows.Next() {
+				var tg string
+				if rows.Scan(&tg)==nil {
+					if cid, e := strconv.ParseInt(strings.TrimSpace(tg), 10, 64); e == nil && cid != 0 { recipients = append(recipients, cid) }
+				}
+			}
+			if len(recipients) == 0 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error":"tidak ada peserta telegram aktif untuk target ini"}); return
+			}
+			sentUsers := 0
+			for _, chatID := range recipients {
+				_ = a.sendTelegramMessage(ctx, chatID, fmt.Sprintf("📚 Materi baru: %s", title), "idle")
+				for i, b := range bubbles {
+					html := markdownToTelegramHTML(b)
+					if html == "" { html = b }
+					if sendErr := a.sendTelegramHTMLMessage(ctx, chatID, html); sendErr != nil { _ = a.sendTelegramMessage(ctx, chatID, b, "idle") }
+					if i < len(bubbles)-1 { time.Sleep(120 * time.Millisecond) }
+				}
+				sentUsers++
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true, "sent_users": sentUsers, "sent_messages": sentUsers * len(bubbles)})
 
 		default:
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "action tidak valid"})
