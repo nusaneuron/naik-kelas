@@ -67,6 +67,7 @@ export default function Page() {
   const [participantRoadmapGraph, setParticipantRoadmapGraph] = useState('{"nodes":[],"edges":[]}');
   const [participantUnknownBacklinks, setParticipantUnknownBacklinks] = useState([]);
   const [participantRoadmapMaterialDetail, setParticipantRoadmapMaterialDetail] = useState(null);
+  const [participantRoadmapHistory, setParticipantRoadmapHistory] = useState([]);
   const [myReflections, setMyReflections] = useState([]);
   const [reflectionDraft, setReflectionDraft] = useState('');
   const [reflectionSaving, setReflectionSaving] = useState(false);
@@ -318,11 +319,14 @@ export default function Page() {
     }
   }
 
-  async function openParticipantRoadmapMaterial(nodeId) {
+  async function openParticipantRoadmapMaterial(nodeId, keepHistory = true) {
     if (String(nodeId).startsWith('c-')) return;
     const res = await fetch(`${apiBase}/participant/roadmap/material?id=${nodeId}`, { credentials: 'include' });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) return showMsg(d.error || 'Gagal buka materi roadmap', 'error');
+    if (keepHistory && participantRoadmapMaterialDetail?.id && String(participantRoadmapMaterialDetail.id) !== String(d.id)) {
+      setParticipantRoadmapHistory(prev => [...prev, participantRoadmapMaterialDetail]);
+    }
     setParticipantRoadmapMaterialDetail(d);
   }
 
@@ -2816,6 +2820,7 @@ export default function Page() {
                       <select className="nk-input-sm" value={participantRoadmapFilter.position_id} onChange={async e => {
                         const v = e.target.value;
                         setParticipantRoadmapMaterialDetail(null);
+                        setParticipantRoadmapHistory([]);
                         setParticipantRoadmapFilter(f => ({ ...f, position_id: v }));
                         await loadParticipantRoadmapGraph(v, participantRoadmapFilter.mode || 'material');
                       }}>
@@ -2825,6 +2830,7 @@ export default function Page() {
                       <select className="nk-input-sm" value={participantRoadmapFilter.mode || 'material'} onChange={async e => {
                         const mode = e.target.value;
                         setParticipantRoadmapMaterialDetail(null);
+                        setParticipantRoadmapHistory([]);
                         setParticipantRoadmapFilter(f => ({ ...f, mode }));
                         await loadParticipantRoadmapGraph(participantRoadmapFilter.position_id || '', mode);
                       }}>
@@ -2844,8 +2850,16 @@ export default function Page() {
 
                     {participantRoadmapMaterialDetail && (
                       <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12 }}>
-                        <div style={{ display:'flex', justifyContent:'space-between', gap:8, alignItems:'center', marginBottom:8 }}>
-                          <div style={{ fontWeight:700 }}>📘 Baca Materi</div>
+                        <div style={{ display:'flex', justifyContent:'space-between', gap:8, alignItems:'center', marginBottom:8, flexWrap:'wrap' }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                            <div style={{ fontWeight:700 }}>📘 Baca Materi</div>
+                            {participantRoadmapHistory.length > 0 && (
+                              <BtnSm onClick={() => {
+                                setParticipantRoadmapMaterialDetail(participantRoadmapHistory[participantRoadmapHistory.length - 1] || null);
+                                setParticipantRoadmapHistory(prev => prev.slice(0, -1));
+                              }} style={{ background:'#334155', fontSize:11 }}>← Kembali</BtnSm>
+                            )}
+                          </div>
                           <span className="nk-badge">{participantRoadmapMaterialDetail.bloom_level || 'C2'}</span>
                         </div>
                         <div style={{ fontSize:16, fontWeight:700, marginBottom:8 }}>{participantRoadmapMaterialDetail.title}</div>
