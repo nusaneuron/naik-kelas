@@ -1099,7 +1099,7 @@ export default function Page() {
   function parseRoadmapGraph(raw) {
     try {
       const x = JSON.parse(raw || '{"nodes":[],"edges":[]}');
-      const nodes = (x.nodes || []).map((n, idx) => ({ id: String(n.id ?? idx + 1), title: n.title || n.label || `Node ${idx + 1}` }));
+      const nodes = (x.nodes || []).map((n, idx) => ({ id: String(n.id ?? idx + 1), title: n.title || n.label || `Node ${idx + 1}`, tags: Array.isArray(n.tags) ? n.tags : [] }));
       const edges = (x.edges || []).map(e => ({ from: String(e.from ?? e.source ?? ''), to: String(e.to ?? e.target ?? '') })).filter(e => e.from && e.to);
       return { nodes, edges, error: '' };
     } catch {

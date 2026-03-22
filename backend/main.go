@@ -8310,10 +8310,37 @@ func (a *app) handleParticipantRoadmapMaterialsGraph(w http.ResponseWriter, r *h
 		b, _ := json.Marshal(map[string]any{"nodes": nodes, "edges": edges})
 		writeJSON(w,http.StatusOK,map[string]any{"graph_json": string(b), "unknown_backlinks": unknown, "count": len(materials), "mode": "competency"}); return
 	}
-	plain := []struct{ ID int64; Title, Content string }{}
-	for _, m := range materials { plain = append(plain, struct{ ID int64; Title, Content string }{ID: m.ID, Title: m.Title, Content: m.Content}) }
-	graphJSON, unknown := buildGraphFromRoadmapMaterials(plain)
-	writeJSON(w,http.StatusOK,map[string]any{"graph_json": graphJSON, "unknown_backlinks": unknown, "count": len(materials), "mode": "material"})
+	type mNode struct { ID int64 `json:"id"`; Title string `json:"title"`; Tags []string `json:"tags,omitempty"` }
+	type mEdge struct { From int64 `json:"from"`; To int64 `json:"to"` }
+	nodes := []mNode{}
+	titleMap := map[string]mrow{}
+	for _, m := range materials {
+		tag := strings.TrimSpace(m.CompetencyName)
+		if tag == "" { tag = "Kompetensi" }
+		nodes = append(nodes, mNode{ID: m.ID, Title: m.Title, Tags: []string{tag}})
+		titleMap[strings.ToLower(strings.TrimSpace(m.Title))] = m
+	}
+	edges := []mEdge{}
+	edgeSet := map[string]struct{}{}
+	unknownSet := map[string]struct{}{}
+	for _, m := range materials {
+		for _, target := range extractBacklinks(m.Content) {
+			k := strings.ToLower(strings.TrimSpace(target))
+			tm, ok := titleMap[k]
+			if !ok {
+				if strings.TrimSpace(target) != "" { unknownSet[strings.TrimSpace(target)] = struct{}{} }
+				continue
+			}
+			es := fmt.Sprintf("%d->%d", m.ID, tm.ID)
+			if _, ex := edgeSet[es]; ex { continue }
+			edgeSet[es] = struct{}{}
+			edges = append(edges, mEdge{From: m.ID, To: tm.ID})
+		}
+	}
+	unknown := []string{}
+	for u := range unknownSet { unknown = append(unknown, u) }
+	b, _ := json.Marshal(map[string]any{"nodes": nodes, "edges": edges})
+	writeJSON(w,http.StatusOK,map[string]any{"graph_json": string(b), "unknown_backlinks": unknown, "count": len(materials), "mode": "material"})
 }
 
 func (a *app) handleParticipantRoadmapMaterialDetail(w http.ResponseWriter, r *http.Request) {
@@ -8421,10 +8448,37 @@ func (a *app) handleAdminRoadmapMaterialsGraph(w http.ResponseWriter, r *http.Re
 		writeJSON(w,http.StatusOK,map[string]any{"graph_json": string(b), "unknown_backlinks": unknown, "count": len(materials), "mode": "competency"}); return
 	}
 
-	plain := []struct{ ID int64; Title, Content string }{}
-	for _, m := range materials { plain = append(plain, struct{ ID int64; Title, Content string }{ID: m.ID, Title: m.Title, Content: m.Content}) }
-	graphJSON, unknown := buildGraphFromRoadmapMaterials(plain)
-	writeJSON(w,http.StatusOK,map[string]any{"graph_json": graphJSON, "unknown_backlinks": unknown, "count": len(materials), "mode": "material"})
+	type mNode struct { ID int64 `json:"id"`; Title string `json:"title"`; Tags []string `json:"tags,omitempty"` }
+	type mEdge struct { From int64 `json:"from"`; To int64 `json:"to"` }
+	nodes := []mNode{}
+	titleMap := map[string]mrow{}
+	for _, m := range materials {
+		tag := strings.TrimSpace(m.CompetencyName)
+		if tag == "" { tag = "Kompetensi" }
+		nodes = append(nodes, mNode{ID: m.ID, Title: m.Title, Tags: []string{tag}})
+		titleMap[strings.ToLower(strings.TrimSpace(m.Title))] = m
+	}
+	edges := []mEdge{}
+	edgeSet := map[string]struct{}{}
+	unknownSet := map[string]struct{}{}
+	for _, m := range materials {
+		for _, target := range extractBacklinks(m.Content) {
+			k := strings.ToLower(strings.TrimSpace(target))
+			tm, ok := titleMap[k]
+			if !ok {
+				if strings.TrimSpace(target) != "" { unknownSet[strings.TrimSpace(target)] = struct{}{} }
+				continue
+			}
+			es := fmt.Sprintf("%d->%d", m.ID, tm.ID)
+			if _, ex := edgeSet[es]; ex { continue }
+			edgeSet[es] = struct{}{}
+			edges = append(edges, mEdge{From: m.ID, To: tm.ID})
+		}
+	}
+	unknown := []string{}
+	for u := range unknownSet { unknown = append(unknown, u) }
+	b, _ := json.Marshal(map[string]any{"nodes": nodes, "edges": edges})
+	writeJSON(w,http.StatusOK,map[string]any{"graph_json": string(b), "unknown_backlinks": unknown, "count": len(materials), "mode": "material"})
 }
 
 func (a *app) handleAdminRoadmapCoreCompetencies(w http.ResponseWriter, r *http.Request) {
