@@ -7213,7 +7213,7 @@ func (a *app) handleAdminAIUsageStats(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	uRows, _ := a.db.QueryContext(r.Context(), `
-		SELECT COALESCE(u.full_name, u.email, CONCAT('user#', l.user_id::text)) AS uname, COALESCE(SUM(l.total_tokens),0) tok
+		SELECT l.user_id, COALESCE(u.full_name, u.email, CONCAT('user#', l.user_id::text)) AS uname, COALESCE(SUM(l.total_tokens),0) tok
 		FROM ai_usage_logs l
 		LEFT JOIN users u ON u.id = l.user_id
 		WHERE l.created_at >= `+whereFrom+` AND l.user_id IS NOT NULL
@@ -7225,11 +7225,50 @@ func (a *app) handleAdminAIUsageStats(w http.ResponseWriter, r *http.Request) {
 	if uRows != nil {
 		defer uRows.Close()
 		for uRows.Next() {
-			var uname string; var tok int64
-			if uRows.Scan(&uname,&tok)==nil { topUsers = append(topUsers, map[string]any{"user":uname,"tokens":tok}) }
+			var uid, tok int64; var uname string
+			if uRows.Scan(&uid,&uname,&tok)==nil { topUsers = append(topUsers, map[string]any{"user_id":uid,"user":uname,"tokens":tok}) }
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"today_tokens":today,"month_tokens":month,"top_features":top,"model_breakdown":modelBreakdown,"top_users":topUsers})
+	userDetail := map[string]any{}
+	if userID, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("user_id")), 10, 64); userID > 0 {
+		var uname string
+		_ = a.db.QueryRowContext(r.Context(), `SELECT COALESCE(full_name,email,CONCAT('user#',id::text)) FROM users WHERE id=$1`, userID).Scan(&uname)
+		if uname == "" { uname = fmt.Sprintf("user#%d", userID) }
+		fRows, _ := a.db.QueryContext(r.Context(), `
+			SELECT feature, COALESCE(SUM(total_tokens),0) tok
+			FROM ai_usage_logs
+			WHERE user_id=$1 AND created_at >= `+whereFrom+`
+			GROUP BY feature
+			ORDER BY tok DESC
+			LIMIT 10
+		`, userID)
+		features := []map[string]any{}
+		if fRows != nil {
+			defer fRows.Close()
+			for fRows.Next() {
+				var f string; var tok int64
+				if fRows.Scan(&f,&tok)==nil { features = append(features, map[string]any{"feature":f,"tokens":tok}) }
+			}
+		}
+		pmRows, _ := a.db.QueryContext(r.Context(), `
+			SELECT provider, model, COALESCE(SUM(total_tokens),0) tok
+			FROM ai_usage_logs
+			WHERE user_id=$1 AND created_at >= `+whereFrom+`
+			GROUP BY provider, model
+			ORDER BY tok DESC
+			LIMIT 10
+		`, userID)
+		models := []map[string]any{}
+		if pmRows != nil {
+			defer pmRows.Close()
+			for pmRows.Next() {
+				var provider, model string; var tok int64
+				if pmRows.Scan(&provider,&model,&tok)==nil { models = append(models, map[string]any{"provider":provider,"model":model,"tokens":tok}) }
+			}
+		}
+		userDetail = map[string]any{"user_id":userID,"user":uname,"features":features,"models":models}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"today_tokens":today,"month_tokens":month,"top_features":top,"model_breakdown":modelBreakdown,"top_users":topUsers,"user_detail":userDetail})
 }
 
 func (a *app) handleAdminAIProfiles(w http.ResponseWriter, r *http.Request) {

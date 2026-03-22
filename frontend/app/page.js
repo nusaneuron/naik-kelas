@@ -248,8 +248,9 @@ export default function Page() {
     api_key_masked: '', model: 'gpt-4o-mini', temperature: 0.7, max_tokens: 2000, is_active: true,
   });
   const [aiProfiles, setAiProfiles] = useState([]);
-  const [aiUsageStats, setAiUsageStats] = useState({ today_tokens: 0, month_tokens: 0, top_features: [], model_breakdown: [], top_users: [] });
+  const [aiUsageStats, setAiUsageStats] = useState({ today_tokens: 0, month_tokens: 0, top_features: [], model_breakdown: [], top_users: [], user_detail: {} });
   const [aiUsageRange, setAiUsageRange] = useState('month');
+  const [aiUsageUserId, setAiUsageUserId] = useState(0);
   const [aiProfileForm, setAiProfileForm] = useState({ id: 0, name: '', provider: 'sumopod', base_url: 'https://ai.sumopod.com/v1/chat/completions', api_key: '', model: 'gpt-4o-mini', temperature: 0.7, max_tokens: 2000 });
   const aiProviderPresets = {
     sumopod: { base_url: 'https://ai.sumopod.com/v1/chat/completions', model: 'gpt-4o-mini' },
@@ -398,10 +399,11 @@ export default function Page() {
   useEffect(() => {
     if (adminSection !== 'ai') return;
     (async () => {
-      const uRes = await fetch(`${apiBase}/admin/ai-usage/stats?range=${encodeURIComponent(aiUsageRange)}`, { credentials: 'include' });
+      const uq = `range=${encodeURIComponent(aiUsageRange)}${aiUsageUserId ? `&user_id=${aiUsageUserId}` : ''}`;
+      const uRes = await fetch(`${apiBase}/admin/ai-usage/stats?${uq}`, { credentials: 'include' });
       if (uRes.ok) setAiUsageStats(await uRes.json());
     })();
-  }, [aiUsageRange, adminSection]);
+  }, [aiUsageRange, aiUsageUserId, adminSection]);
 
   async function loadSection(section) {
     if (loadedSections[section]) return;
@@ -1284,7 +1286,7 @@ export default function Page() {
       const [res, pRes, uRes] = await Promise.all([
         fetch(`${apiBase}/admin/ai-settings`, { credentials: 'include' }),
         fetch(`${apiBase}/admin/ai-profiles`, { credentials: 'include' }),
-        fetch(`${apiBase}/admin/ai-usage/stats?range=${encodeURIComponent(aiUsageRange)}`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/ai-usage/stats?range=${encodeURIComponent(aiUsageRange)}${aiUsageUserId ? `&user_id=${aiUsageUserId}` : ''}`, { credentials: 'include' }),
       ]);
       if (res.ok) setAiSettings(await res.json());
       else showMsg('Gagal load AI settings', 'error');
@@ -4393,8 +4395,28 @@ export default function Page() {
                       </div>
                     )}
                     {Array.isArray(aiUsageStats?.top_users) && aiUsageStats.top_users.length > 0 && (
-                      <div style={{ marginTop:8, fontSize:12, color:'#94a3b8' }}>
-                        Top user: {aiUsageStats.top_users.map((x,i)=>`${i+1}. ${x.user} (${x.tokens})`).join(' • ')}
+                      <div style={{ marginTop:8 }}>
+                        <div style={{ marginBottom:6, fontSize:12, color:'#94a3b8' }}>Top user:</div>
+                        <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                          {aiUsageStats.top_users.map((x,i)=>(
+                            <button key={`${x.user_id||x.user}-${i}`} onClick={()=>setAiUsageUserId(Number(x.user_id||0))}
+                              style={{ border: (Number(aiUsageUserId)===Number(x.user_id||0)) ? '1px solid #8b5cf6' : '1px solid #334155', background: (Number(aiUsageUserId)===Number(x.user_id||0)) ? 'rgba(139,92,246,0.18)' : 'transparent', color:'#cbd5e1', borderRadius:999, padding:'4px 10px', fontSize:11, cursor:'pointer' }}>
+                              {i+1}. {x.user} ({x.tokens})
+                            </button>
+                          ))}
+                          <button onClick={()=>setAiUsageUserId(0)} style={{ border:'1px solid #334155', background:'transparent', color:'#94a3b8', borderRadius:999, padding:'4px 10px', fontSize:11, cursor:'pointer' }}>Reset</button>
+                        </div>
+                      </div>
+                    )}
+                    {aiUsageStats?.user_detail?.user && (
+                      <div style={{ marginTop:10, border:'1px solid #23324a', borderRadius:8, padding:'8px 10px', fontSize:12, color:'#cbd5e1' }}>
+                        <div style={{ fontWeight:700, marginBottom:6 }}>Detail User: {aiUsageStats.user_detail.user}</div>
+                        {Array.isArray(aiUsageStats?.user_detail?.features) && aiUsageStats.user_detail.features.length > 0 && (
+                          <div style={{ color:'#94a3b8', marginBottom:4 }}>Fitur: {aiUsageStats.user_detail.features.map((x,i)=>`${i+1}. ${x.feature} (${x.tokens})`).join(' • ')}</div>
+                        )}
+                        {Array.isArray(aiUsageStats?.user_detail?.models) && aiUsageStats.user_detail.models.length > 0 && (
+                          <div style={{ color:'#94a3b8' }}>Model: {aiUsageStats.user_detail.models.map((x,i)=>`${i+1}. ${x.provider}/${x.model} (${x.tokens})`).join(' • ')}</div>
+                        )}
                       </div>
                     )}
                   </div>
