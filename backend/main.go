@@ -267,6 +267,8 @@ func main() {
 	mux.HandleFunc("/admin/ai-settings", a.handleAdminAISettings)
 	mux.HandleFunc("/admin/ai-profiles", a.handleAdminAIProfiles)
 	mux.HandleFunc("/admin/ai-usage/stats", a.handleAdminAIUsageStats)
+	mux.HandleFunc("/admin/ai-credits", a.handleAdminAICredits)
+	mux.HandleFunc("/participant/ai-credits/balance", a.handleParticipantAICreditBalance)
 	mux.HandleFunc("/participant/reflections", a.handleParticipantReflections)
 	mux.HandleFunc("/participant/reflection-reminder", a.handleParticipantReflectionReminder)
 	mux.HandleFunc("/participant/badges", a.handleParticipantBadges)
@@ -716,6 +718,36 @@ func (a *app) initDB(ctx context.Context) error {
 	`)
 	_, _ = a.db.ExecContext(ctx, `ALTER TABLE ai_usage_logs ADD COLUMN IF NOT EXISTS user_id BIGINT`)
 	_, _ = a.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS ai_usage_logs_created_idx ON ai_usage_logs(created_at DESC)`)
+	_, _ = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS ai_credit_settings (
+			id INT PRIMARY KEY,
+			tokens_per_credit BIGINT NOT NULL DEFAULT 1000,
+			updated_by BIGINT REFERENCES users(id),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	_, _ = a.db.ExecContext(ctx, `
+		INSERT INTO ai_credit_settings (id, tokens_per_credit)
+		VALUES (1, 1000)
+		ON CONFLICT (id) DO NOTHING
+	`)
+	_, _ = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS ai_user_credits (
+			user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+			credits NUMERIC(18,4) NOT NULL DEFAULT 0,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	_, _ = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS ai_credit_logs (
+			id BIGSERIAL PRIMARY KEY,
+			user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			delta_credits NUMERIC(18,4) NOT NULL,
+			reason TEXT NOT NULL DEFAULT '',
+			created_by BIGINT REFERENCES users(id),
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
 
 	// Badges
 	_, _ = a.db.ExecContext(ctx, `
@@ -7040,6 +7072,32 @@ func withAIUsage(ctx context.Context, userID int64, feature string) context.Cont
 	return ctx
 }
 
+func (a *app) getTokensPerCredit(ctx context.Context) int64 {
+	var tpc int64 = 1000
+	_ = a.db.QueryRowContext(ctx, `SELECT tokens_per_credit FROM ai_credit_settings WHERE id=1`).Scan(&tpc)
+	if tpc <= 0 { tpc = 1000 }
+	return tpc
+}
+
+func (a *app) getUserCredits(ctx context.Context, userID int64) float64 {
+	var c float64
+	_ = a.db.QueryRowContext(ctx, `SELECT credits::float8 FROM ai_user_credits WHERE user_id=$1`, userID).Scan(&c)
+	return c
+}
+
+func (a *app) addUserCredits(ctx context.Context, userID int64, delta float64, reason string, createdBy *int64) {
+	if userID <= 0 || delta == 0 { return }
+	_, _ = a.db.ExecContext(ctx, `
+		INSERT INTO ai_user_credits(user_id, credits, updated_at)
+		VALUES($1,$2,NOW())
+		ON CONFLICT(user_id) DO UPDATE SET credits = GREATEST(0, ai_user_credits.credits + EXCLUDED.credits), updated_at=NOW()
+	`, userID, delta)
+	_, _ = a.db.ExecContext(ctx, `
+		INSERT INTO ai_credit_logs(user_id, delta_credits, reason, created_by)
+		VALUES($1,$2,$3,$4)
+	`, userID, delta, strings.TrimSpace(reason), createdBy)
+}
+
 func (a *app) aiChat(ctx context.Context, systemPrompt, userPrompt string, maxTokens int, temperature float64) (string, error) {
 	cfg, err := a.getActiveAISetting(ctx)
 	if err != nil {
@@ -7047,6 +7105,16 @@ func (a *app) aiChat(ctx context.Context, systemPrompt, userPrompt string, maxTo
 	}
 	if maxTokens <= 0 { maxTokens = cfg.MaxTokens }
 	if temperature <= 0 { temperature = cfg.Temperature }
+
+	var usageUserID int64
+	if v, ok := ctx.Value(ctxAIUserIDKey).(int64); ok && v > 0 {
+		usageUserID = v
+		tokensPerCredit := a.getTokensPerCredit(ctx)
+		credits := a.getUserCredits(ctx, usageUserID)
+		if credits*float64(tokensPerCredit) < 1 {
+			return "", errors.New("saldo credit AI tidak cukup")
+		}
+	}
 
 	type aiMsg struct {
 		Role    string `json:"role"`
@@ -7105,6 +7173,13 @@ func (a *app) aiChat(ctx context.Context, systemPrompt, userPrompt string, maxTo
 		INSERT INTO ai_usage_logs(user_id,provider,model,prompt_tokens,completion_tokens,total_tokens,feature)
 		VALUES($1,$2,$3,$4,$5,$6,$7)
 	`, userID, cfg.Provider, cfg.Model, promptTokens, completionTokens, totalTokens, feature)
+	if usageUserID > 0 {
+		tokensPerCredit := a.getTokensPerCredit(ctx)
+		creditUsed := float64(totalTokens) / float64(tokensPerCredit)
+		if creditUsed > 0 {
+			a.addUserCredits(ctx, usageUserID, -creditUsed, fmt.Sprintf("usage:%s:%d tokens", feature, totalTokens), nil)
+		}
+	}
 	return answer, nil
 }
 
@@ -7323,6 +7398,81 @@ func (a *app) handleAdminAIUsageStats(w http.ResponseWriter, r *http.Request) {
 		userDetail = map[string]any{"user_id":userID,"user":uname,"features":features,"models":models,"daily_trend":userDailyTrend}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"today_tokens":today,"month_tokens":month,"top_features":top,"model_breakdown":modelBreakdown,"top_users":topUsers,"user_table":userTable,"daily_trend":dailyTrend,"user_detail":userDetail})
+}
+
+func (a *app) handleParticipantAICreditBalance(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant", "admin", "super_admin")
+	if err != nil { writeJSON(w, http.StatusUnauthorized, map[string]string{"error":"unauthorized"}); return }
+	if r.Method != http.MethodGet { writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error":"method not allowed"}); return }
+	tokensPerCredit := a.getTokensPerCredit(r.Context())
+	credits := a.getUserCredits(r.Context(), u.ID)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"user_id": u.ID,
+		"credits": credits,
+		"tokens_per_credit": tokensPerCredit,
+		"tokens_remaining": int64(credits * float64(tokensPerCredit)),
+	})
+}
+
+func (a *app) handleAdminAICredits(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "admin", "super_admin")
+	if err != nil { writeJSON(w, http.StatusUnauthorized, map[string]string{"error":"unauthorized"}); return }
+	if !isSuperAdmin(u) { writeJSON(w, http.StatusForbidden, map[string]string{"error":"hanya super_admin"}); return }
+
+	switch r.Method {
+	case http.MethodGet:
+		tokensPerCredit := a.getTokensPerCredit(r.Context())
+		rows, _ := a.db.QueryContext(r.Context(), `
+			SELECT c.user_id, COALESCE(p.name, u.phone, CONCAT('user#', c.user_id::text)) uname, c.credits::float8
+			FROM ai_user_credits c
+			LEFT JOIN users u ON u.id=c.user_id
+			LEFT JOIN participant_profiles p ON p.user_id=c.user_id
+			ORDER BY c.credits DESC
+			LIMIT 100
+		`)
+		balances := []map[string]any{}
+		if rows != nil {
+			defer rows.Close()
+			for rows.Next() {
+				var uid int64; var uname string; var credits float64
+				if rows.Scan(&uid, &uname, &credits) == nil {
+					balances = append(balances, map[string]any{"user_id":uid, "user":uname, "credits":credits, "tokens":int64(credits*float64(tokensPerCredit))})
+				}
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"tokens_per_credit":tokensPerCredit, "balances":balances})
+	case http.MethodPost:
+		var req struct {
+			Action string `json:"action"`
+			TokensPerCredit int64 `json:"tokens_per_credit"`
+			UserID int64 `json:"user_id"`
+			Credits float64 `json:"credits"`
+			Reason string `json:"reason"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil { writeJSON(w, http.StatusBadRequest, map[string]string{"error":"invalid json"}); return }
+		switch strings.TrimSpace(req.Action) {
+		case "set_rate":
+			if req.TokensPerCredit <= 0 { writeJSON(w, http.StatusBadRequest, map[string]string{"error":"tokens_per_credit harus > 0"}); return }
+			_, err = a.db.ExecContext(r.Context(), `
+				INSERT INTO ai_credit_settings(id, tokens_per_credit, updated_by, updated_at)
+				VALUES(1,$1,$2,NOW())
+				ON CONFLICT(id) DO UPDATE SET tokens_per_credit=EXCLUDED.tokens_per_credit, updated_by=EXCLUDED.updated_by, updated_at=NOW()
+			`, req.TokensPerCredit, u.ID)
+			if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]string{"error":"gagal simpan setting"}); return }
+			writeJSON(w, http.StatusOK, map[string]any{"ok":true})
+		case "add_credit":
+			if req.UserID <= 0 || req.Credits == 0 { writeJSON(w, http.StatusBadRequest, map[string]string{"error":"user_id dan credits wajib"}); return }
+			adminID := u.ID
+			reason := strings.TrimSpace(req.Reason)
+			if reason == "" { reason = "manual topup" }
+			a.addUserCredits(r.Context(), req.UserID, req.Credits, reason, &adminID)
+			writeJSON(w, http.StatusOK, map[string]any{"ok":true})
+		default:
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error":"unknown action"})
+		}
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error":"method not allowed"})
+	}
 }
 
 func (a *app) handleAdminAIProfiles(w http.ResponseWriter, r *http.Request) {

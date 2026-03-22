@@ -251,6 +251,9 @@ export default function Page() {
   const [aiUsageStats, setAiUsageStats] = useState({ today_tokens: 0, month_tokens: 0, top_features: [], model_breakdown: [], top_users: [], user_table: [], daily_trend: [], user_detail: {} });
   const [aiUsageRange, setAiUsageRange] = useState('month');
   const [aiUsageUserId, setAiUsageUserId] = useState(0);
+  const [aiCreditConfig, setAiCreditConfig] = useState({ tokens_per_credit: 1000, balances: [] });
+  const [aiCreditTopup, setAiCreditTopup] = useState({ user_id: '', credits: '', reason: '' });
+  const [myAICredit, setMyAICredit] = useState({ credits: 0, tokens_per_credit: 1000, tokens_remaining: 0 });
   const [aiProfileForm, setAiProfileForm] = useState({ id: 0, name: '', provider: 'sumopod', base_url: 'https://ai.sumopod.com/v1/chat/completions', api_key: '', model: 'gpt-4o-mini', temperature: 0.7, max_tokens: 2000 });
   const aiProviderPresets = {
     sumopod: { base_url: 'https://ai.sumopod.com/v1/chat/completions', model: 'gpt-4o-mini' },
@@ -409,14 +412,16 @@ export default function Page() {
     if (loadedSections[section]) return;
     setLoadedSections(prev => ({...prev, [section]: true}));
     if (section === 'profil') {
-      const [rRes, bdgRes, lRes] = await Promise.all([
+      const [rRes, bdgRes, lRes, cRes] = await Promise.all([
         fetch(`${apiBase}/participant/reminder`, { credentials: 'include' }),
         fetch(`${apiBase}/participant/badges`, { credentials: 'include' }),
         fetch(`${apiBase}/participant/leaderboard`, { credentials: 'include' }),
+        fetch(`${apiBase}/participant/ai-credits/balance`, { credentials: 'include' }),
       ]);
       if (rRes.ok) setMyReminder(await rRes.json());
       if (bdgRes.ok) setMyBadges((await bdgRes.json()).items || []);
       if (lRes.ok) setLeaderboard((await lRes.json()).items || []);
+      if (cRes.ok) setMyAICredit(await cRes.json());
     } else if (section === 'quiz') {
       const hRes = await fetch(`${apiBase}/participant/history`, { credentials: 'include' });
       if (hRes.ok) setHistory(await hRes.json());
@@ -1283,16 +1288,18 @@ export default function Page() {
       setMaterialGraph(localGraph.graph || '{"nodes":[],"edges":[]}');
       setMaterialUnknownBacklinks(localGraph.unknown || []);
     } else if (section === 'ai') {
-      const [res, pRes, uRes] = await Promise.all([
+      const [res, pRes, uRes, cRes] = await Promise.all([
         fetch(`${apiBase}/admin/ai-settings`, { credentials: 'include' }),
         fetch(`${apiBase}/admin/ai-profiles`, { credentials: 'include' }),
         fetch(`${apiBase}/admin/ai-usage/stats?range=${encodeURIComponent(aiUsageRange)}${aiUsageUserId ? `&user_id=${aiUsageUserId}` : ''}`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/ai-credits`, { credentials: 'include' }),
       ]);
       if (res.ok) setAiSettings(await res.json());
       else showMsg('Gagal load AI settings', 'error');
       if (pRes.ok) setAiProfiles((await pRes.json()).items || []);
       else showMsg('Gagal load AI profiles (cek role super_admin)', 'error');
       if (uRes.ok) setAiUsageStats(await uRes.json());
+      if (cRes.ok) setAiCreditConfig(await cRes.json());
     }
   }
 
@@ -1720,6 +1727,33 @@ export default function Page() {
     const pRes = await fetch(`${apiBase}/admin/ai-profiles`, { credentials: 'include' });
     if (pRes.ok) setAiProfiles((await pRes.json()).items || []);
     setActionType('success'); setActionMsg('Profile AI dihapus.'); setBusy(false);
+  }
+
+  async function saveAICreditRate() {
+    setBusy(true); setActionMsg('');
+    const res = await fetch(`${apiBase}/admin/ai-credits`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ action: 'set_rate', tokens_per_credit: Number(aiCreditConfig?.tokens_per_credit || 1000) })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal simpan rate credit.'); setBusy(false); return; }
+    const cRes = await fetch(`${apiBase}/admin/ai-credits`, { credentials: 'include' });
+    if (cRes.ok) setAiCreditConfig(await cRes.json());
+    setActionType('success'); setActionMsg('Rate credit AI disimpan.'); setBusy(false);
+  }
+
+  async function addAICreditToUser() {
+    setBusy(true); setActionMsg('');
+    const payload = { action: 'add_credit', user_id: Number(aiCreditTopup.user_id || 0), credits: Number(aiCreditTopup.credits || 0), reason: aiCreditTopup.reason || '' };
+    const res = await fetch(`${apiBase}/admin/ai-credits`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload)
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setActionType('error'); setActionMsg(d.error || 'Gagal tambah credit user.'); setBusy(false); return; }
+    const cRes = await fetch(`${apiBase}/admin/ai-credits`, { credentials: 'include' });
+    if (cRes.ok) setAiCreditConfig(await cRes.json());
+    setAiCreditTopup({ user_id: '', credits: '', reason: '' });
+    setActionType('success'); setActionMsg('Credit user berhasil ditambahkan.'); setBusy(false);
   }
 
   async function claimRedeem(itemId) {
@@ -2260,6 +2294,12 @@ export default function Page() {
                 <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 10 }}>🌟 Saldo Poin</div>
                 <div style={{ fontSize: 38, fontWeight: 800, fontFamily: 'Poppins, sans-serif', color: '#ff7a5c', lineHeight: 1 }}>{myPoints}</div>
                 <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 6 }}>poin tersedia</div>
+              </div>
+
+              <div className="nk-stat-card blue">
+                <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 10 }}>🪙 Saldo Credit AI</div>
+                <div style={{ fontSize: 34, fontWeight: 800, fontFamily: 'Poppins, sans-serif', color: '#38bdf8', lineHeight: 1 }}>{Number(myAICredit?.credits || 0).toFixed(2)}</div>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>≈ {myAICredit?.tokens_remaining || 0} token (1 credit = {myAICredit?.tokens_per_credit || 1000} token)</div>
               </div>
 
               <div className="nk-stat-card yellow">
@@ -4469,6 +4509,38 @@ export default function Page() {
                       </div>
                     )}
                   </div>
+
+                  <div style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 12, background: '#0f172a', marginBottom: 12 }}>
+                    <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700 }}>AI Credit Wallet (Super Admin)</p>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:8, alignItems:'end', marginBottom:8 }}>
+                      <div>
+                        <div style={{ fontSize:11, color:'#94a3b8', marginBottom:4 }}>1 credit = berapa token</div>
+                        <input className="nk-input-sm" type="number" min="1" value={aiCreditConfig?.tokens_per_credit || 1000} onChange={e=>setAiCreditConfig(s=>({...s, tokens_per_credit: e.target.value}))} />
+                      </div>
+                      <BtnSm disabled={busy} onClick={saveAICreditRate}>💾 Simpan Rate</BtnSm>
+                    </div>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr auto', gap:8, alignItems:'end', marginBottom:10 }}>
+                      <input className="nk-input-sm" placeholder="User ID" value={aiCreditTopup.user_id} onChange={e=>setAiCreditTopup(s=>({...s,user_id:e.target.value}))} />
+                      <input className="nk-input-sm" placeholder="Credits (+/-)" value={aiCreditTopup.credits} onChange={e=>setAiCreditTopup(s=>({...s,credits:e.target.value}))} />
+                      <input className="nk-input-sm" placeholder="Reason" value={aiCreditTopup.reason} onChange={e=>setAiCreditTopup(s=>({...s,reason:e.target.value}))} />
+                      <BtnSm disabled={busy} onClick={addAICreditToUser}>➕ Tambah Credit</BtnSm>
+                    </div>
+                    {Array.isArray(aiCreditConfig?.balances) && aiCreditConfig.balances.length > 0 && (
+                      <div className="nk-table-wrap" style={{ maxHeight: 220 }}>
+                        <table className="nk-table" style={{ minWidth: 560 }}>
+                          <thead><tr><th>User</th><th>Credits</th><th>Estimasi Token</th></tr></thead>
+                          <tbody>{aiCreditConfig.balances.slice(0, 30).map((b,i)=>(
+                            <tr key={`${b.user_id}-${i}`}>
+                              <td>{b.user || '-'}</td>
+                              <td>{Number(b.credits || 0).toFixed(2)}</td>
+                              <td>{b.tokens || 0}</td>
+                            </tr>
+                          ))}</tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
                     <div style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 12, background: '#0f172a' }}>
                       <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700 }}>Profile Form</p>
