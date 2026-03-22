@@ -134,22 +134,24 @@ export default function Page() {
     let html = '';
     let inCode = false, codeLines = [];
     for (let line of lines) {
-      if (line.startsWith('```')) {
-        if (inCode) { html += `<pre style="background:#0a1628;border-radius:6px;padding:10px;overflow-x:auto;font-size:12px;color:#a5f3fc;margin:6px 0">${line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`; inCode = false; codeLines = []; }
+      line = String(line || '').replace(/\r/g, '');
+      const lead = line.trimStart();
+      if (lead.startsWith('```')) {
+        if (inCode) { html += `<pre style="background:#0a1628;border-radius:6px;padding:10px;overflow-x:auto;font-size:12px;color:#a5f3fc;margin:6px 0">${lead.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`; inCode = false; codeLines = []; }
         else inCode = true;
         continue;
       }
       if (inCode) { codeLines.push(line); html += `<pre style="background:#0a1628;border-radius:6px;padding:10px;overflow-x:auto;font-size:12px;color:#a5f3fc;margin:6px 0">${codeLines.join('\n').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`; continue; }
-      if (line.trim() === '---' || line.trim() === '***') { html += '<hr style="border:none;border-top:1px solid #1e2d45;margin:10px 0"/>'; continue; }
-      if (line.startsWith('# ')) { html += `<p style="font-weight:800;font-size:16px;color:#f1f5f9;margin:10px 0 4px">📌 ${inlineMD(line.slice(2))}</p>`; continue; }
-      if (line.startsWith('## ')) { html += `<p style="font-weight:700;font-size:15px;color:#e2e8f0;margin:8px 0 4px">${inlineMD(line.slice(3))}</p>`; continue; }
-      if (line.startsWith('### ')) { html += `<p style="font-weight:700;font-size:14px;color:#cbd5e1;margin:6px 0 2px">${inlineMD(line.slice(4))}</p>`; continue; }
-      if (line.startsWith('> ')) { html += `<div style="border-left:3px solid #7c3aed;padding:4px 10px;margin:4px 0;color:#94a3b8;font-style:italic;font-size:13px">${inlineMD(line.slice(2))}</div>`; continue; }
-      if (line.startsWith('- ') || line.startsWith('* ')) { html += `<div style="display:flex;gap:6px;margin:2px 0;font-size:13px"><span style="color:#7c3aed;flex-shrink:0">•</span><span>${inlineMD(line.slice(2))}</span></div>`; continue; }
-      const numMatch = line.match(/^(\d+)\. (.+)/);
+      if (lead.trim() === '---' || lead.trim() === '***') { html += '<hr style="border:none;border-top:1px solid #1e2d45;margin:10px 0"/>'; continue; }
+      if (lead.startsWith('### ')) { html += `<p style="font-weight:700;font-size:14px;color:#cbd5e1;margin:6px 0 2px">${inlineMD(lead.slice(4))}</p>`; continue; }
+      if (lead.startsWith('## ')) { html += `<p style="font-weight:700;font-size:15px;color:#e2e8f0;margin:8px 0 4px">${inlineMD(lead.slice(3))}</p>`; continue; }
+      if (lead.startsWith('# ')) { html += `<p style="font-weight:800;font-size:16px;color:#f1f5f9;margin:10px 0 4px">📌 ${inlineMD(lead.slice(2))}</p>`; continue; }
+      if (lead.startsWith('> ')) { html += `<div style="border-left:3px solid #7c3aed;padding:4px 10px;margin:4px 0;color:#94a3b8;font-style:italic;font-size:13px">${inlineMD(lead.slice(2))}</div>`; continue; }
+      if (lead.startsWith('- ') || lead.startsWith('* ')) { html += `<div style="display:flex;gap:6px;margin:2px 0;font-size:13px"><span style="color:#7c3aed;flex-shrink:0">•</span><span>${inlineMD(lead.slice(2))}</span></div>`; continue; }
+      const numMatch = lead.match(/^(\d+)\. (.+)/);
       if (numMatch) { html += `<div style="display:flex;gap:6px;margin:2px 0;font-size:13px"><span style="color:#7c3aed;flex-shrink:0;font-weight:700">${numMatch[1]}.</span><span>${inlineMD(numMatch[2])}</span></div>`; continue; }
       if (line.trim() === '') { html += '<div style="height:6px"></div>'; continue; }
-      html += `<p style="margin:3px 0;font-size:13px;line-height:1.7;color:#94a3b8">${inlineMD(line)}</p>`;
+      html += `<p style="margin:3px 0;font-size:13px;line-height:1.7;color:#94a3b8">${inlineMD(lead)}</p>`;
     }
     return html;
   }
