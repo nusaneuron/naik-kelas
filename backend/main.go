@@ -7086,17 +7086,25 @@ func (a *app) getUserCredits(ctx context.Context, userID int64) float64 {
 	return c
 }
 
-func (a *app) addUserCredits(ctx context.Context, userID int64, delta float64, reason string, createdBy *int64) {
-	if userID <= 0 || delta == 0 { return }
-	_, _ = a.db.ExecContext(ctx, `
+func (a *app) addUserCredits(ctx context.Context, userID int64, delta float64, reason string, createdBy *int64) error {
+	if userID <= 0 { return fmt.Errorf("invalid user id") }
+	if math.IsNaN(delta) || math.IsInf(delta, 0) || delta == 0 { return fmt.Errorf("invalid credit delta") }
+	if _, err := a.db.ExecContext(ctx, `
 		INSERT INTO ai_user_credits(user_id, credits, updated_at)
 		VALUES($1,$2,NOW())
 		ON CONFLICT(user_id) DO UPDATE SET credits = GREATEST(0, ai_user_credits.credits + EXCLUDED.credits), updated_at=NOW()
-	`, userID, delta)
-	_, _ = a.db.ExecContext(ctx, `
+	`, userID, delta); err != nil {
+		return err
+	}
+	var by any = nil
+	if createdBy != nil && *createdBy > 0 { by = *createdBy }
+	if _, err := a.db.ExecContext(ctx, `
 		INSERT INTO ai_credit_logs(user_id, delta_credits, reason, created_by)
 		VALUES($1,$2,$3,$4)
-	`, userID, delta, strings.TrimSpace(reason), createdBy)
+	`, userID, delta, strings.TrimSpace(reason), by); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (a *app) aiChat(ctx context.Context, systemPrompt, userPrompt string, maxTokens int, temperature float64) (string, error) {
@@ -7178,7 +7186,7 @@ func (a *app) aiChat(ctx context.Context, systemPrompt, userPrompt string, maxTo
 		tokensPerCredit := a.getTokensPerCredit(ctx)
 		creditUsed := float64(totalTokens) / float64(tokensPerCredit)
 		if creditUsed > 0 {
-			a.addUserCredits(ctx, usageUserID, -creditUsed, fmt.Sprintf("usage:%s:%d tokens", feature, totalTokens), nil)
+			_ = a.addUserCredits(ctx, usageUserID, -creditUsed, fmt.Sprintf("usage:%s:%d tokens", feature, totalTokens), nil)
 		}
 	}
 	return answer, nil
@@ -7489,12 +7497,17 @@ func (a *app) handleAdminAICredits(w http.ResponseWriter, r *http.Request) {
 			if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]string{"error":"gagal simpan setting"}); return }
 			writeJSON(w, http.StatusOK, map[string]any{"ok":true})
 		case "add_credit":
-			if req.UserID <= 0 || req.Credits == 0 { writeJSON(w, http.StatusBadRequest, map[string]string{"error":"user_id dan credits wajib"}); return }
+			if req.UserID <= 0 || req.Credits == 0 || math.IsNaN(req.Credits) || math.IsInf(req.Credits, 0) { writeJSON(w, http.StatusBadRequest, map[string]string{"error":"user_id dan credits wajib"}); return }
 			adminID := u.ID
 			reason := strings.TrimSpace(req.Reason)
 			if reason == "" { reason = "manual topup" }
-			a.addUserCredits(r.Context(), req.UserID, req.Credits, reason, &adminID)
-			writeJSON(w, http.StatusOK, map[string]any{"ok":true})
+			if err := a.addUserCredits(r.Context(), req.UserID, req.Credits, reason, &adminID); err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error":"gagal tambah credit: " + err.Error()})
+				return
+			}
+			var newCredits float64
+			_ = a.db.QueryRowContext(r.Context(), `SELECT credits::float8 FROM ai_user_credits WHERE user_id=$1`, req.UserID).Scan(&newCredits)
+			writeJSON(w, http.StatusOK, map[string]any{"ok":true,"user_id":req.UserID,"credits":newCredits})
 		default:
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error":"unknown action"})
 		}

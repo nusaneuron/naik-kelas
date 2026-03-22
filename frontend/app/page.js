@@ -1757,7 +1757,7 @@ export default function Page() {
     setAiCreditTopup({ user_id: '', credits: '', reason: '' });
     setAiCreditUserQuery('');
     setAiCreditUserHits([]);
-    setActionType('success'); setActionMsg('Credit user berhasil ditambahkan.'); setBusy(false);
+    setActionType('success'); setActionMsg(`Credit user berhasil ditambahkan. Saldo baru: ${Number(d.credits || 0).toFixed(3)}`); setBusy(false);
   }
 
   async function searchAICreditUsers(q) {
