@@ -3783,7 +3783,12 @@ handleCommands:
 			}
 		}
 		if len(positions) == 0 {
-			return "Belum ada roadmap yang tersedia untuk kelompokmu saat ini.", "idle"
+			var globalCount, groupCount int
+			_ = a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM roadmap_positions WHERE is_active=TRUE AND group_id IS NULL`).Scan(&globalCount)
+			if groupID2 > 0 {
+				_ = a.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM roadmap_positions WHERE is_active=TRUE AND group_id=$1`, groupID2).Scan(&groupCount)
+			}
+			return fmt.Sprintf("Belum ada roadmap yang tersedia untuk kelompokmu saat ini.\n\n🔎 Debug: group_id kamu = %d, jabatan global aktif = %d, jabatan group aktif = %d", groupID2, globalCount, groupCount), "idle"
 		}
 		a.mu.Lock()
 		s.State = "roadmap_choose_position"
