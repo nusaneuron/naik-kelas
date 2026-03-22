@@ -268,6 +268,7 @@ func main() {
 	mux.HandleFunc("/admin/ai-profiles", a.handleAdminAIProfiles)
 	mux.HandleFunc("/admin/ai-usage/stats", a.handleAdminAIUsageStats)
 	mux.HandleFunc("/admin/ai-credits", a.handleAdminAICredits)
+	mux.HandleFunc("/admin/ai-credits/users", a.handleAdminAICreditUsers)
 	mux.HandleFunc("/participant/ai-credits/balance", a.handleParticipantAICreditBalance)
 	mux.HandleFunc("/participant/reflections", a.handleParticipantReflections)
 	mux.HandleFunc("/participant/reflection-reminder", a.handleParticipantReflectionReminder)
@@ -7473,6 +7474,35 @@ func (a *app) handleAdminAICredits(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error":"method not allowed"})
 	}
+}
+
+func (a *app) handleAdminAICreditUsers(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "admin", "super_admin")
+	if err != nil { writeJSON(w, http.StatusUnauthorized, map[string]string{"error":"unauthorized"}); return }
+	if !isSuperAdmin(u) { writeJSON(w, http.StatusForbidden, map[string]string{"error":"hanya super_admin"}); return }
+	if r.Method != http.MethodGet { writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error":"method not allowed"}); return }
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" { writeJSON(w, http.StatusOK, map[string]any{"items": []map[string]any{}}); return }
+	like := "%" + strings.ToLower(q) + "%"
+	rows, _ := a.db.QueryContext(r.Context(), `
+		SELECT u.id, COALESCE(p.name, u.phone, CONCAT('user#', u.id::text)) uname, COALESCE(u.phone, '') phone
+		FROM users u
+		LEFT JOIN participant_profiles p ON p.user_id=u.id
+		WHERE LOWER(COALESCE(p.name,'')) LIKE $1 OR LOWER(COALESCE(u.phone,'')) LIKE $1
+		ORDER BY u.id DESC
+		LIMIT 20
+	`, like)
+	items := []map[string]any{}
+	if rows != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var id int64; var name, phone string
+			if rows.Scan(&id,&name,&phone)==nil {
+				items = append(items, map[string]any{"id":id,"name":name,"phone":phone})
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items":items})
 }
 
 func (a *app) handleAdminAIProfiles(w http.ResponseWriter, r *http.Request) {

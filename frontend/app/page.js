@@ -253,6 +253,8 @@ export default function Page() {
   const [aiUsageUserId, setAiUsageUserId] = useState(0);
   const [aiCreditConfig, setAiCreditConfig] = useState({ tokens_per_credit: 1000, balances: [] });
   const [aiCreditTopup, setAiCreditTopup] = useState({ user_id: '', credits: '', reason: '' });
+  const [aiCreditUserQuery, setAiCreditUserQuery] = useState('');
+  const [aiCreditUserHits, setAiCreditUserHits] = useState([]);
   const [myAICredit, setMyAICredit] = useState({ credits: 0, tokens_per_credit: 1000, tokens_remaining: 0 });
   const [aiProfileForm, setAiProfileForm] = useState({ id: 0, name: '', provider: 'sumopod', base_url: 'https://ai.sumopod.com/v1/chat/completions', api_key: '', model: 'gpt-4o-mini', temperature: 0.7, max_tokens: 2000 });
   const aiProviderPresets = {
@@ -1753,7 +1755,18 @@ export default function Page() {
     const cRes = await fetch(`${apiBase}/admin/ai-credits`, { credentials: 'include' });
     if (cRes.ok) setAiCreditConfig(await cRes.json());
     setAiCreditTopup({ user_id: '', credits: '', reason: '' });
+    setAiCreditUserQuery('');
+    setAiCreditUserHits([]);
     setActionType('success'); setActionMsg('Credit user berhasil ditambahkan.'); setBusy(false);
+  }
+
+  async function searchAICreditUsers(q) {
+    setAiCreditUserQuery(q);
+    if (!q || q.trim().length < 2) { setAiCreditUserHits([]); return; }
+    const res = await fetch(`${apiBase}/admin/ai-credits/users?q=${encodeURIComponent(q.trim())}`, { credentials: 'include' });
+    if (!res.ok) { setAiCreditUserHits([]); return; }
+    const d = await res.json().catch(() => ({}));
+    setAiCreditUserHits(d.items || []);
   }
 
   async function claimRedeem(itemId) {
@@ -4519,12 +4532,25 @@ export default function Page() {
                       </div>
                       <BtnSm disabled={busy} onClick={saveAICreditRate}>💾 Simpan Rate</BtnSm>
                     </div>
-                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr auto', gap:8, alignItems:'end', marginBottom:10 }}>
-                      <input className="nk-input-sm" placeholder="User ID" value={aiCreditTopup.user_id} onChange={e=>setAiCreditTopup(s=>({...s,user_id:e.target.value}))} />
+                    <div style={{ display:'grid', gridTemplateColumns:'1.3fr .8fr 1fr auto', gap:8, alignItems:'end', marginBottom:10 }}>
+                      <div>
+                        <input className="nk-input-sm" placeholder="Cari user (nama/phone)" value={aiCreditUserQuery} onChange={e=>searchAICreditUsers(e.target.value)} />
+                        {aiCreditTopup.user_id ? <div style={{ fontSize:11, color:'#38bdf8', marginTop:4 }}>User terpilih ID: {aiCreditTopup.user_id}</div> : null}
+                      </div>
                       <input className="nk-input-sm" placeholder="Credits (+/-)" value={aiCreditTopup.credits} onChange={e=>setAiCreditTopup(s=>({...s,credits:e.target.value}))} />
                       <input className="nk-input-sm" placeholder="Reason" value={aiCreditTopup.reason} onChange={e=>setAiCreditTopup(s=>({...s,reason:e.target.value}))} />
-                      <BtnSm disabled={busy} onClick={addAICreditToUser}>➕ Tambah Credit</BtnSm>
+                      <BtnSm disabled={busy || !aiCreditTopup.user_id} onClick={addAICreditToUser}>➕ Tambah Credit</BtnSm>
                     </div>
+                    {Array.isArray(aiCreditUserHits) && aiCreditUserHits.length > 0 && (
+                      <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:8 }}>
+                        {aiCreditUserHits.map((u, i) => (
+                          <button key={`${u.id}-${i}`} onClick={() => setAiCreditTopup(s => ({ ...s, user_id: String(u.id) }))}
+                            style={{ border:'1px solid #334155', background:'transparent', color:'#cbd5e1', borderRadius:999, padding:'4px 9px', fontSize:11, cursor:'pointer' }}>
+                            {u.name} ({u.phone || '-'}) • ID:{u.id}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     {Array.isArray(aiCreditConfig?.balances) && aiCreditConfig.balances.length > 0 && (
                       <div className="nk-table-wrap" style={{ maxHeight: 220 }}>
                         <table className="nk-table" style={{ minWidth: 560 }}>
