@@ -7479,12 +7479,15 @@ func (a *app) handleAdminMaterials(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// send_publish -> kirim ke peserta berdasarkan group jabatan roadmap (code lrmc-<competency_id>)
-			m := regexp.MustCompile(`^lrmc-(\d+)$`).FindStringSubmatch(catCode)
-			if len(m) < 2 {
+			if !strings.HasPrefix(catCode, "lrmc-") {
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "chat ini belum terhubung ke kompetensi roadmap"})
 				return
 			}
-			compID, _ := strconv.ParseInt(m[1], 10, 64)
+			compID, _ := strconv.ParseInt(strings.TrimPrefix(catCode, "lrmc-"), 10, 64)
+			if compID <= 0 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kode bridge roadmap tidak valid"})
+				return
+			}
 			var groupID sql.NullInt64
 			_ = a.db.QueryRowContext(ctx, `SELECT rp.group_id FROM roadmap_competencies rc JOIN roadmap_positions rp ON rp.id=rc.position_id WHERE rc.id=$1`, compID).Scan(&groupID)
 			q := `
