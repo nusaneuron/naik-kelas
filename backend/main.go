@@ -8257,6 +8257,38 @@ func splitRoadmapContentIntoChunks(content string, targetLen int) []string {
 	return out
 }
 
+func (a *app) reindexRoadmapRAGMaterial(ctx context.Context, materialID int64) error {
+	if materialID <= 0 { return nil }
+	tx, err := a.db.BeginTx(ctx, nil)
+	if err != nil { return err }
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM roadmap_rag_chunks WHERE material_id=$1`, materialID); err != nil { return err }
+	var title, content, bloom string
+	var competencyID, positionID int64
+	var groupID sql.NullInt64
+	err = tx.QueryRowContext(ctx, `
+		SELECT rm.title, rm.content, COALESCE(rm.bloom_level,'C2'), rc.id, rc.position_id, rp.group_id
+		FROM roadmap_materials rm
+		JOIN roadmap_competencies rc ON rc.id=rm.competency_id
+		JOIN roadmap_positions rp ON rp.id=rc.position_id
+		WHERE rm.id=$1 AND rm.is_active=TRUE
+	`, materialID).Scan(&title, &content, &bloom, &competencyID, &positionID, &groupID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) { return tx.Commit() }
+		return err
+	}
+	chunks := splitRoadmapContentIntoChunks(content, 900)
+	for i, ch := range chunks {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO roadmap_rag_chunks(material_id,position_id,competency_id,group_id,title,chunk_text,chunk_order,bloom_level)
+			VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+		`, materialID, positionID, competencyID, groupID, title, ch, i+1, bloom); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 func (a *app) rebuildRoadmapRAGIndex(ctx context.Context) (int64, int64, int64, string, error) {
 	tx, err := a.db.BeginTx(ctx, nil)
 	if err != nil { return 0, 0, 0, "", err }
@@ -8834,6 +8866,7 @@ func (a *app) handleAdminRoadmapMaterials(w http.ResponseWriter, r *http.Request
 			res, err := a.db.ExecContext(r.Context(), `DELETE FROM roadmap_materials WHERE id=$1`, req.ID)
 			if err != nil { writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal hapus materi"}); return }
 			af,_ := res.RowsAffected(); if af==0 { writeJSON(w,http.StatusNotFound,map[string]string{"error":"materi tidak ditemukan"}); return }
+			_, _ = a.db.ExecContext(r.Context(), `DELETE FROM roadmap_rag_chunks WHERE material_id=$1`, req.ID)
 			writeJSON(w,http.StatusOK,map[string]any{"ok":true}); return
 		}
 		req.Title = strings.TrimSpace(strings.ReplaceAll(req.Title, "\u00a0", " "))
@@ -8849,10 +8882,11 @@ func (a *app) handleAdminRoadmapMaterials(w http.ResponseWriter, r *http.Request
 		}
 		if admin.Role != "super_admin" && !a.canAccessRoadmapPosition(r.Context(), admin, positionID) { writeJSON(w,http.StatusForbidden,map[string]string{"error":"kompetensi di luar kelompok admin"}); return }
 		active := true; if req.IsActive != nil { active = *req.IsActive }
+		materialID := req.ID
 		if req.ID > 0 {
 			_, err = a.db.ExecContext(r.Context(), `UPDATE roadmap_materials SET competency_id=$1,title=$2,content=$3,bloom_level=$4,is_active=$5,updated_by=$6,updated_at=NOW() WHERE id=$7`, req.CompetencyID, req.Title, req.Content, req.BloomLevel, active, admin.ID, req.ID)
 		} else {
-			_, err = a.db.ExecContext(r.Context(), `INSERT INTO roadmap_materials(competency_id,title,content,bloom_level,is_active,created_by,updated_by) VALUES($1,$2,$3,$4,$5,$6,$6)`, req.CompetencyID, req.Title, req.Content, req.BloomLevel, active, admin.ID)
+			err = a.db.QueryRowContext(r.Context(), `INSERT INTO roadmap_materials(competency_id,title,content,bloom_level,is_active,created_by,updated_by) VALUES($1,$2,$3,$4,$5,$6,$6) RETURNING id`, req.CompetencyID, req.Title, req.Content, req.BloomLevel, active, admin.ID).Scan(&materialID)
 		}
 		if err != nil {
 			errText := strings.ToLower(err.Error())
@@ -8860,6 +8894,9 @@ func (a *app) handleAdminRoadmapMaterials(w http.ResponseWriter, r *http.Request
 				writeJSON(w,http.StatusBadRequest,map[string]string{"error":"judul materi sudah digunakan pada kompetensi ini"}); return
 			}
 			writeJSON(w,http.StatusInternalServerError,map[string]string{"error":"gagal simpan materi"}); return
+		}
+		if materialID > 0 {
+			_ = a.reindexRoadmapRAGMaterial(r.Context(), materialID)
 		}
 		writeJSON(w,http.StatusOK,map[string]any{"ok":true}); return
 	}
