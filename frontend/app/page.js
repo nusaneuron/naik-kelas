@@ -2892,10 +2892,19 @@ export default function Page() {
                       </div>
                       {participantRagAnswer && (
                         <div style={{ marginTop:10, border:'1px solid #243246', borderRadius:8, padding:10 }}>
-                          <div style={{ whiteSpace:'pre-wrap', color:'#cbd5e1' }}>{participantRagAnswer}</div>
+                          <div style={{ color:'#cbd5e1', lineHeight:1.7, fontSize:14 }}
+                            dangerouslySetInnerHTML={{ __html: renderMD(participantRagAnswer || '') }} />
                           {participantRagSources.length > 0 && (
-                            <div style={{ marginTop:8, fontSize:11, color:'#94a3b8' }}>
-                              Sumber: {participantRagSources.map((s, i) => s.title ? `${i+1}. ${s.title}` : null).filter(Boolean).join(' • ')}
+                            <div style={{ marginTop:10, paddingTop:8, borderTop:'1px solid #1e2d45' }}>
+                              <div style={{ fontSize:11, color:'#94a3b8', marginBottom:6, textTransform:'uppercase', letterSpacing:'0.4px' }}>Sumber Referensi</div>
+                              <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                                {participantRagSources.map((s, i) => (
+                                  <button key={i} onClick={() => s.material_id && openParticipantRoadmapMaterial(s.material_id)}
+                                    style={{ border:'1px solid rgba(96,165,250,0.25)', background:'rgba(96,165,250,0.08)', color:'#93c5fd', borderRadius:999, padding:'4px 10px', fontSize:11, cursor:'pointer' }}>
+                                    {i+1}. {s.title || 'Sumber'}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
                           )}
                         </div>
