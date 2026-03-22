@@ -193,9 +193,6 @@ export default function Page() {
   const [materiType, setMateriType] = useState('text');
   const [materiContent, setMateriContent] = useState('');
   const [materiBubbles, setMateriBubbles] = useState(['']);
-  const [aiGenerating, setAiGenerating] = useState(false);
-  const [aiGroupDesc, setAiGroupDesc] = useState('');
-  const [aiShowDesc, setAiShowDesc] = useState(false);
   const [qAiGenerating, setQAiGenerating] = useState(false);
   const [qAiRoadmapCompId, setQAiRoadmapCompId] = useState('');
   const [qAiMateriId, setQAiMateriId] = useState('');
@@ -4391,61 +4388,6 @@ export default function Page() {
                         <label style={fieldLbl}>Judul Materi / Judul Chat</label>
                         <input value={materiTitle} onChange={e => setMateriTitle(e.target.value)} placeholder="Judul materi/chat..." className="nk-input-sm" style={{ width: "100%" }} />
                       </div>
-                      {/* AI Generate Button */}
-                      {materiType === 'text' && (
-                        <div style={{ marginBottom: 12, background: '#0a1e3a', border: '1px dashed #2563eb', borderRadius: 10, padding: '10px 14px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                            <span style={{ fontSize: 13, color: '#93c5fd', fontWeight: 600 }}>✨ Generate dengan AI</span>
-                            <button type="button" onClick={() => setAiShowDesc(v => !v)}
-                              style={{ fontSize: 11, color: '#64748b', background: 'none', border: '1px solid #1e3a5f', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}>
-                              {aiShowDesc ? '▲ Sembunyikan Konteks' : '▼ + Konteks Kelompok'}
-                            </button>
-                          </div>
-                          <div style={{ marginBottom: 8 }}>
-                            <label style={{ ...fieldLbl, fontSize: 11 }}>Deskripsi Materi <span style={{ color: '#64748b' }}>(poin-poin yang ingin dibahas)</span></label>
-                            <textarea id="aiMateriDesc"
-                              placeholder="Contoh: bahas definisi K3, kenapa penting, contoh kecelakaan kerja, dan langkah pencegahannya..."
-                              className="nk-input-sm" rows={2}
-                              style={{ width: '100%', fontSize: 12, resize: 'vertical' }} />
-                          </div>
-                          {aiShowDesc && (
-                            <div style={{ marginBottom: 8 }}>
-                              <label style={{ ...fieldLbl, fontSize: 11 }}>Konteks Kelompok/Perusahaan <span style={{ color: '#64748b' }}>(opsional)</span></label>
-                              <textarea value={aiGroupDesc} onChange={e => setAiGroupDesc(e.target.value)}
-                                placeholder="Misal: perusahaan manufaktur baja, fokus K3 dan SOP produksi, peserta adalah operator lantai pabrik..."
-                                className="nk-input-sm" rows={2}
-                                style={{ width: '100%', fontSize: 12, resize: 'vertical' }} />
-                            </div>
-                          )}
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            {[3,4,5].map(n => (
-                              <button key={n} type="button" disabled={aiGenerating || !materiTitle.trim()}
-                                onClick={async () => {
-                                  if (!materiTitle.trim()) return;
-                                  setAiGenerating(true);
-                                  try {
-                                    const res = await fetch(`${apiBase}/admin/materials/generate`, {
-                                      method: 'POST', credentials: 'include',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ topic: materiTitle, materi_description: document.getElementById('aiMateriDesc')?.value || '', group_description: aiGroupDesc, bubble_count: n })
-                                    });
-                                    const data = await res.json();
-                                    if (data.bubbles?.length > 0) {
-                                      setMateriBubbles(data.bubbles);
-                                    } else {
-                                      alert('AI gagal generate: ' + (data.error || 'Unknown error'));
-                                    }
-                                  } catch(e) { alert('Error: ' + e.message); }
-                                  setAiGenerating(false);
-                                }}
-                                style={{ flex: '1 1 80px', minWidth: 80, padding: '6px 0', background: aiGenerating ? '#1e3a5f' : '#1d4ed8', color: '#fff', border: 'none', borderRadius: 8, cursor: aiGenerating || !materiTitle.trim() ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, opacity: !materiTitle.trim() ? 0.5 : 1 }}>
-                                {aiGenerating ? '⏳ Generating...' : `✨ ${n} Bubble`}
-                              </button>
-                            ))}
-                          </div>
-                          {!materiTitle.trim() && <p style={{ margin: '6px 0 0', fontSize: 11, color: '#64748b' }}>Isi judul materi dulu sebelum generate.</p>}
-                        </div>
-                      )}
                       <div style={{ marginBottom: 10 }}>
                         <label style={fieldLbl}>{materiType === 'text' ? 'Isi Materi (Markdown)' : 'URL ' + (materiType === 'video' ? 'Video (YouTube/GDrive)' : 'Audio (MP3)')}</label>
                         {materiType === 'text' ? (<>
