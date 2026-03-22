@@ -266,6 +266,7 @@ func main() {
 	mux.HandleFunc("/admin/contributions/review", a.handleAdminReviewContribution)
 	mux.HandleFunc("/admin/ai-settings", a.handleAdminAISettings)
 	mux.HandleFunc("/admin/ai-profiles", a.handleAdminAIProfiles)
+	mux.HandleFunc("/admin/ai-usage/stats", a.handleAdminAIUsageStats)
 	mux.HandleFunc("/participant/reflections", a.handleParticipantReflections)
 	mux.HandleFunc("/participant/reflection-reminder", a.handleParticipantReflectionReminder)
 	mux.HandleFunc("/participant/badges", a.handleParticipantBadges)
@@ -700,6 +701,19 @@ func (a *app) initDB(ctx context.Context) error {
 		WHERE id=1
 		  AND NOT EXISTS (SELECT 1 FROM ai_provider_profiles)
 	`)
+	_, _ = a.db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS ai_usage_logs (
+			id BIGSERIAL PRIMARY KEY,
+			provider TEXT NOT NULL DEFAULT '',
+			model TEXT NOT NULL DEFAULT '',
+			prompt_tokens INT NOT NULL DEFAULT 0,
+			completion_tokens INT NOT NULL DEFAULT 0,
+			total_tokens INT NOT NULL DEFAULT 0,
+			feature TEXT NOT NULL DEFAULT 'general',
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	_, _ = a.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS ai_usage_logs_created_idx ON ai_usage_logs(created_at DESC)`)
 
 	// Badges
 	_, _ = a.db.ExecContext(ctx, `
@@ -7044,12 +7058,35 @@ func (a *app) aiChat(ctx context.Context, systemPrompt, userPrompt string, maxTo
 
 	var aiResp struct {
 		Choices []struct{ Message struct{ Content string `json:"content"` } `json:"message"` } `json:"choices"`
+		Usage   *struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+			TotalTokens      int `json:"total_tokens"`
+		} `json:"usage"`
 		Error   *struct{ Message string `json:"message"` } `json:"error"`
 	}
 	if json.NewDecoder(resp.Body).Decode(&aiResp) != nil { return "", errors.New("gagal parse respons AI") }
 	if aiResp.Error != nil { return "", errors.New(aiResp.Error.Message) }
 	if len(aiResp.Choices) == 0 { return "", errors.New("AI tidak menghasilkan konten") }
-	return strings.TrimSpace(aiResp.Choices[0].Message.Content), nil
+	answer := strings.TrimSpace(aiResp.Choices[0].Message.Content)
+	promptTokens := 0
+	completionTokens := 0
+	totalTokens := 0
+	if aiResp.Usage != nil {
+		promptTokens = aiResp.Usage.PromptTokens
+		completionTokens = aiResp.Usage.CompletionTokens
+		totalTokens = aiResp.Usage.TotalTokens
+	}
+	if totalTokens <= 0 {
+		promptTokens = len([]rune(systemPrompt+"\n"+userPrompt)) / 4
+		completionTokens = len([]rune(answer)) / 4
+		totalTokens = promptTokens + completionTokens
+	}
+	_, _ = a.db.ExecContext(ctx, `
+		INSERT INTO ai_usage_logs(provider,model,prompt_tokens,completion_tokens,total_tokens,feature)
+		VALUES($1,$2,$3,$4,$5,$6)
+	`, cfg.Provider, cfg.Model, promptTokens, completionTokens, totalTokens, "general")
+	return answer, nil
 }
 
 func (a *app) handleAdminAISettings(w http.ResponseWriter, r *http.Request) {
@@ -7098,6 +7135,33 @@ func (a *app) handleAdminAISettings(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error":"method not allowed"})
 	}
+}
+
+func (a *app) handleAdminAIUsageStats(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "admin", "super_admin")
+	if err != nil { writeJSON(w, http.StatusUnauthorized, map[string]string{"error":"unauthorized"}); return }
+	if !isSuperAdmin(u) { writeJSON(w, http.StatusForbidden, map[string]string{"error":"hanya super_admin"}); return }
+	if r.Method != http.MethodGet { writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error":"method not allowed"}); return }
+	var today, month int64
+	_ = a.db.QueryRowContext(r.Context(), `SELECT COALESCE(SUM(total_tokens),0) FROM ai_usage_logs WHERE created_at >= date_trunc('day', NOW())`).Scan(&today)
+	_ = a.db.QueryRowContext(r.Context(), `SELECT COALESCE(SUM(total_tokens),0) FROM ai_usage_logs WHERE created_at >= date_trunc('month', NOW())`).Scan(&month)
+	rows, _ := a.db.QueryContext(r.Context(), `
+		SELECT feature, COALESCE(SUM(total_tokens),0) tok
+		FROM ai_usage_logs
+		WHERE created_at >= date_trunc('month', NOW())
+		GROUP BY feature
+		ORDER BY tok DESC
+		LIMIT 5
+	`)
+	top := []map[string]any{}
+	if rows != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var f string; var tok int64
+			if rows.Scan(&f,&tok)==nil { top = append(top, map[string]any{"feature":f,"tokens":tok}) }
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"today_tokens":today,"month_tokens":month,"top_features":top})
 }
 
 func (a *app) handleAdminAIProfiles(w http.ResponseWriter, r *http.Request) {

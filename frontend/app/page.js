@@ -248,6 +248,7 @@ export default function Page() {
     api_key_masked: '', model: 'gpt-4o-mini', temperature: 0.7, max_tokens: 2000, is_active: true,
   });
   const [aiProfiles, setAiProfiles] = useState([]);
+  const [aiUsageStats, setAiUsageStats] = useState({ today_tokens: 0, month_tokens: 0, top_features: [] });
   const [aiProfileForm, setAiProfileForm] = useState({ id: 0, name: '', provider: 'sumopod', base_url: 'https://ai.sumopod.com/v1/chat/completions', api_key: '', model: 'gpt-4o-mini', temperature: 0.7, max_tokens: 2000 });
   const aiProviderPresets = {
     sumopod: { base_url: 'https://ai.sumopod.com/v1/chat/completions', model: 'gpt-4o-mini' },
@@ -1271,14 +1272,16 @@ export default function Page() {
       setMaterialGraph(localGraph.graph || '{"nodes":[],"edges":[]}');
       setMaterialUnknownBacklinks(localGraph.unknown || []);
     } else if (section === 'ai') {
-      const [res, pRes] = await Promise.all([
+      const [res, pRes, uRes] = await Promise.all([
         fetch(`${apiBase}/admin/ai-settings`, { credentials: 'include' }),
         fetch(`${apiBase}/admin/ai-profiles`, { credentials: 'include' }),
+        fetch(`${apiBase}/admin/ai-usage/stats`, { credentials: 'include' }),
       ]);
       if (res.ok) setAiSettings(await res.json());
       else showMsg('Gagal load AI settings', 'error');
       if (pRes.ok) setAiProfiles((await pRes.json()).items || []);
       else showMsg('Gagal load AI profiles (cek role super_admin)', 'error');
+      if (uRes.ok) setAiUsageStats(await uRes.json());
     }
   }
 
@@ -4351,6 +4354,18 @@ export default function Page() {
               {/* Admin — AI Settings (super_admin only) */}
               {adminSection === 'ai' && isSuperAdmin && (
                 <AdminSection title="🤖 AI Settings & Profiles (Super Admin)">
+                  <div style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 12, background: '#0f172a', marginBottom: 12 }}>
+                    <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700 }}>Token Usage</p>
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px,1fr))', gap:8 }}>
+                      <div style={{ border:'1px solid #23324a', borderRadius:8, padding:'8px 10px', display:'flex', justifyContent:'space-between', gap:8 }}><span style={{ color:'#94a3b8', fontSize:12 }}>Hari ini</span><b>{aiUsageStats?.today_tokens || 0}</b></div>
+                      <div style={{ border:'1px solid #23324a', borderRadius:8, padding:'8px 10px', display:'flex', justifyContent:'space-between', gap:8 }}><span style={{ color:'#94a3b8', fontSize:12 }}>Bulan ini</span><b>{aiUsageStats?.month_tokens || 0}</b></div>
+                    </div>
+                    {Array.isArray(aiUsageStats?.top_features) && aiUsageStats.top_features.length > 0 && (
+                      <div style={{ marginTop:8, fontSize:12, color:'#94a3b8' }}>
+                        Top fitur: {aiUsageStats.top_features.map((x,i)=>`${i+1}. ${x.feature} (${x.tokens})`).join(' • ')}
+                      </div>
+                    )}
+                  </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
                     <div style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 12, background: '#0f172a' }}>
                       <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700 }}>Profile Form</p>
