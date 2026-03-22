@@ -8414,11 +8414,23 @@ func (a *app) handleParticipantRoadmapRAGAsk(w http.ResponseWriter, r *http.Requ
 	for i, c := range chunks {
 		ctxParts = append(ctxParts, fmt.Sprintf("[%d] %s (Bloom %v)\n%s", i+1, c["title"], c["bloom_level"], c["chunk_text"]))
 	}
-	systemPrompt := `Anda adalah asisten pembelajaran internal perusahaan. Jawab hanya berdasarkan konteks yang diberikan. Jika tidak ada di konteks, katakan tidak ditemukan. Gunakan Bahasa Indonesia ringkas dan jelas.`
-	userPrompt := fmt.Sprintf("Pertanyaan: %s\n\nKonteks:\n%s\n\nJawab singkat dan sertakan referensi [1],[2] bila dipakai.", strings.TrimSpace(req.Question), strings.Join(ctxParts, "\n\n---\n\n"))
+	systemPrompt := `Anda adalah asisten pembelajaran internal perusahaan.
+Aturan wajib:
+- Jawab hanya berdasarkan konteks yang diberikan.
+- Jika informasi tidak ada di konteks, katakan tidak ditemukan.
+- Untuk setiap poin penting, sertakan sitasi [n] yang merujuk ke sumber konteks.
+- Gunakan Bahasa Indonesia ringkas, jelas, dan aplikatif.`
+	userPrompt := fmt.Sprintf("Pertanyaan: %s\n\nKonteks:\n%s\n\nJawab dalam bullet list singkat jika perlu dan sertakan sitasi [1], [2], dst pada kalimat yang relevan.", strings.TrimSpace(req.Question), strings.Join(ctxParts, "\n\n---\n\n"))
 	ans, aiErr := a.aiChat(r.Context(), systemPrompt, userPrompt, 900, 0.2)
 	if aiErr != nil { writeJSON(w,http.StatusBadGateway,map[string]string{"error":"gagal generate jawaban rag: " + aiErr.Error()}); return }
-	writeJSON(w,http.StatusOK,map[string]any{"answer": strings.TrimSpace(ans), "sources": chunks})
+	ans = strings.TrimSpace(ans)
+	if !strings.Contains(ans, "[") {
+		ans += "\n\nSumber rujukan:"
+		for i, c := range chunks {
+			ans += fmt.Sprintf("\n[%d] %v", i+1, c["title"])
+		}
+	}
+	writeJSON(w,http.StatusOK,map[string]any{"answer": ans, "sources": chunks})
 }
 
 func (a *app) handleParticipantRoadmapPositions(w http.ResponseWriter, r *http.Request) {
