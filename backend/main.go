@@ -6651,7 +6651,7 @@ func (a *app) handleParticipantNotesGraph(w http.ResponseWriter, r *http.Request
 }
 
 func (a *app) handleAdminGenerateQuestions(w http.ResponseWriter, r *http.Request) {
-	_, err := a.requireRole(r.Context(), r, "admin")
+	adminUser, err := a.requireRole(r.Context(), r, "admin")
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
@@ -6770,7 +6770,7 @@ Output langsung JSON array saja.`
 		userPrompt = fmt.Sprintf("Kategori: %s\n\n", catName) + userPrompt
 	}
 
-	content, err2 := a.aiChat(withAIUsage(ctx, 0, "question_generate"), systemPrompt, userPrompt, 3000, 0.6)
+	content, err2 := a.aiChat(withAIUsage(ctx, adminUser.ID, "question_generate"), systemPrompt, userPrompt, 3000, 0.6)
 	if err2 != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "gagal hubungi AI: " + err2.Error()})
 		return
@@ -7133,7 +7133,7 @@ func (a *app) handleAdminAISettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if json.NewDecoder(r.Body).Decode(&req) != nil { writeJSON(w,http.StatusBadRequest,map[string]string{"error":"invalid json"}); return }
 		if req.Action=="test" {
-			content, err := a.aiChat(r.Context(), "Balas singkat.", "Tes koneksi AI", 50, 0.3)
+			content, err := a.aiChat(withAIUsage(r.Context(), u.ID, "ai_test"), "Balas singkat.", "Tes koneksi AI", 50, 0.3)
 			if err != nil { writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()}); return }
 			writeJSON(w, http.StatusOK, map[string]any{"ok": true, "result": content}); return
 		}
@@ -7289,7 +7289,7 @@ func (a *app) handleAdminAIProfiles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleAdminGenerateMaterial(w http.ResponseWriter, r *http.Request) {
-	_, err := a.requireRole(r.Context(), r, "admin")
+	adminUserM, err := a.requireRole(r.Context(), r, "admin")
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
@@ -7329,7 +7329,7 @@ Contoh format: ["bubble 1 content", "bubble 2 content", "bubble 3 content"]`
 	}
 	userPrompt += fmt.Sprintf("\n\nBagi menjadi %d bubble pesan yang mengalir secara natural.", req.BubbleCount)
 
-	content, errAI := a.aiChat(withAIUsage(r.Context(), 0, "material_generate"), systemPrompt, userPrompt, 2000, 0.7)
+	content, errAI := a.aiChat(withAIUsage(r.Context(), adminUserM.ID, "material_generate"), systemPrompt, userPrompt, 2000, 0.7)
 	if errAI != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "gagal hubungi AI: " + errAI.Error()})
 		return
