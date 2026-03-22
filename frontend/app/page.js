@@ -142,6 +142,7 @@ export default function Page() {
       }
       if (inCode) { codeLines.push(line); html += `<pre style="background:#0a1628;border-radius:6px;padding:10px;overflow-x:auto;font-size:12px;color:#a5f3fc;margin:6px 0">${codeLines.join('\n').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`; continue; }
       if (lead.trim() === '---' || lead.trim() === '***') { html += '<hr style="border:none;border-top:1px solid #1e2d45;margin:10px 0"/>'; continue; }
+      if (lead.startsWith('#### ')) { html += `<p style="font-weight:700;font-size:13px;color:#94a3b8;margin:5px 0 2px">${inlineMD(lead.slice(5))}</p>`; continue; }
       if (lead.startsWith('### ')) { html += `<p style="font-weight:700;font-size:14px;color:#cbd5e1;margin:6px 0 2px">${inlineMD(lead.slice(4))}</p>`; continue; }
       if (lead.startsWith('## ')) { html += `<p style="font-weight:700;font-size:15px;color:#e2e8f0;margin:8px 0 4px">${inlineMD(lead.slice(3))}</p>`; continue; }
       if (lead.startsWith('# ')) { html += `<p style="font-weight:800;font-size:16px;color:#f1f5f9;margin:10px 0 4px">📌 ${inlineMD(lead.slice(2))}</p>`; continue; }
