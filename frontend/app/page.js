@@ -255,6 +255,7 @@ export default function Page() {
   const [aiCreditTopup, setAiCreditTopup] = useState({ user_id: '', credits: '', reason: '' });
   const [aiCreditUserQuery, setAiCreditUserQuery] = useState('');
   const [aiCreditUserHits, setAiCreditUserHits] = useState([]);
+  const [aiCreditPickedUser, setAiCreditPickedUser] = useState(null);
   const [myAICredit, setMyAICredit] = useState({ credits: 0, tokens_per_credit: 1000, tokens_remaining: 0 });
   const [aiProfileForm, setAiProfileForm] = useState({ id: 0, name: '', provider: 'sumopod', base_url: 'https://ai.sumopod.com/v1/chat/completions', api_key: '', model: 'gpt-4o-mini', temperature: 0.7, max_tokens: 2000 });
   const aiProviderPresets = {
@@ -1747,8 +1748,13 @@ export default function Page() {
   }
 
   async function addAICreditToUser() {
+    const uid = Number(aiCreditTopup.user_id || 0);
+    const creditsVal = Number(aiCreditTopup.credits || 0);
+    const targetLabel = aiCreditPickedUser ? `${aiCreditPickedUser.name} (${aiCreditPickedUser.phone || '-'})` : `User ID ${uid}`;
+    if (!uid || !creditsVal) { setActionType('error'); setActionMsg('Pilih user dan isi credits dulu.'); return; }
+    if (!confirm(`Topup credit ke ${targetLabel} sebesar ${creditsVal}?`)) return;
     setBusy(true); setActionMsg('');
-    const payload = { action: 'add_credit', user_id: Number(aiCreditTopup.user_id || 0), credits: Number(aiCreditTopup.credits || 0), reason: aiCreditTopup.reason || '' };
+    const payload = { action: 'add_credit', user_id: uid, credits: creditsVal, reason: aiCreditTopup.reason || '' };
     const res = await fetch(`${apiBase}/admin/ai-credits`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload)
     });
@@ -1759,6 +1765,7 @@ export default function Page() {
     setAiCreditTopup({ user_id: '', credits: '', reason: '' });
     setAiCreditUserQuery('');
     setAiCreditUserHits([]);
+    setAiCreditPickedUser(null);
     setActionType('success'); setActionMsg(`Credit user berhasil ditambahkan. Saldo baru: ${Number(d.credits || 0).toFixed(3)}`); setBusy(false);
   }
 
@@ -4527,32 +4534,38 @@ export default function Page() {
 
                   <div style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 12, background: '#0f172a', marginBottom: 12 }}>
                     <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700 }}>AI Credit Wallet (Super Admin)</p>
-                    <div style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:8, alignItems:'end', marginBottom:8 }}>
-                      <div>
-                        <div style={{ fontSize:11, color:'#94a3b8', marginBottom:4 }}>1 credit = berapa token</div>
+                    <div style={{ border:'1px solid #23324a', borderRadius:10, padding:10, marginBottom:10 }}>
+                      <div style={{ fontSize:11, color:'#94a3b8', marginBottom:6, fontWeight:700 }}>Pengaturan Rate (1 credit = X token)</div>
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:8, alignItems:'end' }}>
                         <input className="nk-input-sm" type="number" min="1" value={aiCreditConfig?.tokens_per_credit || 1000} onChange={e=>setAiCreditConfig(s=>({...s, tokens_per_credit: e.target.value}))} />
+                        <BtnSm disabled={busy} onClick={saveAICreditRate}>💾 Simpan Rate</BtnSm>
                       </div>
-                      <BtnSm disabled={busy} onClick={saveAICreditRate}>💾 Simpan Rate</BtnSm>
                     </div>
-                    <div style={{ display:'grid', gridTemplateColumns:'1.3fr .8fr 1fr auto', gap:8, alignItems:'end', marginBottom:10 }}>
+
+                    <div style={{ border:'1px solid rgba(34,197,94,0.35)', borderRadius:10, padding:10, marginBottom:10, background:'rgba(34,197,94,0.05)' }}>
+                      <div style={{ fontSize:11, color:'#86efac', marginBottom:6, fontWeight:700 }}>Topup Credit User</div>
+                      <div style={{ display:'grid', gridTemplateColumns:'1.3fr .8fr 1fr auto', gap:8, alignItems:'end', marginBottom:10 }}>
                       <div>
                         <input className="nk-input-sm" placeholder="Cari user (nama/phone)" value={aiCreditUserQuery} onChange={e=>searchAICreditUsers(e.target.value)} />
                         {aiCreditTopup.user_id ? <div style={{ fontSize:11, color:'#38bdf8', marginTop:4 }}>User terpilih ID: {aiCreditTopup.user_id}</div> : null}
                       </div>
                       <input className="nk-input-sm" placeholder="Credits (+/-)" value={aiCreditTopup.credits} onChange={e=>setAiCreditTopup(s=>({...s,credits:e.target.value}))} />
                       <input className="nk-input-sm" placeholder="Reason" value={aiCreditTopup.reason} onChange={e=>setAiCreditTopup(s=>({...s,reason:e.target.value}))} />
-                      <BtnSm disabled={busy || !aiCreditTopup.user_id} onClick={addAICreditToUser}>➕ Tambah Credit</BtnSm>
+                      <div />
                     </div>
                     {Array.isArray(aiCreditUserHits) && aiCreditUserHits.length > 0 && (
                       <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:8 }}>
                         {aiCreditUserHits.map((u, i) => (
-                          <button key={`${u.id}-${i}`} onClick={() => setAiCreditTopup(s => ({ ...s, user_id: String(u.id) }))}
+                          <button key={`${u.id}-${i}`} onClick={() => { setAiCreditTopup(s => ({ ...s, user_id: String(u.id) })); setAiCreditPickedUser(u); }}
                             style={{ border:'1px solid #334155', background:'transparent', color:'#cbd5e1', borderRadius:999, padding:'4px 9px', fontSize:11, cursor:'pointer' }}>
                             {u.name} ({u.phone || '-'}) • ID:{u.id}
                           </button>
                         ))}
                       </div>
                     )}
+                    {aiCreditPickedUser && <div style={{ fontSize:12, color:'#86efac', marginBottom:6 }}>Target topup: <b>{aiCreditPickedUser.name}</b> ({aiCreditPickedUser.phone || '-'}) • ID {aiCreditPickedUser.id}</div>}
+                    <BtnSm disabled={busy || !aiCreditTopup.user_id} onClick={addAICreditToUser} style={{ background:'linear-gradient(135deg,#16a34a,#22c55e)', color:'#fff', border:'none' }}>➕ Tambah Credit Sekarang</BtnSm>
+                    </div>
                     {Array.isArray(aiCreditConfig?.balances) && aiCreditConfig.balances.length > 0 && (
                       <div className="nk-table-wrap" style={{ maxHeight: 220 }}>
                         <table className="nk-table" style={{ minWidth: 560 }}>
