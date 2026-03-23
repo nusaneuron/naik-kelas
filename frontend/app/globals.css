@@ -327,6 +327,7 @@ button:active { transform: translateY(0); }
 .nk-stat-card.purple::before { background: var(--nk-purple); }
 .nk-stat-card.orange::before { background: var(--nk-cta); }
 .nk-stat-card.yellow::before { background: var(--nk-accent); }
+.nk-stat-card.blue::before   { background: #38bdf8; }
 .nk-stat-card.green::before  { background: #4ade80; }
 
 /* ─── Responsive ─────────────────────────────── */
