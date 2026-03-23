@@ -1028,7 +1028,11 @@ export default function Page() {
         edgeSet.add(`${from}->${to}`);
       }
     }
-    const nodes = mats.map(m => ({ id: String(m.id), title: m.title || `Materi ${m.id}` }));
+    const nodes = mats.map(m => {
+      const c = comps.find(x => String(x.id) === String(m.competency_id));
+      const tag = (c?.name || c?.code || '').trim();
+      return { id: String(m.id), title: m.title || `Materi ${m.id}`, tags: tag ? [tag] : [] };
+    });
     const edges = [...edgeSet].map(x => { const [from,to]=x.split('->'); return { from, to }; });
     return { graph: JSON.stringify({ nodes, edges }), unknown: [...unknownSet] };
   }
