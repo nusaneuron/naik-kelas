@@ -4564,14 +4564,13 @@ export default function Page() {
 
                     <div style={{ border:'1px solid rgba(34,197,94,0.35)', borderRadius:10, padding:10, marginBottom:10, background:'rgba(34,197,94,0.05)' }}>
                       <div style={{ fontSize:11, color:'#86efac', marginBottom:6, fontWeight:700 }}>Topup Credit User</div>
-                      <div style={{ display:'grid', gridTemplateColumns:'1.3fr .8fr 1fr auto', gap:8, alignItems:'end', marginBottom:10 }}>
-                      <div>
-                        <input className="nk-input-sm" placeholder="Cari user (nama/phone)" value={aiCreditUserQuery} onChange={e=>searchAICreditUsers(e.target.value)} />
+                      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:8, alignItems:'end', marginBottom:10 }}>
+                      <div style={{ minWidth:0 }}>
+                        <input className="nk-input-sm" style={{ width:'100%' }} placeholder="Cari user (nama/phone)" value={aiCreditUserQuery} onChange={e=>searchAICreditUsers(e.target.value)} />
                         {aiCreditTopup.user_id ? <div style={{ fontSize:11, color:'#38bdf8', marginTop:4 }}>User terpilih ID: {aiCreditTopup.user_id}</div> : null}
                       </div>
-                      <input className="nk-input-sm" placeholder="Credits (+/-)" value={aiCreditTopup.credits} onChange={e=>setAiCreditTopup(s=>({...s,credits:e.target.value}))} />
-                      <input className="nk-input-sm" placeholder="Reason" value={aiCreditTopup.reason} onChange={e=>setAiCreditTopup(s=>({...s,reason:e.target.value}))} />
-                      <div />
+                      <input className="nk-input-sm" style={{ width:'100%' }} placeholder="Credits (+/-)" value={aiCreditTopup.credits} onChange={e=>setAiCreditTopup(s=>({...s,credits:e.target.value}))} />
+                      <input className="nk-input-sm" style={{ width:'100%' }} placeholder="Reason" value={aiCreditTopup.reason} onChange={e=>setAiCreditTopup(s=>({...s,reason:e.target.value}))} />
                     </div>
                     {Array.isArray(aiCreditUserHits) && aiCreditUserHits.length > 0 && (
                       <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:8 }}>
