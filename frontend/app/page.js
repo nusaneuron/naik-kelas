@@ -2340,8 +2340,9 @@ export default function Page() {
 
               <div className="nk-stat-card blue">
                 <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 10 }}>🪙 Saldo Credit AI</div>
-                <div style={{ fontSize: 34, fontWeight: 800, fontFamily: 'Poppins, sans-serif', color: '#38bdf8', lineHeight: 1 }}>{Number(myAICredit?.credits || 0).toFixed(2)}</div>
-                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>≈ {myAICredit?.tokens_remaining || 0} token (1 credit = {myAICredit?.tokens_per_credit || 1000} token)</div>
+                <div style={{ fontSize: 38, fontWeight: 800, fontFamily: 'Poppins, sans-serif', color: '#38bdf8', lineHeight: 1 }}>{Number(myAICredit?.credits || 0).toFixed(2)}</div>
+                <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 6 }}>credit tersedia</div>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>≈ {myAICredit?.tokens_remaining || 0} token (1 credit = {myAICredit?.tokens_per_credit || 1000} token)</div>
               </div>
 
               <div className="nk-stat-card yellow">
