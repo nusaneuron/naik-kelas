@@ -494,24 +494,37 @@ export default function Page() {
 
   async function saveNote() {
     setNoteSaving(true);
-    const isNew = !activeNote?.id;
-    const isFleeting = activeNote?.note_type === 'fleeting';
-    // Fleeting yang di-edit → promote ke permanent
-    const action = isNew ? 'create' : (isFleeting ? 'promote' : 'update');
-    const body = { action, title: noteDraft.title, content: noteDraft.content };
-    if (isNew) body.note_type = newNoteType === 'fleeting' ? 'fleeting' : 'permanent';
-    if (!isNew) body.id = activeNote.id;
-    const res = await fetch(`${apiBase}/participant/notes`, {
-      method: 'POST', credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    const data = await res.json();
-    setNoteSaving(false);
-    if (data.ok) {
+    try {
+      const isNew = !activeNote?.id;
+      const isFleeting = activeNote?.note_type === 'fleeting';
+      // Fleeting yang di-edit → promote ke permanent
+      const action = isNew ? 'create' : (isFleeting ? 'promote' : 'update');
+      const body = { action, title: noteDraft.title, content: noteDraft.content };
+      if (isNew) body.note_type = newNoteType === 'fleeting' ? 'fleeting' : 'permanent';
+      if (!isNew) body.id = activeNote.id;
+
+      const res = await fetch(`${apiBase}/participant/notes`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      let data = {};
+      try { data = await res.json(); } catch (_) {}
+
+      if (!res.ok || !data.ok) {
+        showMsg(data?.error || 'Gagal menyimpan catatan', 'error');
+        return;
+      }
+
       const noteId = isNew ? data.id : activeNote.id;
       await refreshNotes();
       await loadNoteDetail(noteId);
+      showMsg('Catatan berhasil disimpan ✅', 'success');
+    } catch (err) {
+      showMsg('Gagal menyimpan catatan: ' + (err?.message || 'unknown error'), 'error');
+    } finally {
+      setNoteSaving(false);
     }
   }
 
