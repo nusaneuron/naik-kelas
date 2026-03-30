@@ -518,8 +518,19 @@ export default function Page() {
       }
 
       const noteId = isNew ? data.id : activeNote.id;
-      await refreshNotes();
-      await loadNoteDetail(noteId);
+
+      // UX: catatan cepat baru langsung terlihat di daftar "Cepat"
+      if (isNew && newNoteType === 'fleeting') {
+        setNotesSearch('');
+        setNotesTagFilter('');
+        await refreshNotes('', '');
+        setNoteListMode('quick');
+        setNoteView('list');
+      } else {
+        await refreshNotes();
+        await loadNoteDetail(noteId);
+      }
+
       showMsg('Catatan berhasil disimpan ✅', 'success');
     } catch (err) {
       showMsg('Gagal menyimpan catatan: ' + (err?.message || 'unknown error'), 'error');
