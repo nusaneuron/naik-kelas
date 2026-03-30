@@ -132,6 +132,9 @@ export default function Page() {
   const [materialGraph, setMaterialGraph] = useState('{"nodes":[],"edges":[]}');
   const [materialUnknownBacklinks, setMaterialUnknownBacklinks] = useState([]);
   const [roadmapMaterialFoldersOpen, setRoadmapMaterialFoldersOpen] = useState({});
+  const [techCompFoldersOpen, setTechCompFoldersOpen] = useState({});
+  const [coreCompFoldersOpen, setCoreCompFoldersOpen] = useState({});
+  const [leadCompFoldersOpen, setLeadCompFoldersOpen] = useState({});
   const [materialGraphFilter, setMaterialGraphFilter] = useState({ position_id: '', mode: 'material' });
   const [refreshingGraphData, setRefreshingGraphData] = useState(false);
   const [roadmapRagReindexing, setRoadmapRagReindexing] = useState(false);
@@ -2162,6 +2165,27 @@ export default function Page() {
     const key = comp ? `${comp.code} • ${comp.name}` : `Kompetensi #${m.competency_id}`;
     if (!acc[key]) acc[key] = [];
     acc[key].push(m);
+    return acc;
+  }, {});
+  const techCompGroups = roadmapCompetencies.reduce((acc, c) => {
+    const pos = roadmapPositions.find(p => String(p.id) === String(c.position_id));
+    const key = pos ? `${pos.code} • ${pos.name}` : `Jabatan #${c.position_id}`;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(c);
+    return acc;
+  }, {});
+  const coreCompGroups = roadmapCoreCompetencies.reduce((acc, c) => {
+    const pos = roadmapPositions.find(p => String(p.id) === String(c.position_id));
+    const key = pos ? `${pos.code} • ${pos.name}` : `Jabatan #${c.position_id}`;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(c);
+    return acc;
+  }, {});
+  const leadCompGroups = roadmapLeadershipCompetencies.reduce((acc, c) => {
+    const pos = roadmapPositions.find(p => String(p.id) === String(c.position_id));
+    const key = pos ? `${pos.code} • ${pos.name}` : `Jabatan #${c.position_id}`;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(c);
     return acc;
   }, {});
   const isAdmin = me?.role === 'admin' || me?.role === 'super_admin';
@@ -5357,7 +5381,7 @@ export default function Page() {
                     {roadmapMenu === 'competencies' && <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12, marginTop: 2 }}>
                       <div style={{ fontWeight:700, marginBottom:8 }}>Kompetensi Teknis per Jabatan</div>
                       <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))' }}>
-                        <select className="nk-input-sm" value={competencyForm.position_id} onChange={async e => { const v=e.target.value; setCompetencyForm(f => ({ ...f, position_id: v })); await loadRoadmapCompetencies(v); }}>
+                        <select className="nk-input-sm" value={competencyForm.position_id} onChange={async e => { const v=e.target.value; setCompetencyForm(f => ({ ...f, position_id: v })); const pos = roadmapPositions.find(p => String(p.id) === String(v)); if (pos) setTechCompFoldersOpen(prev => ({ ...prev, [`${pos.code} • ${pos.name}`]: true })); await loadRoadmapCompetencies(v); }}>
                           <option value="">Pilih jabatan</option>
                           {roadmapPositions.map(p => <option key={p.id} value={p.id}>{p.code} • {p.name}</option>)}
                         </select>
@@ -5370,33 +5394,49 @@ export default function Page() {
                         </div>
                       </div>
 
-                      <div className="nk-table-wrap" style={{ marginTop: 12 }}>
-                        <table className="nk-table">
-                          <thead><tr><th>Jabatan</th><th>Kode</th><th>Nama</th><th>Deskripsi</th><th>Update</th><th>Aksi</th></tr></thead>
-                          <tbody>
-                            {roadmapCompetencies.map(c => (
-                              <tr key={c.id}>
-                                <td>{roadmapPositions.find(p => String(p.id) === String(c.position_id))?.name || `#${c.position_id}`}</td>
-                                <td style={{ fontWeight:700 }}>{c.code}</td>
-                                <td>{c.name}</td>
-                                <td style={{ maxWidth: 320, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{c.description || '-'}</td>
-                                <td style={{ fontSize:12, color:'#94a3b8' }}>{c.updated_at ? new Date(c.updated_at).toLocaleString('id-ID') : '-'}</td>
-                                <td style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                                  <BtnSm onClick={() => setCompetencyForm({ id:c.id, position_id:String(c.position_id), code:c.code || '', name:c.name || '', description:c.description || '', is_active: !!c.is_active })}>Edit</BtnSm>
-                                  <BtnSm danger onClick={() => deleteRoadmapCompetency(c.id)}>Hapus</BtnSm>
-                                </td>
-                              </tr>
-                            ))}
-                            {roadmapCompetencies.length === 0 && <tr><td colSpan={6} className="nk-empty">Belum ada kompetensi teknis.</td></tr>}
-                          </tbody>
-                        </table>
+                      <div style={{ marginTop: 12, display:'grid', gap:10 }}>
+                        {Object.entries(techCompGroups).map(([posName, items]) => {
+                          const isOpen = techCompFoldersOpen[posName] ?? (Object.keys(techCompGroups).length === 1);
+                          return (
+                            <div key={posName} style={{ border:'1px solid #1e2d45', borderRadius:12, overflow:'hidden', background:'#0f172a' }}>
+                              <button onClick={() => setTechCompFoldersOpen(prev => ({ ...prev, [posName]: !isOpen }))}
+                                style={{ width:'100%', display:'flex', alignItems:'center', gap:8, padding:'10px 12px', background:'#0b1220', border:'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', color:'#e2e8f0', cursor:'pointer' }}>
+                                <span style={{ fontSize:16 }}>📁</span>
+                                <span style={{ fontWeight:700, flex:1, textAlign:'left' }}>{posName}</span>
+                                <span className="nk-badge nk-badge-purple">{items.length} kompetensi</span>
+                                <span style={{ color:'#94a3b8' }}>{isOpen ? '▲' : '▼'}</span>
+                              </button>
+                              {isOpen && (
+                                <div style={{ padding:10, display:'grid', gap:8 }}>
+                                  {items.map(c => (
+                                    <div key={c.id} style={{ border:'1px solid #1e2d45', borderRadius:10, padding:'10px 12px', background:'#0f172a' }}>
+                                      <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:6 }}>
+                                        <span className="nk-badge">{c.code}</span>
+                                        <span style={{ fontWeight:700 }}>{c.name}</span>
+                                      </div>
+                                      <div style={{ fontSize:12, color:'#94a3b8', marginBottom:8, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{c.description || '-'}</div>
+                                      <div style={{ display:'flex', justifyContent:'space-between', gap:8, flexWrap:'wrap', alignItems:'center' }}>
+                                        <span style={{ fontSize:11, color:'#64748b' }}>{c.updated_at ? new Date(c.updated_at).toLocaleString('id-ID') : '-'}</span>
+                                        <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                                          <BtnSm onClick={() => setCompetencyForm({ id:c.id, position_id:String(c.position_id), code:c.code || '', name:c.name || '', description:c.description || '', is_active: !!c.is_active })}>Edit</BtnSm>
+                                          <BtnSm danger onClick={() => deleteRoadmapCompetency(c.id)}>Hapus</BtnSm>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        {roadmapCompetencies.length === 0 && <div className="nk-empty">Belum ada kompetensi teknis.</div>}
                       </div>
                     </div>}
 
                     {roadmapMenu === 'core-competencies' && <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12, marginTop: 2 }}>
                       <div style={{ fontWeight:700, marginBottom:8 }}>Kompetensi Inti per Jabatan</div>
                       <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))' }}>
-                        <select className="nk-input-sm" value={coreCompetencyForm.position_id} onChange={async e => { const v=e.target.value; setCoreCompetencyForm(f => ({ ...f, position_id: v })); await loadRoadmapCoreCompetencies(v); }}>
+                        <select className="nk-input-sm" value={coreCompetencyForm.position_id} onChange={async e => { const v=e.target.value; setCoreCompetencyForm(f => ({ ...f, position_id: v })); const pos = roadmapPositions.find(p => String(p.id) === String(v)); if (pos) setCoreCompFoldersOpen(prev => ({ ...prev, [`${pos.code} • ${pos.name}`]: true })); await loadRoadmapCoreCompetencies(v); }}>
                           <option value="">Pilih jabatan</option>
                           {roadmapPositions.map(p => <option key={p.id} value={p.id}>{p.code} • {p.name}</option>)}
                         </select>
@@ -5408,33 +5448,49 @@ export default function Page() {
                           <BtnSm color="purple" onClick={saveRoadmapCoreCompetency}>💾 Simpan Kompetensi Inti</BtnSm>
                         </div>
                       </div>
-                      <div className="nk-table-wrap" style={{ marginTop: 12 }}>
-                        <table className="nk-table">
-                          <thead><tr><th>Jabatan</th><th>Kode</th><th>Nama</th><th>Deskripsi</th><th>Update</th><th>Aksi</th></tr></thead>
-                          <tbody>
-                            {roadmapCoreCompetencies.map(c => (
-                              <tr key={c.id}>
-                                <td>{roadmapPositions.find(p => String(p.id) === String(c.position_id))?.name || `#${c.position_id}`}</td>
-                                <td style={{ fontWeight:700 }}>{c.code}</td>
-                                <td>{c.name}</td>
-                                <td style={{ maxWidth: 320, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{c.description || '-'}</td>
-                                <td style={{ fontSize:12, color:'#94a3b8' }}>{c.updated_at ? new Date(c.updated_at).toLocaleString('id-ID') : '-'}</td>
-                                <td style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                                  <BtnSm onClick={() => setCoreCompetencyForm({ id:c.id, position_id:String(c.position_id), code:c.code || '', name:c.name || '', description:c.description || '', is_active: !!c.is_active })}>Edit</BtnSm>
-                                  <BtnSm danger onClick={() => deleteRoadmapCoreCompetency(c.id)}>Hapus</BtnSm>
-                                </td>
-                              </tr>
-                            ))}
-                            {roadmapCoreCompetencies.length === 0 && <tr><td colSpan={6} className="nk-empty">Belum ada kompetensi inti.</td></tr>}
-                          </tbody>
-                        </table>
+                      <div style={{ marginTop: 12, display:'grid', gap:10 }}>
+                        {Object.entries(coreCompGroups).map(([posName, items]) => {
+                          const isOpen = coreCompFoldersOpen[posName] ?? (Object.keys(coreCompGroups).length === 1);
+                          return (
+                            <div key={posName} style={{ border:'1px solid #1e2d45', borderRadius:12, overflow:'hidden', background:'#0f172a' }}>
+                              <button onClick={() => setCoreCompFoldersOpen(prev => ({ ...prev, [posName]: !isOpen }))}
+                                style={{ width:'100%', display:'flex', alignItems:'center', gap:8, padding:'10px 12px', background:'#0b1220', border:'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', color:'#e2e8f0', cursor:'pointer' }}>
+                                <span style={{ fontSize:16 }}>📁</span>
+                                <span style={{ fontWeight:700, flex:1, textAlign:'left' }}>{posName}</span>
+                                <span className="nk-badge nk-badge-purple">{items.length} kompetensi inti</span>
+                                <span style={{ color:'#94a3b8' }}>{isOpen ? '▲' : '▼'}</span>
+                              </button>
+                              {isOpen && (
+                                <div style={{ padding:10, display:'grid', gap:8 }}>
+                                  {items.map(c => (
+                                    <div key={c.id} style={{ border:'1px solid #1e2d45', borderRadius:10, padding:'10px 12px', background:'#0f172a' }}>
+                                      <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:6 }}>
+                                        <span className="nk-badge">{c.code}</span>
+                                        <span style={{ fontWeight:700 }}>{c.name}</span>
+                                      </div>
+                                      <div style={{ fontSize:12, color:'#94a3b8', marginBottom:8, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{c.description || '-'}</div>
+                                      <div style={{ display:'flex', justifyContent:'space-between', gap:8, flexWrap:'wrap', alignItems:'center' }}>
+                                        <span style={{ fontSize:11, color:'#64748b' }}>{c.updated_at ? new Date(c.updated_at).toLocaleString('id-ID') : '-'}</span>
+                                        <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                                          <BtnSm onClick={() => setCoreCompetencyForm({ id:c.id, position_id:String(c.position_id), code:c.code || '', name:c.name || '', description:c.description || '', is_active: !!c.is_active })}>Edit</BtnSm>
+                                          <BtnSm danger onClick={() => deleteRoadmapCoreCompetency(c.id)}>Hapus</BtnSm>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        {roadmapCoreCompetencies.length === 0 && <div className="nk-empty">Belum ada kompetensi inti.</div>}
                       </div>
                     </div>}
 
                     {roadmapMenu === 'leadership-competencies' && <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12, marginTop: 2 }}>
                       <div style={{ fontWeight:700, marginBottom:8 }}>Kompetensi Kepemimpinan per Jabatan</div>
                       <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))' }}>
-                        <select className="nk-input-sm" value={leadershipCompetencyForm.position_id} onChange={async e => { const v=e.target.value; setLeadershipCompetencyForm(f => ({ ...f, position_id: v })); await loadRoadmapLeadershipCompetencies(v); }}>
+                        <select className="nk-input-sm" value={leadershipCompetencyForm.position_id} onChange={async e => { const v=e.target.value; setLeadershipCompetencyForm(f => ({ ...f, position_id: v })); const pos = roadmapPositions.find(p => String(p.id) === String(v)); if (pos) setLeadCompFoldersOpen(prev => ({ ...prev, [`${pos.code} • ${pos.name}`]: true })); await loadRoadmapLeadershipCompetencies(v); }}>
                           <option value="">Pilih jabatan</option>
                           {roadmapPositions.map(p => <option key={p.id} value={p.id}>{p.code} • {p.name}</option>)}
                         </select>
@@ -5446,26 +5502,42 @@ export default function Page() {
                           <BtnSm color="purple" onClick={saveRoadmapLeadershipCompetency}>💾 Simpan Kompetensi Kepemimpinan</BtnSm>
                         </div>
                       </div>
-                      <div className="nk-table-wrap" style={{ marginTop: 12 }}>
-                        <table className="nk-table">
-                          <thead><tr><th>Jabatan</th><th>Kode</th><th>Nama</th><th>Deskripsi</th><th>Update</th><th>Aksi</th></tr></thead>
-                          <tbody>
-                            {roadmapLeadershipCompetencies.map(c => (
-                              <tr key={c.id}>
-                                <td>{roadmapPositions.find(p => String(p.id) === String(c.position_id))?.name || `#${c.position_id}`}</td>
-                                <td style={{ fontWeight:700 }}>{c.code}</td>
-                                <td>{c.name}</td>
-                                <td style={{ maxWidth: 320, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{c.description || '-'}</td>
-                                <td style={{ fontSize:12, color:'#94a3b8' }}>{c.updated_at ? new Date(c.updated_at).toLocaleString('id-ID') : '-'}</td>
-                                <td style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                                  <BtnSm onClick={() => setLeadershipCompetencyForm({ id:c.id, position_id:String(c.position_id), code:c.code || '', name:c.name || '', description:c.description || '', is_active: !!c.is_active })}>Edit</BtnSm>
-                                  <BtnSm danger onClick={() => deleteRoadmapLeadershipCompetency(c.id)}>Hapus</BtnSm>
-                                </td>
-                              </tr>
-                            ))}
-                            {roadmapLeadershipCompetencies.length === 0 && <tr><td colSpan={6} className="nk-empty">Belum ada kompetensi kepemimpinan.</td></tr>}
-                          </tbody>
-                        </table>
+                      <div style={{ marginTop: 12, display:'grid', gap:10 }}>
+                        {Object.entries(leadCompGroups).map(([posName, items]) => {
+                          const isOpen = leadCompFoldersOpen[posName] ?? (Object.keys(leadCompGroups).length === 1);
+                          return (
+                            <div key={posName} style={{ border:'1px solid #1e2d45', borderRadius:12, overflow:'hidden', background:'#0f172a' }}>
+                              <button onClick={() => setLeadCompFoldersOpen(prev => ({ ...prev, [posName]: !isOpen }))}
+                                style={{ width:'100%', display:'flex', alignItems:'center', gap:8, padding:'10px 12px', background:'#0b1220', border:'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', color:'#e2e8f0', cursor:'pointer' }}>
+                                <span style={{ fontSize:16 }}>📁</span>
+                                <span style={{ fontWeight:700, flex:1, textAlign:'left' }}>{posName}</span>
+                                <span className="nk-badge nk-badge-purple">{items.length} kompetensi kepemimpinan</span>
+                                <span style={{ color:'#94a3b8' }}>{isOpen ? '▲' : '▼'}</span>
+                              </button>
+                              {isOpen && (
+                                <div style={{ padding:10, display:'grid', gap:8 }}>
+                                  {items.map(c => (
+                                    <div key={c.id} style={{ border:'1px solid #1e2d45', borderRadius:10, padding:'10px 12px', background:'#0f172a' }}>
+                                      <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:6 }}>
+                                        <span className="nk-badge">{c.code}</span>
+                                        <span style={{ fontWeight:700 }}>{c.name}</span>
+                                      </div>
+                                      <div style={{ fontSize:12, color:'#94a3b8', marginBottom:8, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{c.description || '-'}</div>
+                                      <div style={{ display:'flex', justifyContent:'space-between', gap:8, flexWrap:'wrap', alignItems:'center' }}>
+                                        <span style={{ fontSize:11, color:'#64748b' }}>{c.updated_at ? new Date(c.updated_at).toLocaleString('id-ID') : '-'}</span>
+                                        <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                                          <BtnSm onClick={() => setLeadershipCompetencyForm({ id:c.id, position_id:String(c.position_id), code:c.code || '', name:c.name || '', description:c.description || '', is_active: !!c.is_active })}>Edit</BtnSm>
+                                          <BtnSm danger onClick={() => deleteRoadmapLeadershipCompetency(c.id)}>Hapus</BtnSm>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        {roadmapLeadershipCompetencies.length === 0 && <div className="nk-empty">Belum ada kompetensi kepemimpinan.</div>}
                       </div>
                     </div>}
 
