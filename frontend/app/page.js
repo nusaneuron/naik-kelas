@@ -34,6 +34,20 @@ export default function Page() {
   const [showResetPass, setShowResetPass] = useState(false);
 
   const [history, setHistory] = useState({ quiz: [], tryout: [] });
+  const [quizCategories, setQuizCategories] = useState([]);
+  const [quizFlow, setQuizFlow] = useState({
+    mode: '', // quiz | tryout
+    phase: 'idle', // idle | answering | review | result
+    categoryId: '',
+    categoryName: '',
+    questions: [],
+    answers: {},
+    current: 0,
+    reviewIndex: 0,
+    startedAt: 0,
+    result: null,
+    loading: false,
+  });
   const [leaderboard, setLeaderboard] = useState([]);
   const [profile, setProfile] = useState(null);
   const [editingName, setEditingName] = useState(false);
@@ -435,8 +449,19 @@ export default function Page() {
       if (lRes.ok) setLeaderboard((await lRes.json()).items || []);
       if (cRes.ok) setMyAICredit(await cRes.json());
     } else if (section === 'quiz') {
-      const hRes = await fetch(`${apiBase}/participant/history`, { credentials: 'include' });
+      const [hRes, cRes] = await Promise.all([
+        fetch(`${apiBase}/participant/history`, { credentials: 'include' }),
+        fetch(`${apiBase}/participant/quiz/web`, {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'categories' })
+        }),
+      ]);
       if (hRes.ok) setHistory(await hRes.json());
+      if (cRes.ok) {
+        const cd = await cRes.json();
+        setQuizCategories(cd.items || []);
+      }
     } else if (section === 'redeem') {
       const [riRes, rcRes] = await Promise.all([
         fetch(`${apiBase}/participant/redeem/items`, { credentials: 'include' }),
@@ -597,6 +622,92 @@ export default function Page() {
   async function loadGraph() {
     const res = await fetch(`${apiBase}/participant/notes/graph`, { credentials: 'include' });
     if (res.ok) { setGraphData(await res.json()); setNoteView('graph'); }
+  }
+
+  // ── Quiz & Tryout Web Flow ───────────────────────────────────────────────
+  async function startQuizFlow(mode) {
+    const isQuiz = mode === 'quiz';
+    if (isQuiz && !quizFlow.categoryId) {
+      showMsg('Pilih kategori quiz dulu ya', 'error');
+      return;
+    }
+    setQuizFlow(f => ({ ...f, loading: true }));
+    try {
+      const res = await fetch(`${apiBase}/participant/quiz/web`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'start', mode, category_id: isQuiz ? Number(quizFlow.categoryId) : 0 })
+      });
+      const d = await res.json();
+      if (!res.ok) {
+        showMsg(d.error || 'Gagal memulai sesi', 'error');
+        setQuizFlow(f => ({ ...f, loading: false }));
+        return;
+      }
+      setQuizFlow(f => ({
+        ...f,
+        mode,
+        phase: 'answering',
+        categoryName: d.category_name || '',
+        questions: d.questions || [],
+        answers: {},
+        current: 0,
+        reviewIndex: 0,
+        startedAt: Date.now(),
+        result: null,
+        loading: false,
+      }));
+    } catch (err) {
+      showMsg('Gagal memulai sesi: ' + err.message, 'error');
+      setQuizFlow(f => ({ ...f, loading: false }));
+    }
+  }
+
+  function answerCurrent(opt) {
+    const q = quizFlow.questions?.[quizFlow.current];
+    if (!q) return;
+    setQuizFlow(f => ({ ...f, answers: { ...f.answers, [q.id]: opt } }));
+  }
+
+  async function submitQuizFlow() {
+    const qs = quizFlow.questions || [];
+    if (!qs.length) return;
+    const answers = qs.map(q => ({ question_id: q.id, answer: quizFlow.answers[q.id] || '' }));
+    const durationSec = Math.max(0, Math.floor((Date.now() - (quizFlow.startedAt || Date.now())) / 1000));
+    setQuizFlow(f => ({ ...f, loading: true }));
+    try {
+      const res = await fetch(`${apiBase}/participant/quiz/web`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'submit',
+          mode: quizFlow.mode,
+          category_id: quizFlow.mode === 'quiz' ? Number(quizFlow.categoryId || 0) : 0,
+          duration_seconds: durationSec,
+          answers,
+        })
+      });
+      const d = await res.json();
+      if (!res.ok || !d.ok) {
+        showMsg(d.error || 'Gagal submit', 'error');
+        setQuizFlow(f => ({ ...f, loading: false }));
+        return;
+      }
+      setQuizFlow(f => ({ ...f, result: d, phase: 'review', reviewIndex: 0, loading: false }));
+      const hRes = await fetch(`${apiBase}/participant/history`, { credentials: 'include' });
+      if (hRes.ok) setHistory(await hRes.json());
+    } catch (err) {
+      showMsg('Gagal submit: ' + err.message, 'error');
+      setQuizFlow(f => ({ ...f, loading: false }));
+    }
+  }
+
+  function resetQuizFlow() {
+    setQuizFlow(f => ({
+      ...f,
+      mode: '', phase: 'idle', questions: [], answers: {}, current: 0,
+      reviewIndex: 0, startedAt: 0, result: null, loading: false,
+    }));
   }
 
   // ── Kontribusi Functions ──────────────────────────────────────────────────
@@ -3093,7 +3204,98 @@ export default function Page() {
 
             {/* ── Quiz & Tryout ── */}
             {participantSection === 'quiz' && (<>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 14 }}>
+            <Section title="🧠 Quiz & 🚀 Tryout">
+              {quizFlow.phase === 'idle' && (
+                <div style={{ display:'grid', gap:12 }}>
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))', gap:10 }}>
+                    <div style={{ border:'1px solid #1e2d45', borderRadius:12, padding:12, background:'#0f172a' }}>
+                      <div style={{ fontSize:12, color:'#94a3b8', marginBottom:8 }}>Mulai Quiz per kategori</div>
+                      <select className="nk-input-sm" value={quizFlow.categoryId} onChange={e => setQuizFlow(f => ({ ...f, categoryId: e.target.value }))}>
+                        <option value="">Pilih kategori quiz</option>
+                        {quizCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                      <button onClick={() => startQuizFlow('quiz')} disabled={quizFlow.loading} style={{ marginTop:10, width:'100%', padding:'9px 12px', borderRadius:9, border:'none', background:'#2563eb', color:'#fff', fontWeight:700, cursor:'pointer' }}>Mulai Quiz</button>
+                    </div>
+                    <div style={{ border:'1px solid #1e2d45', borderRadius:12, padding:12, background:'#0f172a' }}>
+                      <div style={{ fontSize:12, color:'#94a3b8', marginBottom:8 }}>Mulai Tryout (acak dari config aktif)</div>
+                      <button onClick={() => startQuizFlow('tryout')} disabled={quizFlow.loading} style={{ width:'100%', padding:'9px 12px', borderRadius:9, border:'none', background:'#7c3aed', color:'#fff', fontWeight:700, cursor:'pointer' }}>Mulai Tryout</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {quizFlow.phase === 'answering' && (() => {
+                const q = quizFlow.questions[quizFlow.current];
+                if (!q) return <div className="nk-empty">Memuat soal...</div>;
+                const ans = quizFlow.answers[q.id] || '';
+                const isLast = quizFlow.current === quizFlow.questions.length - 1;
+                return (
+                  <div style={{ border:'1px solid #1e2d45', borderRadius:12, padding:14, background:'#0f172a' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', gap:8, marginBottom:10, flexWrap:'wrap' }}>
+                      <div style={{ fontSize:12, color:'#94a3b8' }}>{quizFlow.mode === 'quiz' ? `Quiz • ${quizFlow.categoryName || '-'}` : 'Tryout'}</div>
+                      <div style={{ fontSize:12, color:'#94a3b8' }}>Soal {quizFlow.current + 1}/{quizFlow.questions.length}</div>
+                    </div>
+                    <div style={{ fontWeight:700, marginBottom:10 }}>{q.question}</div>
+                    <div style={{ display:'grid', gap:8 }}>
+                      {[
+                        ['A', q.option_a], ['B', q.option_b], ['C', q.option_c], ['D', q.option_d]
+                      ].map(([key, val]) => (
+                        <button key={key} onClick={() => answerCurrent(key)} style={{ textAlign:'left', padding:'10px 12px', borderRadius:10, border:`1px solid ${ans===key ? '#3b82f6' : '#1e2d45'}`, background: ans===key ? 'rgba(59,130,246,0.16)' : '#0b1220', color:'#e2e8f0', cursor:'pointer' }}>
+                          <b>{key}.</b> {val}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ display:'flex', justifyContent:'space-between', marginTop:12 }}>
+                      <button onClick={() => setQuizFlow(f => ({ ...f, current: Math.max(0, f.current - 1) }))} disabled={quizFlow.current===0} style={{ padding:'8px 12px', borderRadius:8, border:'1px solid #334155', background:'transparent', color:'#cbd5e1', cursor:'pointer' }}>← Sebelumnya</button>
+                      {!isLast ? (
+                        <button onClick={() => setQuizFlow(f => ({ ...f, current: Math.min(f.questions.length - 1, f.current + 1) }))} style={{ padding:'8px 12px', borderRadius:8, border:'none', background:'#2563eb', color:'#fff', cursor:'pointer', fontWeight:700 }}>Next →</button>
+                      ) : (
+                        <button onClick={submitQuizFlow} disabled={quizFlow.loading} style={{ padding:'8px 12px', borderRadius:8, border:'none', background:'#16a34a', color:'#fff', cursor:'pointer', fontWeight:700 }}>{quizFlow.loading ? 'Mengirim...' : 'Selesai & Nilai'}</button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {quizFlow.phase === 'review' && quizFlow.result && (() => {
+                const rv = quizFlow.result.reviews?.[quizFlow.reviewIndex];
+                if (!rv) return null;
+                const isLast = quizFlow.reviewIndex === (quizFlow.result.reviews.length - 1);
+                return (
+                  <div style={{ border:'1px solid #1e2d45', borderRadius:12, padding:14, background:'#0f172a' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
+                      <div style={{ fontSize:12, color:'#94a3b8' }}>Pembahasan {quizFlow.reviewIndex + 1}/{quizFlow.result.reviews.length}</div>
+                      <span className={`nk-badge ${rv.is_correct ? 'nk-badge-green' : 'nk-badge-red'}`}>{rv.is_correct ? 'Benar' : 'Salah'}</span>
+                    </div>
+                    <div style={{ fontWeight:700, marginBottom:8 }}>{rv.question}</div>
+                    <div style={{ fontSize:13, color:'#cbd5e1', marginBottom:6 }}>Jawabanmu: <b>{rv.your_answer || '-'}</b> | Jawaban benar: <b>{rv.correct_answer}</b></div>
+                    <div style={{ fontSize:13, color:'#94a3b8', marginBottom:12 }}>{rv.explanation}</div>
+                    <div style={{ display:'flex', justifyContent:'space-between' }}>
+                      <button onClick={() => setQuizFlow(f => ({ ...f, reviewIndex: Math.max(0, f.reviewIndex - 1) }))} disabled={quizFlow.reviewIndex===0} style={{ padding:'8px 12px', borderRadius:8, border:'1px solid #334155', background:'transparent', color:'#cbd5e1', cursor:'pointer' }}>← Sebelumnya</button>
+                      {!isLast ? (
+                        <button onClick={() => setQuizFlow(f => ({ ...f, reviewIndex: Math.min(f.result.reviews.length - 1, f.reviewIndex + 1) }))} style={{ padding:'8px 12px', borderRadius:8, border:'none', background:'#2563eb', color:'#fff', cursor:'pointer', fontWeight:700 }}>Next →</button>
+                      ) : (
+                        <button onClick={() => setQuizFlow(f => ({ ...f, phase:'result' }))} style={{ padding:'8px 12px', borderRadius:8, border:'none', background:'#16a34a', color:'#fff', cursor:'pointer', fontWeight:700 }}>Lihat Ringkasan</button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {quizFlow.phase === 'result' && quizFlow.result && (
+                <div style={{ border:'1px solid #1e2d45', borderRadius:12, padding:14, background:'#0f172a' }}>
+                  <div style={{ fontSize:18, fontWeight:800, marginBottom:8 }}>Hasil {quizFlow.mode === 'quiz' ? 'Quiz' : 'Tryout'}</div>
+                  <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:10 }}>
+                    <span className="nk-badge nk-badge-purple">Benar: {quizFlow.result.correct_count}/{quizFlow.result.total}</span>
+                    <span className={`nk-badge ${quizFlow.result.all_correct ? 'nk-badge-green' : 'nk-badge-yellow'}`}>{quizFlow.result.all_correct ? '⭐ PERFECT' : 'Perlu latihan lagi'}</span>
+                    {quizFlow.mode === 'tryout' && <span className="nk-badge nk-badge-orange">{Number(quizFlow.result.speed_qpm || 0).toFixed(2)} qpm</span>}
+                  </div>
+                  <button onClick={resetQuizFlow} style={{ padding:'8px 12px', borderRadius:8, border:'none', background:'#2563eb', color:'#fff', cursor:'pointer', fontWeight:700 }}>Mulai Sesi Baru</button>
+                </div>
+              )}
+            </Section>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 14, marginTop: 14 }}>
               <Section title="🧠 Riwayat Quiz">
                 {(history.quiz || []).length ? (
                   <div className="nk-table-wrap" style={{ maxHeight: 280, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>

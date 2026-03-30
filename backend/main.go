@@ -199,6 +199,7 @@ func main() {
 	mux.HandleFunc("/participant/me", a.handleParticipantMe)
 	mux.HandleFunc("/participant/change-password", a.handleParticipantChangePassword)
 	mux.HandleFunc("/participant/history", a.handleParticipantHistory)
+	mux.HandleFunc("/participant/quiz/web", a.handleParticipantQuizWeb)
 	mux.HandleFunc("/participant/leaderboard", a.handleParticipantLeaderboard)
 	mux.HandleFunc("/participant/reminder", a.handleParticipantReminder)
 	mux.HandleFunc("/participant/notes", a.handleParticipantNotes)
@@ -1529,6 +1530,260 @@ func (a *app) handleParticipantHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"quiz": quizHistory, "tryout": tryHistory})
+}
+
+func (a *app) handleParticipantQuizWeb(w http.ResponseWriter, r *http.Request) {
+	u, err := a.requireRole(r.Context(), r, "participant", "admin")
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	ctx := r.Context()
+	var req struct {
+		Action          string `json:"action"`
+		Mode            string `json:"mode"`
+		CategoryID      int64  `json:"category_id"`
+		DurationSeconds int    `json:"duration_seconds"`
+		Answers         []struct {
+			QuestionID int64  `json:"question_id"`
+			Answer     string `json:"answer"`
+		} `json:"answers"`
+	}
+	if json.NewDecoder(r.Body).Decode(&req) != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+
+	if req.Action == "categories" {
+		groupID := a.getUserGroupID(ctx, u.ID)
+		var rows *sql.Rows
+		var qErr error
+		if groupID > 0 {
+			rows, qErr = a.db.QueryContext(ctx, `SELECT id, code, name FROM question_categories WHERE is_active=TRUE AND (group_id=$1 OR group_id IS NULL) ORDER BY id ASC`, groupID)
+		} else {
+			rows, qErr = a.db.QueryContext(ctx, `SELECT id, code, name FROM question_categories WHERE is_active=TRUE ORDER BY id ASC`)
+		}
+		if qErr != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed categories"})
+			return
+		}
+		defer rows.Close()
+		items := []map[string]any{}
+		for rows.Next() {
+			var id int64
+			var code, name string
+			if rows.Scan(&id, &code, &name) == nil {
+				items = append(items, map[string]any{"id": id, "code": code, "name": name})
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+		return
+	}
+
+	if req.Action == "start" {
+		type qItem struct {
+			ID          int64  `json:"id"`
+			Question    string `json:"question"`
+			OptionA     string `json:"option_a"`
+			OptionB     string `json:"option_b"`
+			OptionC     string `json:"option_c"`
+			OptionD     string `json:"option_d"`
+			Correct     string `json:"-"`
+			CategoryID  int64  `json:"category_id,omitempty"`
+			Category    string `json:"category_name,omitempty"`
+		}
+		questions := []qItem{}
+		mode := strings.ToLower(strings.TrimSpace(req.Mode))
+
+		if mode == "quiz" {
+			if req.CategoryID <= 0 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "category_id required"})
+				return
+			}
+			groupID := a.getUserGroupID(ctx, u.ID)
+			var catCode, catName string
+			var cErr error
+			if groupID > 0 {
+				cErr = a.db.QueryRowContext(ctx, `SELECT code, name FROM question_categories WHERE id=$1 AND is_active=TRUE AND (group_id=$2 OR group_id IS NULL)`, req.CategoryID, groupID).Scan(&catCode, &catName)
+			} else {
+				cErr = a.db.QueryRowContext(ctx, `SELECT code, name FROM question_categories WHERE id=$1 AND is_active=TRUE`, req.CategoryID).Scan(&catCode, &catName)
+			}
+			if cErr != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kategori tidak ditemukan"})
+				return
+			}
+			rows, qErr := a.db.QueryContext(ctx, `
+				SELECT id, question_text, option_a, option_b, option_c, option_d, correct_option
+				FROM questions WHERE category_id=$1 AND is_active=TRUE ORDER BY id ASC
+			`, req.CategoryID)
+			if qErr != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed questions"})
+				return
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var it qItem
+				if rows.Scan(&it.ID, &it.Question, &it.OptionA, &it.OptionB, &it.OptionC, &it.OptionD, &it.Correct) == nil {
+					it.CategoryID = req.CategoryID
+					it.Category = catName
+					questions = append(questions, it)
+				}
+			}
+			if len(questions) == 0 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "soal quiz belum tersedia"})
+				return
+			}
+			_ = catCode
+			writeJSON(w, http.StatusOK, map[string]any{"mode": "quiz", "category_id": req.CategoryID, "category_name": catName, "questions": questions, "total": len(questions)})
+			return
+		}
+
+		if mode == "tryout" {
+			groupID := a.getUserGroupID(ctx, u.ID)
+			var configID int64
+			errCfg := a.db.QueryRowContext(ctx, `SELECT id FROM tryout_configs WHERE group_id=$1 AND is_active=TRUE ORDER BY id DESC LIMIT 1`, groupID).Scan(&configID)
+			if errCfg != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "konfigurasi tryout belum tersedia"})
+				return
+			}
+			itemRows, qErr := a.db.QueryContext(ctx, `SELECT category_id, question_count FROM tryout_config_items WHERE config_id=$1`, configID)
+			if qErr != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed load tryout config"})
+				return
+			}
+			defer itemRows.Close()
+			type cfgItem struct{ CategoryID int64; Count int }
+			cfgs := []cfgItem{}
+			for itemRows.Next() {
+				var x cfgItem
+				if itemRows.Scan(&x.CategoryID, &x.Count) == nil && x.Count > 0 {
+					cfgs = append(cfgs, x)
+				}
+			}
+			for _, it := range cfgs {
+				rows, errQ := a.db.QueryContext(ctx, `
+					SELECT q.id, q.question_text, q.option_a, q.option_b, q.option_c, q.option_d, q.correct_option, COALESCE(c.name,'')
+					FROM questions q JOIN question_categories c ON c.id=q.category_id
+					WHERE q.category_id=$1 AND q.is_active=TRUE AND c.is_active=TRUE
+					ORDER BY RANDOM() LIMIT $2
+				`, it.CategoryID, it.Count)
+				if errQ != nil { continue }
+				for rows.Next() {
+					var q qItem
+					if rows.Scan(&q.ID, &q.Question, &q.OptionA, &q.OptionB, &q.OptionC, &q.OptionD, &q.Correct, &q.Category) == nil {
+						q.CategoryID = it.CategoryID
+						questions = append(questions, q)
+					}
+				}
+				rows.Close()
+			}
+			if len(questions) == 0 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "soal tryout belum tersedia"})
+				return
+			}
+			rd := rand.New(rand.NewSource(time.Now().UnixNano()))
+			rd.Shuffle(len(questions), func(i, j int) { questions[i], questions[j] = questions[j], questions[i] })
+			writeJSON(w, http.StatusOK, map[string]any{"mode": "tryout", "questions": questions, "total": len(questions)})
+			return
+		}
+
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "mode harus quiz|tryout"})
+		return
+	}
+
+	if req.Action == "submit" {
+		mode := strings.ToLower(strings.TrimSpace(req.Mode))
+		if len(req.Answers) == 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "answers kosong"})
+			return
+		}
+		type qDetail struct {
+			ID int64; QText, A, B, C, D, Correct string
+		}
+		qMap := map[int64]qDetail{}
+		for _, aItem := range req.Answers {
+			if aItem.QuestionID <= 0 { continue }
+			var q qDetail
+			errQ := a.db.QueryRowContext(ctx, `SELECT id, question_text, option_a, option_b, option_c, option_d, correct_option FROM questions WHERE id=$1 AND is_active=TRUE`, aItem.QuestionID).
+				Scan(&q.ID, &q.QText, &q.A, &q.B, &q.C, &q.D, &q.Correct)
+			if errQ == nil {
+				qMap[q.ID] = q
+			}
+		}
+		if len(qMap) == 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "soal tidak valid"})
+			return
+		}
+		correctCount := 0
+		reviews := []map[string]any{}
+		for i, aItem := range req.Answers {
+			q, ok := qMap[aItem.QuestionID]
+			if !ok { continue }
+			ans := strings.ToUpper(strings.TrimSpace(aItem.Answer))
+			isCorrect := ans == strings.ToUpper(strings.TrimSpace(q.Correct))
+			if isCorrect { correctCount++ }
+			reviews = append(reviews, map[string]any{
+				"no": i + 1,
+				"question_id": q.ID,
+				"question": q.QText,
+				"option_a": q.A,
+				"option_b": q.B,
+				"option_c": q.C,
+				"option_d": q.D,
+				"your_answer": ans,
+				"correct_answer": strings.ToUpper(strings.TrimSpace(q.Correct)),
+				"is_correct": isCorrect,
+				"explanation": fmt.Sprintf("Jawaban benar adalah %s.", strings.ToUpper(strings.TrimSpace(q.Correct))),
+			})
+		}
+		total := len(reviews)
+		allCorrect := total > 0 && correctCount == total
+		uid := strconv.FormatInt(u.ID, 10)
+		var displayName string
+		_ = a.db.QueryRowContext(ctx, `SELECT COALESCE(name,'') FROM participant_profiles WHERE user_id=$1`, u.ID).Scan(&displayName)
+		if strings.TrimSpace(displayName) == "" { displayName = u.Phone }
+
+		resp := map[string]any{
+			"ok": true,
+			"mode": mode,
+			"total": total,
+			"correct_count": correctCount,
+			"wrong_count": total - correctCount,
+			"all_correct": allCorrect,
+			"duration_seconds": req.DurationSeconds,
+			"reviews": reviews,
+		}
+		if mode == "quiz" {
+			if req.CategoryID <= 0 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "category_id required"})
+				return
+			}
+			var cat quizCategory
+			if errCat := a.db.QueryRowContext(ctx, `SELECT code, name FROM question_categories WHERE id=$1`, req.CategoryID).Scan(&cat.Code, &cat.Name); errCat != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kategori tidak ditemukan"})
+				return
+			}
+			attemptNo, _ := a.saveQuizAttempt(ctx, uid, displayName, cat, total, total-correctCount, allCorrect)
+			resp["attempt_no"] = attemptNo
+			resp["category_name"] = cat.Name
+		} else if mode == "tryout" {
+			_ = a.saveTryoutResult(ctx, uid, displayName, total, correctCount, allCorrect, req.DurationSeconds)
+			if req.DurationSeconds > 0 {
+				resp["speed_qpm"] = float64(correctCount) * 60.0 / float64(req.DurationSeconds)
+			} else {
+				resp["speed_qpm"] = 0.0
+			}
+		}
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
+
+	writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown action"})
 }
 
 func (a *app) handleParticipantLeaderboard(w http.ResponseWriter, r *http.Request) {
