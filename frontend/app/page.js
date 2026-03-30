@@ -131,6 +131,7 @@ export default function Page() {
   const [materialStrictMode, setMaterialStrictMode] = useState(true);
   const [materialGraph, setMaterialGraph] = useState('{"nodes":[],"edges":[]}');
   const [materialUnknownBacklinks, setMaterialUnknownBacklinks] = useState([]);
+  const [roadmapMaterialFoldersOpen, setRoadmapMaterialFoldersOpen] = useState({});
   const [materialGraphFilter, setMaterialGraphFilter] = useState({ position_id: '', mode: 'material' });
   const [refreshingGraphData, setRefreshingGraphData] = useState(false);
   const [roadmapRagReindexing, setRoadmapRagReindexing] = useState(false);
@@ -2152,6 +2153,13 @@ export default function Page() {
   });
   const adminMaterialGroups = filteredAdminMaterials.reduce((acc, m) => {
     const key = m.category_name || 'Tanpa Kategori';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(m);
+    return acc;
+  }, {});
+  const roadmapMaterialGroups = roadmapMaterials.reduce((acc, m) => {
+    const comp = roadmapCompetencies.find(c => String(c.id) === String(m.competency_id));
+    const key = comp ? `${comp.code} • ${comp.name}` : `Kompetensi #${m.competency_id}`;
     if (!acc[key]) acc[key] = [];
     acc[key].push(m);
     return acc;
@@ -5470,7 +5478,7 @@ export default function Page() {
                         </label>
                       </div>
                       <div ref={materialEditorRef} style={{ display:'grid', gap:8 }}>
-                        <select className="nk-input-sm" value={materialForm.competency_id} onChange={async e => { const v=e.target.value; setMaterialForm(f => ({ ...f, competency_id: v })); await loadRoadmapMaterials(v); }}>
+                        <select className="nk-input-sm" value={materialForm.competency_id} onChange={async e => { const v=e.target.value; setMaterialForm(f => ({ ...f, competency_id: v })); const comp = roadmapCompetencies.find(c => String(c.id) === String(v)); if (comp) setRoadmapMaterialFoldersOpen(prev => ({ ...prev, [`${comp.code} • ${comp.name}`]: true })); await loadRoadmapMaterials(v); }}>
                           <option value="">Pilih kompetensi teknis</option>
                           {roadmapCompetencies.map(c => {
                             const pos = roadmapPositions.find(p => String(p.id) === String(c.position_id));
@@ -5530,29 +5538,43 @@ export default function Page() {
                         </div>
                       </div>
 
-                      <div className="nk-table-wrap" style={{ marginTop: 12 }}>
-                        <table className="nk-table">
-                          <thead><tr><th>Kompetensi</th><th>Bloom</th><th>Judul Materi</th><th>Isi</th><th>Update</th><th>Aksi</th></tr></thead>
-                          <tbody>
-                            {roadmapMaterials.map(m => {
-                              const comp = roadmapCompetencies.find(c => String(c.id) === String(m.competency_id));
-                              return (
-                                <tr key={m.id}>
-                                  <td>{comp ? `${comp.code} • ${comp.name}` : `#${m.competency_id}`}</td>
-                                  <td><span className="nk-badge">{m.bloom_level || 'C2'}</span></td>
-                                  <td style={{ fontWeight:700 }}>{m.title}</td>
-                                  <td style={{ maxWidth: 380, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{renderBacklinkBold((m.content || '').slice(0,180))}{(m.content||'').length>180?'...':''}</td>
-                                  <td style={{ fontSize:12, color:'#94a3b8' }}>{m.updated_at ? new Date(m.updated_at).toLocaleString('id-ID') : '-'}</td>
-                                  <td style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                                    <BtnSm onClick={() => setMaterialForm({ id:m.id, competency_id:String(m.competency_id), title:m.title || '', content:m.content || '', brief:'', bloom_level:m.bloom_level || 'C2', learning_objectives:'', style:'ringkas', is_active: !!m.is_active })}>Edit</BtnSm>
-                                    <BtnSm danger onClick={() => deleteRoadmapMaterial(m.id)}>Hapus</BtnSm>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                            {roadmapMaterials.length === 0 && <tr><td colSpan={6} className="nk-empty">Belum ada materi roadmap.</td></tr>}
-                          </tbody>
-                        </table>
+                      <div style={{ marginTop: 12, display:'grid', gap:10 }}>
+                        {Object.entries(roadmapMaterialGroups).map(([compName, items]) => {
+                          const isOpen = roadmapMaterialFoldersOpen[compName] ?? (Object.keys(roadmapMaterialGroups).length === 1);
+                          return (
+                            <div key={compName} style={{ border:'1px solid #1e2d45', borderRadius:12, overflow:'hidden', background:'#0f172a' }}>
+                              <button
+                                onClick={() => setRoadmapMaterialFoldersOpen(prev => ({ ...prev, [compName]: !isOpen }))}
+                                style={{ width:'100%', display:'flex', alignItems:'center', gap:8, padding:'10px 12px', background:'#0b1220', border:'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', color:'#e2e8f0', cursor:'pointer' }}>
+                                <span style={{ fontSize:16 }}>📁</span>
+                                <span style={{ fontWeight:700, flex:1, textAlign:'left' }}>{compName}</span>
+                                <span className="nk-badge nk-badge-purple">{items.length} materi</span>
+                                <span style={{ color:'#94a3b8' }}>{isOpen ? '▲' : '▼'}</span>
+                              </button>
+                              {isOpen && (
+                                <div style={{ padding:10, display:'grid', gap:8 }}>
+                                  {items.map(m => (
+                                    <div key={m.id} style={{ border:'1px solid #1e2d45', borderRadius:10, padding:'10px 12px', background:'#0f172a' }}>
+                                      <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:6 }}>
+                                        <span className="nk-badge">{m.bloom_level || 'C2'}</span>
+                                        <span style={{ fontWeight:700 }}>{m.title}</span>
+                                      </div>
+                                      <div style={{ fontSize:12, color:'#94a3b8', marginBottom:8, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{renderBacklinkBold((m.content || '').slice(0,180))}{(m.content||'').length>180?'...':''}</div>
+                                      <div style={{ display:'flex', justifyContent:'space-between', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+                                        <span style={{ fontSize:11, color:'#64748b' }}>{m.updated_at ? new Date(m.updated_at).toLocaleString('id-ID') : '-'}</span>
+                                        <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                                          <BtnSm onClick={() => setMaterialForm({ id:m.id, competency_id:String(m.competency_id), title:m.title || '', content:m.content || '', brief:'', bloom_level:m.bloom_level || 'C2', learning_objectives:'', style:'ringkas', is_active: !!m.is_active })}>Edit</BtnSm>
+                                          <BtnSm danger onClick={() => deleteRoadmapMaterial(m.id)}>Hapus</BtnSm>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        {roadmapMaterials.length === 0 && <div className="nk-empty">Belum ada materi roadmap.</div>}
                       </div>
                     </div>}
 
