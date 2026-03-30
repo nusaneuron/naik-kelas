@@ -3287,7 +3287,18 @@ export default function Page() {
                       <span className={`nk-badge ${rv.is_correct ? 'nk-badge-green' : 'nk-badge-red'}`}>{rv.is_correct ? 'Benar' : 'Salah'}</span>
                     </div>
                     <div style={{ fontWeight:700, marginBottom:8 }}>{rv.question}</div>
-                    <div style={{ fontSize:13, color:'#cbd5e1', marginBottom:6 }}>Jawabanmu: <b>{rv.your_answer || '-'}</b> | Jawaban benar: <b>{rv.correct_answer}</b></div>
+                    <div style={{ fontSize:13, color:'#cbd5e1', marginBottom:6 }}>
+                      Jawabanmu: <b>{rv.your_answer || '-'}</b>
+                      {rv.your_answer === 'A' && rv.option_a ? ` (${rv.option_a})` : ''}
+                      {rv.your_answer === 'B' && rv.option_b ? ` (${rv.option_b})` : ''}
+                      {rv.your_answer === 'C' && rv.option_c ? ` (${rv.option_c})` : ''}
+                      {rv.your_answer === 'D' && rv.option_d ? ` (${rv.option_d})` : ''}
+                      {' '}| Jawaban benar: <b>{rv.correct_answer}</b>
+                      {rv.correct_answer === 'A' && rv.option_a ? ` (${rv.option_a})` : ''}
+                      {rv.correct_answer === 'B' && rv.option_b ? ` (${rv.option_b})` : ''}
+                      {rv.correct_answer === 'C' && rv.option_c ? ` (${rv.option_c})` : ''}
+                      {rv.correct_answer === 'D' && rv.option_d ? ` (${rv.option_d})` : ''}
+                    </div>
                     <div style={{ fontSize:13, color:'#94a3b8', marginBottom:12 }}>{rv.explanation}</div>
                     <div style={{ display:'flex', justifyContent:'space-between' }}>
                       <button onClick={() => setQuizFlow(f => ({ ...f, reviewIndex: Math.max(0, f.reviewIndex - 1) }))} disabled={quizFlow.reviewIndex===0} style={{ padding:'8px 12px', borderRadius:8, border:'1px solid #334155', background:'transparent', color:'#cbd5e1', cursor:'pointer' }}>← Sebelumnya</button>
