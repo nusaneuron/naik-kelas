@@ -219,6 +219,7 @@ export default function Page() {
   const [activeNote, setActiveNote] = useState(null); // {id,title,content,tags,backlinks}
   const [noteEditing, setNoteEditing] = useState(false);
   const [noteDraft, setNoteDraft] = useState({ title: '', content: '' });
+  const [newNoteType, setNewNoteType] = useState('permanent'); // permanent | fleeting (create dari web)
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteView, setNoteView] = useState('list'); // 'list' | 'editor' | 'graph' | 'canvas'
   const [noteListMode, setNoteListMode] = useState('all'); // all | permanent | quick | reflection
@@ -486,6 +487,7 @@ export default function Page() {
       setNoteDraft({ title: data.title, content: data.content });
       // Catatan sementara langsung buka dalam mode edit
       setNoteEditing(data.note_type === 'fleeting');
+      setNewNoteType('permanent');
       setNoteView('editor');
     }
   }
@@ -497,6 +499,7 @@ export default function Page() {
     // Fleeting yang di-edit → promote ke permanent
     const action = isNew ? 'create' : (isFleeting ? 'promote' : 'update');
     const body = { action, title: noteDraft.title, content: noteDraft.content };
+    if (isNew) body.note_type = newNoteType === 'fleeting' ? 'fleeting' : 'permanent';
     if (!isNew) body.id = activeNote.id;
     const res = await fetch(`${apiBase}/participant/notes`, {
       method: 'POST', credentials: 'include',
@@ -2564,9 +2567,13 @@ export default function Page() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                 {/* Toolbar */}
                 <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <button onClick={() => { setActiveNote(null); setNoteDraft({ title: '', content: '' }); setNoteEditing(true); setNoteView('editor'); }}
+                  <button onClick={() => { setActiveNote(null); setNoteDraft({ title: '', content: '' }); setNewNoteType('permanent'); setNoteEditing(true); setNoteView('editor'); }}
                     style={{ padding: '7px 14px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
                     ✏️ Catatan Baru
+                  </button>
+                  <button onClick={() => { setActiveNote(null); setNoteDraft({ title: '', content: '' }); setNewNoteType('fleeting'); setNoteEditing(true); setNoteView('editor'); }}
+                    style={{ padding: '7px 14px', background: '#f59e0b', color: '#111827', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
+                    ⚡ Catatan Cepat Baru
                   </button>
                   <button onClick={() => { setShowReflectionEditor(true); }}
                     style={{ padding: '7px 14px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
@@ -2726,6 +2733,11 @@ export default function Page() {
                       <button onClick={() => setNoteView('list')} style={{ color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, padding: 0 }}>←</button>
                       <input value={noteDraft.title} onChange={e => { setNoteDraft(d => ({ ...d, title: e.target.value })); setNoteEditing(true); }}
                         placeholder="Judul catatan..." style={{ flex: 1, background: 'transparent', border: 'none', color: '#fff', fontWeight: 700, fontSize: 16, outline: 'none', minWidth: 100 }} />
+                      {!activeNote?.id && (
+                        <span className="nk-badge" style={{ background: newNoteType === 'fleeting' ? 'rgba(245,158,11,0.18)' : 'rgba(59,130,246,0.18)', color: newNoteType === 'fleeting' ? '#fbbf24' : '#93c5fd', fontSize: 11 }}>
+                          {newNoteType === 'fleeting' ? '⚡ Cepat' : '📌 Permanen'}
+                        </span>
+                      )}
                       {noteEditing && (
                         <button onClick={saveNote} disabled={noteSaving}
                           style={{ padding: '5px 14px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
