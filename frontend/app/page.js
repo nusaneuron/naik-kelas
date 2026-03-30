@@ -303,6 +303,7 @@ export default function Page() {
   const [qCategoryId, setQCategoryId] = useState('');
   const [editingQuestionId, setEditingQuestionId] = useState('');
   const [questionFilterCategoryId, setQuestionFilterCategoryId] = useState('');
+  const [questionFoldersOpen, setQuestionFoldersOpen] = useState({});
   const [qText, setQText] = useState('');
   const [qA, setQA] = useState('');
   const [qB, setQB] = useState('');
@@ -2137,6 +2138,12 @@ export default function Page() {
 
   const matchedParticipant = participants.find((p) => ((p.phone || '').replace(/[^0-9]/g, '') === (pointPhone || '').replace(/[^0-9]/g, '')));
   const filteredQuestions = questionFilterCategoryId ? questions.filter((q) => String(q.category_id) === String(questionFilterCategoryId)) : questions;
+  const questionGroups = filteredQuestions.reduce((acc, q) => {
+    const key = q.category_name || 'Tanpa Kategori';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(q);
+    return acc;
+  }, {});
   const isAdmin = me?.role === 'admin' || me?.role === 'super_admin';
   const isSuperAdmin = me?.role === 'super_admin';
   const showParticipantView = !isAdmin || adminViewMode === 'participant';
@@ -3969,29 +3976,55 @@ export default function Page() {
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <span style={{ fontSize: 13, color: '#94a3b8' }}>Filter:</span>
-                      <select className="nk-input-sm" value={questionFilterCategoryId} onChange={(e) => setQuestionFilterCategoryId(e.target.value)}>
+                      <select className="nk-input-sm" value={questionFilterCategoryId} onChange={(e) => {
+                        const v = e.target.value;
+                        setQuestionFilterCategoryId(v);
+                        if (v) {
+                          const cat = categories.find(c => String(c.id) === String(v));
+                          if (cat?.name) setQuestionFoldersOpen(prev => ({ ...prev, [cat.name]: true }));
+                        }
+                      }}>
                         <option value="">Semua kategori</option>
                         {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
                       <span className="nk-badge nk-badge-purple">{filteredQuestions.length} soal</span>
                     </div>
 
-                    <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
-                      {filteredQuestions.map((q) => (
-                        <div key={q.id} style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 14, background: '#0f172a' }}>
-                          <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}><span className="nk-badge nk-badge-purple">{q.category_name}</span></div>
-                          <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>{q.question_text}</div>
-                          <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 10, lineHeight: 1.6 }}>
-                            A. {q.option_a} &nbsp;·&nbsp; B. {q.option_b}<br />
-                            C. {q.option_c} &nbsp;·&nbsp; D. {q.option_d}<br />
-                            <span style={{ color: '#4ade80', fontWeight: 600 }}>✓ Jawaban: {q.correct_option}</span>
+                    <div style={{ display: 'grid', gap: 10 }}>
+                      {Object.entries(questionGroups).map(([catName, items]) => {
+                        const isOpen = questionFoldersOpen[catName] ?? (!!questionFilterCategoryId || Object.keys(questionGroups).length === 1);
+                        return (
+                          <div key={catName} style={{ border: '1px solid #1e2d45', borderRadius: 12, overflow: 'hidden', background: '#0f172a' }}>
+                            <button
+                              onClick={() => setQuestionFoldersOpen(prev => ({ ...prev, [catName]: !isOpen }))}
+                              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: '#0b1220', border: 'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', cursor: 'pointer', color: '#e2e8f0' }}>
+                              <span style={{ fontSize: 16 }}>📁</span>
+                              <span style={{ fontWeight: 700, flex: 1, textAlign: 'left' }}>{catName}</span>
+                              <span className="nk-badge nk-badge-purple">{items.length} soal</span>
+                              <span style={{ color: '#94a3b8' }}>{isOpen ? '▲' : '▼'}</span>
+                            </button>
+
+                            {isOpen && (
+                              <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', padding: 12 }}>
+                                {items.map((q) => (
+                                  <div key={q.id} style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 14, background: '#0f172a' }}>
+                                    <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>{q.question_text}</div>
+                                    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 10, lineHeight: 1.6 }}>
+                                      A. {q.option_a} &nbsp;·&nbsp; B. {q.option_b}<br />
+                                      C. {q.option_c} &nbsp;·&nbsp; D. {q.option_d}<br />
+                                      <span style={{ color: '#4ade80', fontWeight: 600 }}>✓ Jawaban: {q.correct_option}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 6 }}>
+                                      <BtnSm disabled={busy} onClick={() => startEditQuestion(q)}>Edit</BtnSm>
+                                      <BtnSm disabled={busy} onClick={() => deleteQuestion(q.id)} danger>Hapus</BtnSm>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <BtnSm disabled={busy} onClick={() => startEditQuestion(q)}>Edit</BtnSm>
-                            <BtnSm disabled={busy} onClick={() => deleteQuestion(q.id)} danger>Hapus</BtnSm>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                       {!filteredQuestions.length && <div className="nk-empty">Tidak ada soal untuk kategori ini.</div>}
                     </div>
                   </AdminSection>
