@@ -208,6 +208,7 @@ export default function Page() {
   const [adminCategories, setAdminCategories] = useState([]);
   const [materiFilterCat, setMateriFilterCat] = useState('');
   const [materiFilterGroup, setMateriFilterGroup] = useState('');
+  const [materiFoldersOpen, setMateriFoldersOpen] = useState({});
   const [editingMateriId, setEditingMateriId] = useState('');
   const [materiCatId, setMateriCatId] = useState('');
   const [materiTitle, setMateriTitle] = useState('');
@@ -2142,6 +2143,17 @@ export default function Page() {
     const key = q.category_name || 'Tanpa Kategori';
     if (!acc[key]) acc[key] = [];
     acc[key].push(q);
+    return acc;
+  }, {});
+  const filteredAdminMaterials = adminMaterials.filter(m => {
+    if (materiFilterCat && String(m.category_id) !== materiFilterCat) return false;
+    if (materiFilterGroup && String(m.group_id) !== materiFilterGroup) return false;
+    return true;
+  });
+  const adminMaterialGroups = filteredAdminMaterials.reduce((acc, m) => {
+    const key = m.category_name || 'Tanpa Kategori';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(m);
     return acc;
   }, {});
   const isAdmin = me?.role === 'admin' || me?.role === 'super_admin';
@@ -5187,7 +5199,14 @@ export default function Page() {
                         {isSuperAdmin && <option value="">🌐 Global (Super Admin)</option>}
                         {adminGroups.map(g => <option key={g.id} value={String(g.id)}>🏢 {g.name}</option>)}
                       </select>
-                      <select className="nk-input-sm" value={materiFilterCat} onChange={e => setMateriFilterCat(e.target.value)}>
+                      <select className="nk-input-sm" value={materiFilterCat} onChange={e => {
+                        const v = e.target.value;
+                        setMateriFilterCat(v);
+                        if (v) {
+                          const cat = adminCategories.find(c => String(c.id) === String(v));
+                          if (cat?.name) setMateriFoldersOpen(prev => ({ ...prev, [cat.name]: true }));
+                        }
+                      }}>
                         <option value="">Semua Kategori</option>
                         {adminCategories
                           .filter(c => !materiFilterGroup || String(c.group_id) === materiFilterGroup || c.group_id === 0)
@@ -5195,52 +5214,62 @@ export default function Page() {
                       </select>
                     </div>
 
-                    {/* List materi */}
-                    {adminMaterials
-                      .filter(m => {
-                        if (materiFilterCat && String(m.category_id) !== materiFilterCat) return false;
-                        if (materiFilterGroup && String(m.group_id) !== materiFilterGroup) return false;
-                        return true;
-                      })
-                      .map(m => {
-                        const typeIcon = { text: '📖', video: '🎬', audio: '🎵' }[m.type] || '📄';
+                    {/* List materi (folder per kategori) */}
+                    <div style={{ display: 'grid', gap: 10 }}>
+                      {Object.entries(adminMaterialGroups).map(([catName, items]) => {
+                        const isOpen = materiFoldersOpen[catName] ?? (!!materiFilterCat || Object.keys(adminMaterialGroups).length === 1);
                         return (
-                          <div key={m.id} style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 10, padding: '12px 14px', marginBottom: 8, display: 'flex', flexDirection:'column', gap: 10, overflow:'hidden' }}>
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
-                                <span>{typeIcon}</span>
-                                <span style={{ fontWeight: 600, fontSize: 14 }}>{m.title}</span>
-                                <span className="nk-badge nk-badge-purple">{m.category_name}</span>
-                                {m.group_name ? <span className="nk-badge" style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', fontSize: 11 }}>🏢 {m.group_name}</span> : <span className="nk-badge" style={{ background: '#1e293b', color: '#64748b', fontSize: 11 }}>🌐 Global</span>}
-                                {!m.is_active && <span className="nk-badge" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171', fontSize: 11 }}>Nonaktif</span>}
+                          <div key={catName} style={{ border: '1px solid #1e2d45', borderRadius: 12, overflow: 'hidden', background: '#0f172a' }}>
+                            <button
+                              onClick={() => setMateriFoldersOpen(prev => ({ ...prev, [catName]: !isOpen }))}
+                              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: '#0b1220', border: 'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', cursor: 'pointer', color: '#e2e8f0' }}>
+                              <span style={{ fontSize: 16 }}>📁</span>
+                              <span style={{ fontWeight: 700, flex: 1, textAlign: 'left' }}>{catName}</span>
+                              <span className="nk-badge nk-badge-purple">{items.length} materi</span>
+                              <span style={{ color: '#94a3b8' }}>{isOpen ? '▲' : '▼'}</span>
+                            </button>
+
+                            {isOpen && (
+                              <div style={{ padding: 10 }}>
+                                {items.map(m => {
+                                  const typeIcon = { text: '📖', video: '🎬', audio: '🎵' }[m.type] || '📄';
+                                  return (
+                                    <div key={m.id} style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 10, padding: '12px 14px', marginBottom: 8, display: 'flex', flexDirection:'column', gap: 10, overflow:'hidden' }}>
+                                      <div style={{ minWidth: 0 }}>
+                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
+                                          <span>{typeIcon}</span>
+                                          <span style={{ fontWeight: 600, fontSize: 14 }}>{m.title}</span>
+                                          {m.group_name ? <span className="nk-badge" style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', fontSize: 11 }}>🏢 {m.group_name}</span> : <span className="nk-badge" style={{ background: '#1e293b', color: '#64748b', fontSize: 11 }}>🌐 Global</span>}
+                                          {!m.is_active && <span className="nk-badge" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171', fontSize: 11 }}>Nonaktif</span>}
+                                        </div>
+                                        <div style={{ fontSize: 12, color: '#64748b', display: 'flex', gap: 12, flexWrap:'wrap' }}>
+                                          <span>+{m.exp_reward} EXP</span>
+                                          <span>Urutan: {m.order_no}</span>
+                                          <span>Selesai oleh: {m.completed_count} peserta</span>
+                                        </div>
+                                      </div>
+                                      <div style={{ display: 'flex', gap: 6, flexWrap:'wrap', width:'100%' }}>
+                                        <BtnSm onClick={() => startEditMateri(m)} style={{ background: '#1e40af', fontSize: 12 }}>Edit</BtnSm>
+                                        <BtnSm onClick={() => sendMateriTestTelegram(m.id)} style={{ background: '#0f766e', fontSize: 12 }}>Test Telegram</BtnSm>
+                                        <BtnSm onClick={() => previewPublishMateriTelegram(m.id)} style={{ background: '#334155', fontSize: 12 }}>Preview Recipient</BtnSm>
+                                        <BtnSm onClick={() => publishMateriTelegram(m.id)} style={{ background: '#9333ea', fontSize: 12 }}>Publish Peserta</BtnSm>
+                                        <BtnSm onClick={() => deleteMateri(m.id)} style={{ background: '#7f1d1d', fontSize: 12 }}>Hapus</BtnSm>
+                                        {chatPublishPreview && chatPublishPreview.id === m.id && (
+                                          <div style={{ width:'100%', fontSize:11, color:'#cbd5e1', marginTop:4 }}>
+                                            👥 {chatPublishPreview.recipient_count || 0} peserta • 💬 {chatPublishPreview.bubble_count || 0} bubble • 📤 estimasi {chatPublishPreview.estimated_messages || 0} pesan
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
                               </div>
-                              <div style={{ fontSize: 12, color: '#64748b', display: 'flex', gap: 12, flexWrap:'wrap' }}>
-                                <span>+{m.exp_reward} EXP</span>
-                                <span>Urutan: {m.order_no}</span>
-                                <span>Selesai oleh: {m.completed_count} peserta</span>
-                              </div>
-                            </div>
-                            <div style={{ display: 'flex', gap: 6, flexWrap:'wrap', width:'100%' }}>
-                              <BtnSm onClick={() => startEditMateri(m)} style={{ background: '#1e40af', fontSize: 12 }}>Edit</BtnSm>
-                              <BtnSm onClick={() => sendMateriTestTelegram(m.id)} style={{ background: '#0f766e', fontSize: 12 }}>Test Telegram</BtnSm>
-                              <BtnSm onClick={() => previewPublishMateriTelegram(m.id)} style={{ background: '#334155', fontSize: 12 }}>Preview Recipient</BtnSm>
-                              <BtnSm onClick={() => publishMateriTelegram(m.id)} style={{ background: '#9333ea', fontSize: 12 }}>Publish Peserta</BtnSm>
-                              <BtnSm onClick={() => deleteMateri(m.id)} style={{ background: '#7f1d1d', fontSize: 12 }}>Hapus</BtnSm>
-                              {chatPublishPreview && chatPublishPreview.id === m.id && (
-                                <div style={{ width:'100%', fontSize:11, color:'#cbd5e1', marginTop:4 }}>
-                                  👥 {chatPublishPreview.recipient_count || 0} peserta • 💬 {chatPublishPreview.bubble_count || 0} bubble • 📤 estimasi {chatPublishPreview.estimated_messages || 0} pesan
-                                </div>
-                              )}
-                            </div>
+                            )}
                           </div>
                         );
-                      })
-                    }
-                    {adminMaterials.filter(m => {
-                      if (materiFilterCat && String(m.category_id) !== materiFilterCat) return false;
-                      if (materiFilterGroup && String(m.group_id) !== materiFilterGroup) return false;
-                      return true;
-                    }).length === 0 && (
+                      })}
+                    </div>
+                    {filteredAdminMaterials.length === 0 && (
                       <p style={{ fontSize: 13, color: '#64748b' }}>Belum ada materi. Tambahkan di atas!</p>
                     )}
                   </AdminSection>
