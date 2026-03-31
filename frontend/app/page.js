@@ -3931,8 +3931,8 @@ export default function Page() {
                 <>
                   <AdminSection title="📝 Bank Soal">
                     {/* AI Generate Soal */}
-                    <div style={{ background: '#0a1e3a', border: '1px dashed #2563eb', borderRadius: 10, padding: '12px 14px', marginBottom: 16 }}>
-                      <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, color: '#93c5fd' }}>✨ Generate Soal dengan AI</p>
+                    <div style={{ background: 'var(--theme-elevated)', border: '1px dashed #3b82f6', borderRadius: 10, padding: '12px 14px', marginBottom: 16 }}>
+                      <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, color: '#2563eb' }}>✨ Generate Soal dengan AI</p>
                       <div className="nk-grid-2col" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8, marginBottom: 8 }}>
                         <div>
                           <label style={fieldLbl}>Kompetensi (Roadmap)</label>
@@ -3953,7 +3953,7 @@ export default function Page() {
                           </select>
                         </div>
                         <div>
-                          <label style={fieldLbl}>Materi Sumber (Roadmap) <span style={{ color: '#64748b' }}>(opsional)</span></label>
+                          <label style={fieldLbl}>Materi Sumber (Roadmap) <span style={{ color: 'var(--nk-muted)' }}>(opsional)</span></label>
                           <select className="nk-input-sm" style={{ width: '100%' }} value={qAiMateriId} onChange={e => { setQAiMateriId(e.target.value); setQAiGenerated([]); setQAiChecked([]); }}>
                             <option value="">-- Semua Materi Kompetensi --</option>
                             {qAiCategoryMateri.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
@@ -3980,12 +3980,12 @@ export default function Page() {
                               } catch(e) { alert('Error: ' + e.message); }
                               setQAiGenerating(false);
                             }}
-                            style={{ flex: '1 1 80px', minWidth: 80, padding: '7px 0', background: qAiGenerating || !qAiRoadmapCompId ? '#1e3a5f' : '#1d4ed8', color: '#fff', border: 'none', borderRadius: 8, cursor: qAiGenerating || !qAiRoadmapCompId ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, opacity: !qAiRoadmapCompId ? 0.5 : 1 }}>
+                            style={{ flex: '1 1 80px', minWidth: 80, padding: '7px 0', background: qAiGenerating || !qAiRoadmapCompId ? 'var(--theme-bg-subtle)' : '#2563eb', color: qAiGenerating || !qAiRoadmapCompId ? 'var(--nk-muted)' : '#fff', border: `1px solid ${qAiGenerating || !qAiRoadmapCompId ? 'var(--nk-border)' : '#1d4ed8'}`, borderRadius: 8, cursor: qAiGenerating || !qAiRoadmapCompId ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, opacity: !qAiRoadmapCompId ? 0.8 : 1 }}>
                             {qAiGenerating ? '⏳ Generating...' : `✨ ${n} Soal`}
                           </button>
                         ))}
                       </div>
-                      {!qAiRoadmapCompId && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#64748b' }}>Pilih kompetensi roadmap dulu sebelum generate soal.</p>}
+                      {!qAiRoadmapCompId && <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--nk-muted)' }}>Pilih kompetensi roadmap dulu sebelum generate soal.</p>}
                       {/* Preview hasil generate */}
                       {qAiGenerated.length > 0 && (
                         <div style={{ marginTop: 12 }}>
@@ -3994,13 +3994,13 @@ export default function Page() {
                               {qAiGenerated.length} soal dihasilkan — <span style={{ color: '#4ade80' }}>{qAiChecked.length} dipilih</span>
                             </p>
                             <button type="button" onClick={() => setQAiChecked(qAiChecked.length === qAiGenerated.length ? [] : qAiGenerated.map((_,i) => i))}
-                              style={{ fontSize: 11, color: '#93c5fd', background: 'none', border: '1px solid #1e3a5f', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}>
+                              style={{ fontSize: 11, color: '#2563eb', background: 'transparent', border: '1px solid var(--nk-border)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}>
                               {qAiChecked.length === qAiGenerated.length ? 'Batal Semua' : 'Pilih Semua'}
                             </button>
                           </div>
                           {qAiGenerated.map((q, i) => (
                             <div key={i} onClick={() => setQAiChecked(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i])}
-                              style={{ background: qAiChecked.includes(i) ? '#0d2744' : 'var(--theme-elevated)', border: `1px solid ${qAiChecked.includes(i) ? '#2563eb' : '#1e3a5f'}`, borderRadius: 8, padding: '10px 12px', marginBottom: 8, cursor: 'pointer', transition: 'all 0.15s' }}>
+                              style={{ background: qAiChecked.includes(i) ? 'rgba(37,99,235,0.10)' : 'var(--theme-elevated)', border: `1px solid ${qAiChecked.includes(i) ? '#2563eb' : 'var(--nk-border)'}`, borderRadius: 8, padding: '10px 12px', marginBottom: 8, cursor: 'pointer', transition: 'all 0.15s' }}>
                               <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                                 <span style={{ fontSize: 16, marginTop: 1 }}>{qAiChecked.includes(i) ? '✅' : '⬜'}</span>
                                 <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{i+1}. {q.question_text}</span>
