@@ -5172,15 +5172,15 @@ export default function Page() {
                               { label: '───', title: 'Separator', insert: '---\n', style: {} },
                             ];
                             return (
-                              <div key={bi} style={{ marginBottom: 12, background: '#0a1628', border: '1px solid var(--nk-border)', borderRadius: 10, padding: 10 }}>
+                              <div key={bi} style={{ marginBottom: 12, background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 10, padding: 10 }}>
                                 {/* Header bubble */}
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                                  <span style={{ fontSize: 11, color: '#475569', fontWeight: 600 }}>
+                                  <span style={{ fontSize: 11, color: 'var(--nk-muted)', fontWeight: 600 }}>
                                     💬 Pesan {bi + 1} {materiBubbles.length > 1 ? `/ ${materiBubbles.length}` : ''}
                                   </span>
                                   {materiBubbles.length > 1 && (
                                     <button type="button" onClick={() => setMateriBubbles(prev => prev.filter((_,i2) => i2 !== bi))}
-                                      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 5, color: '#f87171', padding: '2px 8px', fontSize: 11, cursor: 'pointer' }}>
+                                      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 5, color: '#ef4444', padding: '2px 8px', fontSize: 11, cursor: 'pointer' }}>
                                       🗑️ Hapus
                                     </button>
                                   )}
@@ -5189,7 +5189,7 @@ export default function Page() {
                                 <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginBottom: 6 }}>
                                   {toolbarBtns.map((btn, ti) => (
                                     <button key={ti} type="button" title={btn.title}
-                                      style={{ background: 'var(--nk-border)', border: '1px solid #2d3f5c', borderRadius: 4, color: 'var(--nk-text)', padding: '2px 7px', fontSize: 11, cursor: 'pointer', ...btn.style }}
+                                      style={{ background: 'var(--theme-bg-subtle)', border: '1px solid var(--nk-border)', borderRadius: 4, color: 'var(--nk-text)', padding: '2px 7px', fontSize: 11, cursor: 'pointer', ...btn.style }}
                                       onClick={() => {
                                         const el = document.getElementById(editorId);
                                         if (!el) return;
@@ -5208,7 +5208,7 @@ export default function Page() {
                                 <textarea id={editorId} value={bubble}
                                   onChange={e => setMateriBubbles(prev => prev.map((b,i2) => i2===bi ? e.target.value : b))}
                                   rows={4} placeholder={`Tulis isi pesan ${bi+1}...`}
-                                  style={{ width: '100%', resize: 'vertical', fontFamily: 'monospace', fontSize: 12, background: '#0d1b2e', border: '1px solid var(--nk-border)', borderRadius: 6, color: '#f1f5f9', padding: '8px 10px' }} />
+                                  style={{ width: '100%', resize: 'vertical', fontFamily: 'monospace', fontSize: 12, background: 'var(--theme-bg-subtle)', border: '1px solid var(--nk-border)', borderRadius: 6, color: 'var(--nk-text)', padding: '8px 10px' }} />
                               </div>
                             );
                           })}
@@ -5217,22 +5217,22 @@ export default function Page() {
                             <button type="button"
                               disabled={materiBubbles.length >= 20}
                               onClick={() => setMateriBubbles(prev => [...prev, ''])}
-                              style={{ flex: '1 1 220px', minWidth: 0, background: materiBubbles.length >= 20 ? 'rgba(51,65,85,0.3)' : 'rgba(99,102,241,0.1)', border: `1px dashed ${materiBubbles.length >= 20 ? '#334155' : 'rgba(99,102,241,0.4)'}`, borderRadius: 8, color: materiBubbles.length >= 20 ? '#475569' : '#818cf8', padding: '8px 16px', fontSize: 13, cursor: materiBubbles.length >= 20 ? 'not-allowed' : 'pointer' }}>
+                              style={{ flex: '1 1 220px', minWidth: 0, background: materiBubbles.length >= 20 ? 'rgba(148,163,184,0.12)' : 'rgba(99,102,241,0.1)', border: `1px dashed ${materiBubbles.length >= 20 ? 'var(--nk-border)' : 'rgba(99,102,241,0.4)'}`, borderRadius: 8, color: materiBubbles.length >= 20 ? 'var(--nk-muted)' : '#6366f1', padding: '8px 16px', fontSize: 13, cursor: materiBubbles.length >= 20 ? 'not-allowed' : 'pointer' }}>
                               {materiBubbles.length >= 20 ? '🚫 Batas maksimal tercapai' : '+ Tambah Pesan'}
                             </button>
-                            <span style={{ fontSize: 12, color: materiBubbles.length >= 18 ? '#f87171' : '#475569', whiteSpace: 'nowrap', fontWeight: 600 }}>
+                            <span style={{ fontSize: 12, color: materiBubbles.length >= 18 ? '#ef4444' : 'var(--nk-muted)', whiteSpace: 'nowrap', fontWeight: 600 }}>
                               {materiBubbles.length} / 20
                             </span>
                           </div>
 
                           {/* Panduan Markdown */}
                           <details style={{ marginTop: 8 }}>
-                            <summary style={{ fontSize: 12, color: '#64748b', cursor: 'pointer', userSelect: 'none' }}>📖 Panduan format Markdown (klik untuk buka)</summary>
-                            <div style={{ background: '#0a1628', border: '1px solid var(--nk-border)', borderRadius: 8, padding: 14, marginTop: 8, fontSize: 12, lineHeight: 1.8 }}>
+                            <summary style={{ fontSize: 12, color: 'var(--nk-muted)', cursor: 'pointer', userSelect: 'none' }}>📖 Panduan format Markdown (klik untuk buka)</summary>
+                            <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 8, padding: 14, marginTop: 8, fontSize: 12, lineHeight: 1.8 }}>
                               <p style={{ fontWeight: 700, color: 'var(--nk-muted)', margin: '0 0 8px' }}>✍️ Cara penulisan teks di Telegram:</p>
                               <div style={{ width:'100%', overflowX:'auto' }}>
                               <table style={{ width: '100%', minWidth: 560, borderCollapse: 'collapse' }}>
-                                <thead><tr style={{ color: '#475569', borderBottom: '1px solid #1e2d45' }}><th style={{ textAlign: 'left', padding: '4px 8px' }}>Yang kamu tulis</th><th style={{ textAlign: 'left', padding: '4px 8px' }}>Tampil di Telegram</th></tr></thead>
+                                <thead><tr style={{ color: 'var(--nk-muted)', borderBottom: '1px solid var(--nk-border)' }}><th style={{ textAlign: 'left', padding: '4px 8px' }}>Yang kamu tulis</th><th style={{ textAlign: 'left', padding: '4px 8px' }}>Tampil di Telegram</th></tr></thead>
                                 <tbody>{[
                                   ['**teks**', '𝐭𝐞𝐤𝐬 (tebal/bold)'],
                                   ['_teks_', '𝑡𝑒𝑘𝑠 (miring/italic)'],
