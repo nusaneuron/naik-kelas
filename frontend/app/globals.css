@@ -8,14 +8,14 @@
   /* Phase 1 — Dark sebagai tema default (light akan jadi override di phase 2) */
 
   /* Semantic theme tokens */
-  --theme-bg-base: #080d18;
-  --theme-bg-subtle: #0b1220;
+  --theme-bg-base: var(--theme-bg-subtle);
+  --theme-bg-subtle: var(--theme-bg-subtle);
   --theme-surface: #0f172a;
   --theme-elevated: #111827;
   --theme-card: #131e33;
   --theme-text: #e5e7eb;
   --theme-muted: #94a3b8;
-  --theme-border: #1e2d45;
+  --theme-border: var(--nk-border);
 
   /* Brand / accent */
   --theme-brand: #be94f5;
@@ -112,8 +112,8 @@ body {
 /* ─── Scrollbar ─────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #2d3f5a; border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: #3d5473; }
+::-webkit-scrollbar-thumb { background: var(--nk-border); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--nk-muted); }
 
 /* ─── Typography ─────────────────────────────── */
 h1, h2, h3 { font-family: 'Poppins', 'Inter', sans-serif; }
@@ -225,7 +225,7 @@ button:active { transform: translateY(0); }
   border-radius: var(--nk-radius-md);
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
-  scrollbar-color: #1e2d45 transparent;
+  scrollbar-color: var(--nk-border) transparent;
 }
 .nk-table {
   width: max-content;
