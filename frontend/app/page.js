@@ -1633,6 +1633,15 @@ export default function Page() {
 
   function formatAICreditError(msg) {
     const s = String(msg || '').trim();
+
+    // Tangani respons HTML dari upstream (mis. EasyPanel service not reachable)
+    if (s.startsWith('<!DOCTYPE html') || s.startsWith('<html')) {
+      if (/Service is not reachable/i.test(s)) {
+        return 'Layanan AI tidak bisa dijangkau (service unreachable). Cek AI Settings: base_url, API key, dan pastikan endpoint AI sedang healthy.';
+      }
+      return 'Respons AI tidak valid (HTML), kemungkinan endpoint AI salah atau service AI sedang down.';
+    }
+
     if (!s.includes('saldo credit AI tidak cukup')) return s || 'Saldo credit AI tidak cukup.';
     const readNum = (key) => {
       const m = s.match(new RegExp(`${key}=([0-9]+(?:\\.[0-9]+)?)`));
