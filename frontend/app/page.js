@@ -19,6 +19,7 @@ export default function Page() {
   const [participantSection, setParticipantSection] = useState('profil');
   const [entryMode, setEntryMode] = useState(''); // '' | 'notes' | 'portal'
   const [confirmAction, setConfirmAction] = useState(null);
+  const [theme, setTheme] = useState('dark');
 
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -410,6 +411,22 @@ export default function Page() {
       if (n?.id) await openParticipantRoadmapMaterial(n.id);
     } catch {}
   }
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('nk_theme');
+      const initial = saved === 'light' || saved === 'dark' ? saved : 'dark';
+      setTheme(initial);
+      document.documentElement.setAttribute('data-theme', initial);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('nk_theme', theme);
+    } catch {}
+  }, [theme]);
 
   useEffect(() => {
     if (!pendingFocusMaterial || roadmapMenu !== 'materials') return;
@@ -2260,6 +2277,14 @@ export default function Page() {
               Naik Kelas
             </h1>
             <p style={{ color: '#94a3b8', margin: 0, fontSize: 14 }}>Portal Belajar Peserta</p>
+            <div style={{ marginTop: 10 }}>
+              <button type="button" onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} style={{
+                border: '1px solid #334155', background: 'rgba(15,23,42,0.5)', color: '#e2e8f0',
+                borderRadius: 10, padding: '6px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600
+              }}>
+                {theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode'}
+              </button>
+            </div>
           </div>
 
           {/* Card */}
@@ -2432,6 +2457,13 @@ export default function Page() {
                 {notesOnlyMode ? '🎓 Portal Lengkap' : '📝 Mode Catatan'}
               </button>
             )}
+            <button onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} style={{
+              border: '1px solid rgba(0,0,0,0.25)',
+              background: 'rgba(0,0,0,0.2)', color: 'white',
+              borderRadius: 10, padding: '7px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600
+            }}>
+              {theme === 'dark' ? '☀️ Light' : '🌙 Dark'}
+            </button>
             <button onClick={logout} style={{
               border: '1px solid rgba(0,0,0,0.25)',
               background: 'rgba(0,0,0,0.2)', color: 'white',

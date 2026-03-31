@@ -65,6 +65,22 @@
   --nk-space-7: 48px;
 }
 
+:root[data-theme='light'] {
+  --theme-bg-base: #eef2ff;
+  --theme-bg-subtle: #f8fafc;
+  --theme-surface: #ffffff;
+  --theme-elevated: #f8fafc;
+  --theme-card: #ffffff;
+  --theme-text: #0f172a;
+  --theme-muted: #475569;
+  --theme-border: #cbd5e1;
+
+  --nk-shadow-sm: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --nk-shadow-md: 0 8px 24px rgba(15, 23, 42, 0.12);
+  --nk-shadow-lg: 0 16px 40px rgba(15, 23, 42, 0.16);
+  --nk-shadow-purple: 0 4px 20px rgba(190, 148, 245, 0.16);
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
 }
@@ -83,6 +99,14 @@ body {
   color: var(--nk-text);
   font-family: 'Inter', Arial, sans-serif;
   min-height: 100vh;
+}
+
+:root[data-theme='light'] body {
+  background:
+    radial-gradient(ellipse 1200px 700px at 15% 5%, rgba(190, 148, 245, 0.12), transparent 60%),
+    radial-gradient(ellipse 900px 500px at 85% 0%, rgba(252, 204, 66, 0.08), transparent 55%),
+    radial-gradient(ellipse 600px 400px at 50% 100%, rgba(255, 87, 52, 0.05), transparent 60%),
+    linear-gradient(180deg, var(--theme-bg-base) 0%, var(--theme-bg-subtle) 100%);
 }
 
 /* ─── Scrollbar ─────────────────────────────── */
