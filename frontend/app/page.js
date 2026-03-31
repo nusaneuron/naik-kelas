@@ -5582,7 +5582,7 @@ export default function Page() {
                         </div>
                         <textarea className="nk-input-sm" placeholder="Tujuan pembelajaran (learning objectives)" value={materialForm.learning_objectives || ''} onChange={e => setMaterialForm(f => ({ ...f, learning_objectives: e.target.value }))} style={{ minHeight: 64 }} />
                         <div style={{ display:'flex', justifyContent:'flex-end' }}>
-                          <button onClick={generateRoadmapMaterialDraft} disabled={generatingRoadmapMaterial || !(materialForm.title || '').trim()} style={{ border:'1px solid #334155', background: generatingRoadmapMaterial ? '#1e293b' : 'rgba(139,92,246,0.15)', color:'#ddd6fe', borderRadius:8, padding:'8px 12px', fontSize:12, fontWeight:700, cursor: generatingRoadmapMaterial ? 'not-allowed' : 'pointer' }}>
+                          <button onClick={generateRoadmapMaterialDraft} disabled={generatingRoadmapMaterial} style={{ border:'1px solid #334155', background: generatingRoadmapMaterial ? '#1e293b' : 'rgba(139,92,246,0.15)', color:'#ddd6fe', borderRadius:8, padding:'8px 12px', fontSize:12, fontWeight:700, cursor: generatingRoadmapMaterial ? 'not-allowed' : 'pointer' }}>
                             {generatingRoadmapMaterial ? '⏳ Generating...' : '🤖 Generate Draft dengan AI'}
                           </button>
                         </div>
