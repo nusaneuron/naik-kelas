@@ -3,23 +3,42 @@
   to   { transform: translateY(0);    opacity: 1; }
 }
 
-:root {
-  /* Naik Kelas Design Tokens */
-  --nk-bg-main: #be94f5;
-  --nk-bg-surface: #0f172a;
-  --nk-bg-elevated: #111827;
-  --nk-bg-card: #131e33;
+:root,
+:root[data-theme='dark'] {
+  /* Phase 1 — Dark sebagai tema default (light akan jadi override di phase 2) */
 
-  --nk-cta: #ff5734;
-  --nk-cta-hover: #e8431f;
-  --nk-accent: #fccc42;
-  --nk-purple: #be94f5;
+  /* Semantic theme tokens */
+  --theme-bg-base: #080d18;
+  --theme-bg-subtle: #0b1220;
+  --theme-surface: #0f172a;
+  --theme-elevated: #111827;
+  --theme-card: #131e33;
+  --theme-text: #e5e7eb;
+  --theme-muted: #94a3b8;
+  --theme-border: #1e2d45;
+
+  /* Brand / accent */
+  --theme-brand: #be94f5;
+  --theme-accent: #fccc42;
+  --theme-cta: #ff5734;
+  --theme-cta-hover: #e8431f;
+
+  /* Backward-compatible tokens (dipakai komponen existing) */
+  --nk-bg-main: var(--theme-brand);
+  --nk-bg-surface: var(--theme-surface);
+  --nk-bg-elevated: var(--theme-elevated);
+  --nk-bg-card: var(--theme-card);
+
+  --nk-cta: var(--theme-cta);
+  --nk-cta-hover: var(--theme-cta-hover);
+  --nk-accent: var(--theme-accent);
+  --nk-purple: var(--theme-brand);
   --nk-purple-dark: #9b6de0;
 
   --nk-ink: #151313;
-  --nk-text: #e5e7eb;
-  --nk-muted: #94a3b8;
-  --nk-border: #1e2d45;
+  --nk-text: var(--theme-text);
+  --nk-muted: var(--theme-muted);
+  --nk-border: var(--theme-border);
 
   --nk-success: #16a34a;
   --nk-warning: #f59e0b;
@@ -60,7 +79,7 @@ body {
     radial-gradient(ellipse 1200px 700px at 15% 5%, rgba(190, 148, 245, 0.18), transparent 60%),
     radial-gradient(ellipse 900px 500px at 85% 0%, rgba(252, 204, 66, 0.1), transparent 55%),
     radial-gradient(ellipse 600px 400px at 50% 100%, rgba(255, 87, 52, 0.07), transparent 60%),
-    linear-gradient(180deg, #080d18 0%, #0b1220 100%);
+    linear-gradient(180deg, var(--theme-bg-base) 0%, var(--theme-bg-subtle) 100%);
   color: var(--nk-text);
   font-family: 'Inter', Arial, sans-serif;
   min-height: 100vh;
