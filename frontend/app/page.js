@@ -2252,7 +2252,7 @@ export default function Page() {
           <h2 style={{ fontFamily: 'Poppins, sans-serif', margin: '0 0 8px', fontSize: 22, color: '#e5e7eb' }}>
             Naik Kelas
           </h2>
-          <p style={{ color: '#94a3b8', margin: '0 0 24px', fontSize: 14 }}>Memuat portal belajarmu...</p>
+          <p style={{ color: 'var(--nk-muted)', margin: '0 0 24px', fontSize: 14 }}>Memuat portal belajarmu...</p>
           <div className="nk-spinner" />
         </div>
       </main>
@@ -2276,7 +2276,7 @@ export default function Page() {
             <h1 style={{ fontFamily: 'Poppins, sans-serif', margin: '0 0 6px', fontSize: 28, color: '#fff' }}>
               Naik Kelas
             </h1>
-            <p style={{ color: '#94a3b8', margin: 0, fontSize: 14 }}>Portal Belajar Peserta</p>
+            <p style={{ color: 'var(--nk-muted)', margin: 0, fontSize: 14 }}>Portal Belajar Peserta</p>
             <div style={{ marginTop: 10 }}>
               <button type="button" onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} style={{
                 border: '1px solid #334155', background: 'rgba(15,23,42,0.5)', color: '#e2e8f0',
@@ -2296,12 +2296,12 @@ export default function Page() {
             backdropFilter: 'blur(12px)',
             boxShadow: '0 16px 40px rgba(0,0,0,0.4)'
           }}>
-            <p style={{ color: '#cbd5e1', margin: '0 0 20px', fontSize: 14, fontWeight: 500 }}>
+            <p style={{ color: 'var(--nk-text)', margin: '0 0 20px', fontSize: 14, fontWeight: 500 }}>
               Masuk dengan nomor HP &amp; password
             </p>
 
             <div style={{ marginBottom: 12 }}>
-              <label style={{ display: 'block', fontSize: 12, color: '#94a3b8', marginBottom: 6, fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
+              <label style={{ display: 'block', fontSize: 12, color: 'var(--nk-muted)', marginBottom: 6, fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
                 Nomor HP
               </label>
               <input
@@ -2313,7 +2313,7 @@ export default function Page() {
             </div>
 
             <div style={{ marginBottom: 20 }}>
-              <label style={{ display: 'block', fontSize: 12, color: '#94a3b8', marginBottom: 6, fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
+              <label style={{ display: 'block', fontSize: 12, color: 'var(--nk-muted)', marginBottom: 6, fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
                 Password
               </label>
               <div style={{ position: 'relative' }}>
@@ -2372,17 +2372,17 @@ export default function Page() {
       <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 16 }}>
         <div style={{ width: '100%', maxWidth: 680, border: '1px solid #1e2d45', borderRadius: 20, padding: 24, background: 'rgba(15,23,42,0.85)' }}>
           <h2 style={{ margin: '0 0 8px', color: '#fff' }}>Pilih Mode Masuk</h2>
-          <p style={{ margin: '0 0 18px', color: '#94a3b8', fontSize: 13 }}>Kamu bisa masuk cepat ke Catatan atau ke Portal Lengkap. Data catatan tetap sinkron di keduanya.</p>
+          <p style={{ margin: '0 0 18px', color: 'var(--nk-muted)', fontSize: 13 }}>Kamu bisa masuk cepat ke Catatan atau ke Portal Lengkap. Data catatan tetap sinkron di keduanya.</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <button onClick={async () => { setEntryMode('notes'); localStorage.setItem('nk_entry_mode', 'notes'); setParticipantSection('catatan'); await loadSection('catatan'); }}
-              style={{ border: '1px solid #334155', borderRadius: 14, padding: 16, background: '#0b1220', color: '#e2e8f0', textAlign: 'left', cursor: 'pointer' }}>
+              style={{ border: '1px solid #334155', borderRadius: 14, padding: 16, background: 'var(--theme-bg-subtle)', color: '#e2e8f0', textAlign: 'left', cursor: 'pointer' }}>
               <div style={{ fontWeight: 700, marginBottom: 4 }}>📝 Mode Catatan</div>
-              <div style={{ fontSize: 12, color: '#94a3b8' }}>Hanya fitur catatan (cepat, fokus).</div>
+              <div style={{ fontSize: 12, color: 'var(--nk-muted)' }}>Hanya fitur catatan (cepat, fokus).</div>
             </button>
             <button onClick={() => { setEntryMode('portal'); localStorage.setItem('nk_entry_mode', 'portal'); }}
-              style={{ border: '1px solid #334155', borderRadius: 14, padding: 16, background: '#0b1220', color: '#e2e8f0', textAlign: 'left', cursor: 'pointer' }}>
+              style={{ border: '1px solid #334155', borderRadius: 14, padding: 16, background: 'var(--theme-bg-subtle)', color: '#e2e8f0', textAlign: 'left', cursor: 'pointer' }}>
               <div style={{ fontWeight: 700, marginBottom: 4 }}>🎓 Portal Lengkap</div>
-              <div style={{ fontSize: 12, color: '#94a3b8' }}>Semua fitur Naik Kelas.</div>
+              <div style={{ fontSize: 12, color: 'var(--nk-muted)' }}>Semua fitur Naik Kelas.</div>
             </button>
           </div>
         </div>
@@ -2504,7 +2504,7 @@ export default function Page() {
                   padding: '9px 12px', borderRadius: 10, cursor: 'pointer',
                   border: participantSection === key ? '1px solid rgba(190,148,245,0.3)' : '1px solid transparent',
                   background: participantSection === key ? 'rgba(190,148,245,0.12)' : 'transparent',
-                  color: participantSection === key ? '#be94f5' : '#94a3b8',
+                  color: participantSection === key ? '#be94f5' : 'var(--nk-muted)',
                   fontWeight: participantSection === key ? 700 : 500,
                   fontSize: 13, textAlign: 'left', transition: 'all 160ms ease', width: '100%'
                 }}>
@@ -2523,7 +2523,7 @@ export default function Page() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14, marginBottom: 14 }}>
 
               <div className="nk-stat-card purple">
-                <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 10 }}>👤 Profil</div>
+                <div style={{ fontSize: 11, color: 'var(--nk-muted)', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 10 }}>👤 Profil</div>
                 {editingName ? (
                   <div style={{ marginBottom: 8 }}>
                     <input autoFocus value={editNameVal} onChange={e => setEditNameVal(e.target.value)}
@@ -2544,7 +2544,7 @@ export default function Page() {
                       }} style={{ flex: 1, padding: '5px 0', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                         {editNameLoading ? 'Menyimpan...' : '💾 Simpan'}
                       </button>
-                      <button onClick={() => setEditingName(false)} style={{ flex: 1, padding: '5px 0', background: 'transparent', color: '#94a3b8', border: '1px solid #1e2d45', borderRadius: 7, cursor: 'pointer', fontSize: 12 }}>Batal</button>
+                      <button onClick={() => setEditingName(false)} style={{ flex: 1, padding: '5px 0', background: 'transparent', color: 'var(--nk-muted)', border: '1px solid #1e2d45', borderRadius: 7, cursor: 'pointer', fontSize: 12 }}>Batal</button>
                     </div>
                   </div>
                 ) : (
@@ -2554,7 +2554,7 @@ export default function Page() {
                       style={{ background: 'none', border: '1px solid #1e3a5f', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', fontSize: 11, color: '#64748b' }}>✏️ Edit</button>
                   </div>
                 )}
-                <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 2 }}>{profile?.email || '-'}</div>
+                <div style={{ fontSize: 13, color: 'var(--nk-muted)', marginBottom: 2 }}>{profile?.email || '-'}</div>
                 <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <span className="nk-badge nk-badge-purple">Lv. {profile?.level || 1}</span>
                   <span className="nk-badge nk-badge-yellow">⭐ {profile?.exp || 0} EXP</span>
@@ -2575,46 +2575,46 @@ export default function Page() {
               </div>
 
               <div className="nk-stat-card orange">
-                <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 10 }}>🌟 Saldo Poin</div>
+                <div style={{ fontSize: 11, color: 'var(--nk-muted)', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 10 }}>🌟 Saldo Poin</div>
                 <div style={{ fontSize: 38, fontWeight: 800, fontFamily: 'Poppins, sans-serif', color: '#ff7a5c', lineHeight: 1 }}>{myPoints}</div>
-                <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 6 }}>poin tersedia</div>
+                <div style={{ fontSize: 13, color: 'var(--nk-muted)', marginTop: 6 }}>poin tersedia</div>
               </div>
 
               <div className="nk-stat-card blue">
-                <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 10 }}>🪙 Saldo Credit AI</div>
+                <div style={{ fontSize: 11, color: 'var(--nk-muted)', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 10 }}>🪙 Saldo Credit AI</div>
                 <div style={{ fontSize: 38, fontWeight: 800, fontFamily: 'Poppins, sans-serif', color: '#38bdf8', lineHeight: 1 }}>{Number(myAICredit?.credits || 0).toFixed(2)}</div>
-                <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 6 }}>credit tersedia</div>
+                <div style={{ fontSize: 13, color: 'var(--nk-muted)', marginTop: 6 }}>credit tersedia</div>
                 <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>≈ {myAICredit?.tokens_remaining || 0} token (1 credit = {myAICredit?.tokens_per_credit || 1000} token)</div>
               </div>
 
               <div className="nk-stat-card yellow">
-                <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 10 }}>📅 Jadwal Belajar</div>
+                <div style={{ fontSize: 11, color: 'var(--nk-muted)', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 10 }}>📅 Jadwal Belajar</div>
                 {myReminder?.active ? (
                   <>
                     <div style={{ fontWeight: 700, fontSize: 16 }}>Jam {myReminder.time_of_day}</div>
-                    <div style={{ fontSize: 13, color: '#94a3b8' }}>{myReminder.timezone}</div>
+                    <div style={{ fontSize: 13, color: 'var(--nk-muted)' }}>{myReminder.timezone}</div>
                     <span className="nk-badge nk-badge-green" style={{ marginTop: 10 }}>● Aktif</span>
                   </>
                 ) : (
                   <>
-                    <div style={{ fontSize: 14, color: '#94a3b8', marginBottom: 8 }}>Belum diatur</div>
-                    <div style={{ fontSize: 13, color: '#94a3b8' }}>Atur via bot: <b style={{ color: '#fccc42' }}>/jadwal_belajar</b></div>
+                    <div style={{ fontSize: 14, color: 'var(--nk-muted)', marginBottom: 8 }}>Belum diatur</div>
+                    <div style={{ fontSize: 13, color: 'var(--nk-muted)' }}>Atur via bot: <b style={{ color: '#fccc42' }}>/jadwal_belajar</b></div>
                   </>
                 )}
               </div>
 
               <div className="nk-stat-card purple">
-                <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 10 }}>📔 Jadwal Refleksi</div>
+                <div style={{ fontSize: 11, color: 'var(--nk-muted)', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 10 }}>📔 Jadwal Refleksi</div>
                 {reflectionReminderTime ? (
                   <>
                     <div style={{ fontWeight: 700, fontSize: 16 }}>Jam {reflectionReminderTime}</div>
-                    <div style={{ fontSize: 13, color: '#94a3b8' }}>WIB</div>
+                    <div style={{ fontSize: 13, color: 'var(--nk-muted)' }}>WIB</div>
                     <span className="nk-badge nk-badge-green" style={{ marginTop: 10 }}>● Aktif</span>
                   </>
                 ) : (
                   <>
-                    <div style={{ fontSize: 14, color: '#94a3b8', marginBottom: 8 }}>Belum diatur</div>
-                    <div style={{ fontSize: 13, color: '#94a3b8' }}>Atur via bot: <b style={{ color: '#a78bfa' }}>/jadwal_refleksi</b></div>
+                    <div style={{ fontSize: 14, color: 'var(--nk-muted)', marginBottom: 8 }}>Belum diatur</div>
+                    <div style={{ fontSize: 13, color: 'var(--nk-muted)' }}>Atur via bot: <b style={{ color: '#a78bfa' }}>/jadwal_refleksi</b></div>
                   </>
                 )}
               </div>
@@ -2646,15 +2646,15 @@ export default function Page() {
                     <p style={{ color: '#64748b', fontSize: 13, margin: '0 0 16px' }}>Kamu punya <b style={{ color: '#a78bfa' }}>{myBadges.length} badge</b> 🎉</p>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 14 }}>
                       {myBadges.map((b, i) => (
-                        <div key={i} style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 14, padding: 16, textAlign: 'center', transition: 'all 0.2s', cursor: 'default' }}
+                        <div key={i} style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 14, padding: 16, textAlign: 'center', transition: 'all 0.2s', cursor: 'default' }}
                           onMouseEnter={e => { e.currentTarget.style.borderColor='#7c3aed'; e.currentTarget.style.transform='translateY(-2px)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.borderColor='#1e2d45'; e.currentTarget.style.transform='none'; }}>
+                          onMouseLeave={e => { e.currentTarget.style.borderColor='var(--nk-border)'; e.currentTarget.style.transform='none'; }}>
                           {b.icon_url
                             ? <img src={b.icon_url} alt={b.name} style={{ width: 64, height: 64, borderRadius: 10, objectFit: 'cover', marginBottom: 10 }} onError={e => { e.target.style.display='none'; e.target.insertAdjacentHTML('afterend','<span style="font-size:48px;display:block;margin-bottom:10px">🎖️</span>'); }} />
                             : <span style={{ fontSize: 48, display: 'block', marginBottom: 10 }}>🎖️</span>}
                           <div style={{ fontWeight: 700, fontSize: 13, color: '#e2e8f0', marginBottom: 4 }}>{b.name}</div>
                           {b.description && <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6, lineHeight: 1.4 }}>{b.description}</div>}
-                          {b.note && <div style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic', marginBottom: 6 }}>📝 {b.note}</div>}
+                          {b.note && <div style={{ fontSize: 11, color: 'var(--nk-muted)', fontStyle: 'italic', marginBottom: 6 }}>📝 {b.note}</div>}
                           <span className={`nk-badge ${b.badge_type === 'auto' ? 'nk-badge-blue' : 'nk-badge-purple'}`} style={{ fontSize: 10 }}>
                             {b.badge_type === 'auto' ? '⚡ Otomatis' : '🏅 Manual'}
                           </span>
@@ -2682,9 +2682,9 @@ export default function Page() {
                     <tbody>{myPointHistory.slice(0, 50).map((p, i) => (
                       <tr key={i}>
                         <td><span className={`nk-badge ${p.delta > 0 ? 'nk-badge-green' : 'nk-badge-red'}`}>{p.delta > 0 ? `+${p.delta}` : p.delta}</span></td>
-                        <td style={{ color: '#cbd5e1' }}>{p.reason}</td>
+                        <td style={{ color: 'var(--nk-text)' }}>{p.reason}</td>
                         <td><span className="nk-badge nk-badge-purple">{p.type}</span></td>
-                        <td style={{ color: '#94a3b8', fontSize: 13 }}>{new Date(p.created_at).toLocaleString('id-ID')}</td>
+                        <td style={{ color: 'var(--nk-muted)', fontSize: 13 }}>{new Date(p.created_at).toLocaleString('id-ID')}</td>
                       </tr>
                     ))}</tbody>
                   </table>
@@ -2705,7 +2705,7 @@ export default function Page() {
                     <tbody>{leaderboard.map((it) => (
                       <tr key={it.rank}>
                         <td>
-                          <span style={{ fontWeight: 700, color: it.rank === 1 ? '#fccc42' : it.rank === 2 ? '#94a3b8' : it.rank === 3 ? '#cd7c3c' : '#e5e7eb' }}>
+                          <span style={{ fontWeight: 700, color: it.rank === 1 ? '#fccc42' : it.rank === 2 ? 'var(--nk-muted)' : it.rank === 3 ? '#cd7c3c' : '#e5e7eb' }}>
                             {it.rank === 1 ? '🥇' : it.rank === 2 ? '🥈' : it.rank === 3 ? '🥉' : `#${it.rank}`}
                           </span>
                         </td>
@@ -2720,7 +2720,7 @@ export default function Page() {
                             {(!it.badges || it.badges.length === 0) && <span style={{ color: '#334155', fontSize: 12 }}>—</span>}
                           </div>
                         </td>
-                        <td style={{ color: '#94a3b8' }}>@{it.telegram}</td>
+                        <td style={{ color: 'var(--nk-muted)' }}>@{it.telegram}</td>
                         <td><span className="nk-badge nk-badge-orange">⚡ {it.best_seconds}s</span></td>
                         <td><span className="nk-badge nk-badge-purple">{it.perfect_count}x</span></td>
                       </tr>
@@ -2834,7 +2834,7 @@ export default function Page() {
                         ['reflection', '📔 Refleksi Diri'],
                       ].map(([k, label]) => (
                         <button key={k} onClick={() => setNoteListMode(k)}
-                          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid', borderColor: noteListMode === k ? '#7c3aed' : '#1e2d45', background: noteListMode === k ? 'rgba(124,58,237,0.18)' : 'transparent', color: noteListMode === k ? '#c4b5fd' : '#64748b', cursor: 'pointer', fontSize: 12 }}>
+                          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid', borderColor: noteListMode === k ? '#7c3aed' : 'var(--nk-border)', background: noteListMode === k ? 'rgba(124,58,237,0.18)' : 'transparent', color: noteListMode === k ? '#c4b5fd' : '#64748b', cursor: 'pointer', fontSize: 12 }}>
                           {label}
                         </button>
                       ))}
@@ -2848,12 +2848,12 @@ export default function Page() {
                 {notesAllTags.length > 0 && (
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
                     <button onClick={() => { setNotesTagFilter(''); refreshNotes(''); }}
-                      style={{ padding: '3px 10px', borderRadius: 20, border: '1px solid', borderColor: !notesTagFilter ? '#3b82f6' : '#1e2d45', background: !notesTagFilter ? '#1e3a5f' : 'transparent', color: !notesTagFilter ? '#93c5fd' : '#64748b', fontSize: 12, cursor: 'pointer' }}>
+                      style={{ padding: '3px 10px', borderRadius: 20, border: '1px solid', borderColor: !notesTagFilter ? '#3b82f6' : 'var(--nk-border)', background: !notesTagFilter ? '#1e3a5f' : 'transparent', color: !notesTagFilter ? '#93c5fd' : '#64748b', fontSize: 12, cursor: 'pointer' }}>
                       Semua
                     </button>
                     {notesAllTags.map(t => (
                       <button key={t} onClick={() => { setNotesTagFilter(t); refreshNotes(t); }}
-                        style={{ padding: '3px 10px', borderRadius: 20, border: '1px solid', borderColor: notesTagFilter === t ? '#a78bfa' : '#1e2d45', background: notesTagFilter === t ? 'rgba(167,139,250,0.15)' : 'transparent', color: notesTagFilter === t ? '#a78bfa' : '#64748b', fontSize: 12, cursor: 'pointer' }}>
+                        style={{ padding: '3px 10px', borderRadius: 20, border: '1px solid', borderColor: notesTagFilter === t ? '#a78bfa' : 'var(--nk-border)', background: notesTagFilter === t ? 'rgba(167,139,250,0.15)' : 'transparent', color: notesTagFilter === t ? '#a78bfa' : '#64748b', fontSize: 12, cursor: 'pointer' }}>
                         #{t}
                       </button>
                     ))}
@@ -2862,9 +2862,9 @@ export default function Page() {
 
                 {/* Refleksi Harian (di Catatan) */}
                 {noteView === 'list' && (noteListMode === 'all' || noteListMode === 'reflection') && (
-                <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 12, marginBottom: 12 }}>
+                <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 12, marginBottom: 12 }}>
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 8, gap: 8, flexWrap:'wrap' }}>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: '#cbd5e1' }}>📔 Refleksi Harian</div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--nk-text)' }}>📔 Refleksi Harian</div>
                     <button onClick={() => setShowReflectionEditor(true)}
                       style={{ padding:'6px 12px', borderRadius:8, border:'none', background:'#7c3aed', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer' }}>
                       ➕ Buat Refleksi
@@ -2876,13 +2876,13 @@ export default function Page() {
                       {myReflections.slice(0, 5).map(r => (
                         <div key={r.id} style={{ background:'#080d18', border:'1px solid #1e2d45', borderRadius:8, padding:'8px 10px' }}>
                           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:4 }}>
-                            <div style={{ fontSize:11, color:'#94a3b8' }}>📅 {new Date(r.reflected_date + 'T00:00:00').toLocaleDateString('id-ID')}</div>
+                            <div style={{ fontSize:11, color:'var(--nk-muted)' }}>📅 {new Date(r.reflected_date + 'T00:00:00').toLocaleDateString('id-ID')}</div>
                             <button onClick={() => deleteReflection(r.id)} disabled={reflectionDeletingId === r.id}
                               style={{ background:'transparent', border:'1px solid #7f1d1d', color:'#fca5a5', borderRadius:6, fontSize:11, padding:'2px 7px', cursor:'pointer' }}>
                               {reflectionDeletingId === r.id ? '⏳' : '🗑 Hapus'}
                             </button>
                           </div>
-                          <div style={{ fontSize:12, color:'#cbd5e1', lineHeight:1.5, whiteSpace:'pre-wrap' }}>{(r.content || '').slice(0, 140)}{(r.content || '').length > 140 ? '...' : ''}</div>
+                          <div style={{ fontSize:12, color:'var(--nk-text)', lineHeight:1.5, whiteSpace:'pre-wrap' }}>{(r.content || '').slice(0, 140)}{(r.content || '').length > 140 ? '...' : ''}</div>
                         </div>
                       ))}
                     </div>
@@ -2908,7 +2908,7 @@ export default function Page() {
                           <div style={{ display: 'grid', gap: 6 }}>
                             {permanent.map(n => (
                               <div key={n.id} onClick={() => loadNoteDetail(n.id)}
-                                style={{ background: '#0f172a', border: `1px solid ${activeNote?.id === n.id ? '#3b82f6' : '#1e2d45'}`, borderRadius: 10, padding: '11px 14px', cursor: 'pointer' }}>
+                                style={{ background: 'var(--theme-elevated)', border: `1px solid ${activeNote?.id === n.id ? '#3b82f6' : 'var(--nk-border)'}`, borderRadius: 10, padding: '11px 14px', cursor: 'pointer' }}>
                                 <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{n.title}</div>
                                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                                   {n.tags.map(t => <span key={t} style={{ fontSize: 11, color: '#a78bfa', background: 'rgba(167,139,250,0.1)', padding: '1px 7px', borderRadius: 10 }}>#{t}</span>)}
@@ -2962,7 +2962,7 @@ export default function Page() {
 
                 {/* EDITOR VIEW */}
                 {noteView === 'editor' && (
-                  <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, overflow: 'hidden' }}>
+                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, overflow: 'hidden' }}>
                     {/* Header editor */}
                     <div style={{ display: 'flex', gap: 8, padding: '10px 12px', borderBottom: '1px solid #1e2d45', alignItems: 'center', flexWrap: 'wrap' }}>
                       <button onClick={() => setNoteView('list')} style={{ color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, padding: 0 }}>←</button>
@@ -2982,7 +2982,7 @@ export default function Page() {
                       {activeNote?.id && !noteEditing && (
                         <>
                           <button onClick={() => setNoteEditing(true)}
-                            style={{ padding: '5px 12px', background: 'transparent', color: '#94a3b8', border: '1px solid #1e2d45', borderRadius: 7, cursor: 'pointer', fontSize: 12 }}>✏️ Edit</button>
+                            style={{ padding: '5px 12px', background: 'transparent', color: 'var(--nk-muted)', border: '1px solid #1e2d45', borderRadius: 7, cursor: 'pointer', fontSize: 12 }}>✏️ Edit</button>
                           {activeNote?.note_type !== 'fleeting' && (
                             <button onClick={() => openContributeModal(activeNote)}
                               style={{ padding: '5px 12px', background: 'rgba(139,92,246,0.15)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
@@ -3234,7 +3234,7 @@ export default function Page() {
 
                     <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
                       <div style={{ fontWeight:700, marginBottom:6 }}>Graph Materi (Backlink)</div>
-                      <div style={{ fontSize:12, color:'#94a3b8', marginBottom:8 }}>Silakan klik node jika ingin melihat detail materi.</div>
+                      <div style={{ fontSize:12, color:'var(--nk-muted)', marginBottom:8 }}>Silakan klik node jika ingin melihat detail materi.</div>
                       {(() => { const g = parseRoadmapGraph(participantRoadmapGraph); return g.error ? <div className="nk-empty" style={{ margin:0 }}>{g.error}</div> : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={openParticipantRoadmapMaterial} />; })()}
                       {participantUnknownBacklinks.length > 0 && (
                         <div className="nk-empty" style={{ marginTop:8, color:'#fbbf24' }}>⚠️ Referensi belum ditemukan: {participantUnknownBacklinks.slice(0,8).join(', ')}{participantUnknownBacklinks.length > 8 ? ` (+${participantUnknownBacklinks.length - 8})` : ''}</div>
@@ -3249,11 +3249,11 @@ export default function Page() {
                       </div>
                       {participantRagAnswer && (
                         <div style={{ marginTop:10, border:'1px solid #243246', borderRadius:8, padding:10 }}>
-                          <div style={{ color:'#cbd5e1', lineHeight:1.7, fontSize:14 }}
+                          <div style={{ color:'var(--nk-text)', lineHeight:1.7, fontSize:14 }}
                             dangerouslySetInnerHTML={{ __html: renderMD(participantRagAnswer || '') }} />
                           {participantRagSources.length > 0 && (
                             <div style={{ marginTop:10, paddingTop:8, borderTop:'1px solid #1e2d45' }}>
-                              <div style={{ fontSize:11, color:'#94a3b8', marginBottom:6, textTransform:'uppercase', letterSpacing:'0.4px' }}>Sumber Referensi</div>
+                              <div style={{ fontSize:11, color:'var(--nk-muted)', marginBottom:6, textTransform:'uppercase', letterSpacing:'0.4px' }}>Sumber Referensi</div>
                               <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
                                 {participantRagSources.map((s, i) => (
                                   <button key={i} onClick={() => s.material_id && openParticipantRoadmapMaterial(s.material_id)}
@@ -3284,7 +3284,7 @@ export default function Page() {
                         </div>
                         <div style={{ fontSize:16, fontWeight:700, marginBottom:8 }}>{participantRoadmapMaterialDetail.title}</div>
                         <div style={{
-                          color:'#cbd5e1',
+                          color:'var(--nk-text)',
                           lineHeight: 1.7,
                           fontSize: 14,
                         }}
@@ -3308,16 +3308,16 @@ export default function Page() {
               {quizFlow.phase === 'idle' && (
                 <div style={{ display:'grid', gap:12 }}>
                   <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))', gap:10 }}>
-                    <div style={{ border:'1px solid #1e2d45', borderRadius:12, padding:12, background:'#0f172a' }}>
-                      <div style={{ fontSize:12, color:'#94a3b8', marginBottom:8 }}>Mulai Quiz per kategori</div>
+                    <div style={{ border:'1px solid #1e2d45', borderRadius:12, padding:12, background:'var(--theme-elevated)' }}>
+                      <div style={{ fontSize:12, color:'var(--nk-muted)', marginBottom:8 }}>Mulai Quiz per kategori</div>
                       <select className="nk-input-sm" value={quizFlow.categoryId} onChange={e => setQuizFlow(f => ({ ...f, categoryId: e.target.value }))}>
                         <option value="">Pilih kategori quiz</option>
                         {quizCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
                       <button onClick={() => startQuizFlow('quiz')} disabled={quizFlow.loading} style={{ marginTop:10, width:'100%', padding:'9px 12px', borderRadius:9, border:'none', background:'#2563eb', color:'#fff', fontWeight:700, cursor:'pointer' }}>Mulai Quiz</button>
                     </div>
-                    <div style={{ border:'1px solid #1e2d45', borderRadius:12, padding:12, background:'#0f172a' }}>
-                      <div style={{ fontSize:12, color:'#94a3b8', marginBottom:8 }}>Mulai Tryout (acak dari config aktif)</div>
+                    <div style={{ border:'1px solid #1e2d45', borderRadius:12, padding:12, background:'var(--theme-elevated)' }}>
+                      <div style={{ fontSize:12, color:'var(--nk-muted)', marginBottom:8 }}>Mulai Tryout (acak dari config aktif)</div>
                       <button onClick={() => startQuizFlow('tryout')} disabled={quizFlow.loading} style={{ width:'100%', padding:'9px 12px', borderRadius:9, border:'none', background:'#7c3aed', color:'#fff', fontWeight:700, cursor:'pointer' }}>Mulai Tryout</button>
                     </div>
                   </div>
@@ -3330,23 +3330,23 @@ export default function Page() {
                 const ans = quizFlow.answers[q.id] || '';
                 const isLast = quizFlow.current === quizFlow.questions.length - 1;
                 return (
-                  <div style={{ border:'1px solid #1e2d45', borderRadius:12, padding:14, background:'#0f172a' }}>
+                  <div style={{ border:'1px solid #1e2d45', borderRadius:12, padding:14, background:'var(--theme-elevated)' }}>
                     <div style={{ display:'flex', justifyContent:'space-between', gap:8, marginBottom:10, flexWrap:'wrap' }}>
-                      <div style={{ fontSize:12, color:'#94a3b8' }}>{quizFlow.mode === 'quiz' ? `Quiz • ${quizFlow.categoryName || '-'}` : 'Tryout'}</div>
-                      <div style={{ fontSize:12, color:'#94a3b8' }}>Soal {quizFlow.current + 1}/{quizFlow.questions.length}</div>
+                      <div style={{ fontSize:12, color:'var(--nk-muted)' }}>{quizFlow.mode === 'quiz' ? `Quiz • ${quizFlow.categoryName || '-'}` : 'Tryout'}</div>
+                      <div style={{ fontSize:12, color:'var(--nk-muted)' }}>Soal {quizFlow.current + 1}/{quizFlow.questions.length}</div>
                     </div>
                     <div style={{ fontWeight:700, marginBottom:10 }}>{q.question}</div>
                     <div style={{ display:'grid', gap:8 }}>
                       {[
                         ['A', q.option_a], ['B', q.option_b], ['C', q.option_c], ['D', q.option_d]
                       ].map(([key, val]) => (
-                        <button key={key} onClick={() => answerCurrent(key)} style={{ textAlign:'left', padding:'10px 12px', borderRadius:10, border:`1px solid ${ans===key ? '#3b82f6' : '#1e2d45'}`, background: ans===key ? 'rgba(59,130,246,0.16)' : '#0b1220', color:'#e2e8f0', cursor:'pointer' }}>
+                        <button key={key} onClick={() => answerCurrent(key)} style={{ textAlign:'left', padding:'10px 12px', borderRadius:10, border:`1px solid ${ans===key ? '#3b82f6' : 'var(--nk-border)'}`, background: ans===key ? 'rgba(59,130,246,0.16)' : 'var(--theme-bg-subtle)', color:'#e2e8f0', cursor:'pointer' }}>
                           <b>{key}.</b> {val}
                         </button>
                       ))}
                     </div>
                     <div style={{ display:'flex', justifyContent:'space-between', marginTop:12 }}>
-                      <button onClick={() => setQuizFlow(f => ({ ...f, current: Math.max(0, f.current - 1) }))} disabled={quizFlow.current===0} style={{ padding:'8px 12px', borderRadius:8, border:'1px solid #334155', background:'transparent', color:'#cbd5e1', cursor:'pointer' }}>← Sebelumnya</button>
+                      <button onClick={() => setQuizFlow(f => ({ ...f, current: Math.max(0, f.current - 1) }))} disabled={quizFlow.current===0} style={{ padding:'8px 12px', borderRadius:8, border:'1px solid #334155', background:'transparent', color:'var(--nk-text)', cursor:'pointer' }}>← Sebelumnya</button>
                       {!isLast ? (
                         <button onClick={() => setQuizFlow(f => ({ ...f, current: Math.min(f.questions.length - 1, f.current + 1) }))} style={{ padding:'8px 12px', borderRadius:8, border:'none', background:'#2563eb', color:'#fff', cursor:'pointer', fontWeight:700 }}>Next →</button>
                       ) : (
@@ -3362,13 +3362,13 @@ export default function Page() {
                 if (!rv) return null;
                 const isLast = quizFlow.reviewIndex === (quizFlow.result.reviews.length - 1);
                 return (
-                  <div style={{ border:'1px solid #1e2d45', borderRadius:12, padding:14, background:'#0f172a' }}>
+                  <div style={{ border:'1px solid #1e2d45', borderRadius:12, padding:14, background:'var(--theme-elevated)' }}>
                     <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
-                      <div style={{ fontSize:12, color:'#94a3b8' }}>Pembahasan {quizFlow.reviewIndex + 1}/{quizFlow.result.reviews.length}</div>
+                      <div style={{ fontSize:12, color:'var(--nk-muted)' }}>Pembahasan {quizFlow.reviewIndex + 1}/{quizFlow.result.reviews.length}</div>
                       <span className={`nk-badge ${rv.is_correct ? 'nk-badge-green' : 'nk-badge-red'}`}>{rv.is_correct ? 'Benar' : 'Salah'}</span>
                     </div>
                     <div style={{ fontWeight:700, marginBottom:8 }}>{rv.question}</div>
-                    <div style={{ fontSize:13, color:'#cbd5e1', marginBottom:6 }}>
+                    <div style={{ fontSize:13, color:'var(--nk-text)', marginBottom:6 }}>
                       Jawabanmu: <b>{rv.your_answer || '-'}</b>
                       {rv.your_answer === 'A' && rv.option_a ? ` (${rv.option_a})` : ''}
                       {rv.your_answer === 'B' && rv.option_b ? ` (${rv.option_b})` : ''}
@@ -3380,9 +3380,9 @@ export default function Page() {
                       {rv.correct_answer === 'C' && rv.option_c ? ` (${rv.option_c})` : ''}
                       {rv.correct_answer === 'D' && rv.option_d ? ` (${rv.option_d})` : ''}
                     </div>
-                    <div style={{ fontSize:13, color:'#94a3b8', marginBottom:12 }}>{rv.explanation}</div>
+                    <div style={{ fontSize:13, color:'var(--nk-muted)', marginBottom:12 }}>{rv.explanation}</div>
                     <div style={{ display:'flex', justifyContent:'space-between' }}>
-                      <button onClick={() => setQuizFlow(f => ({ ...f, reviewIndex: Math.max(0, f.reviewIndex - 1) }))} disabled={quizFlow.reviewIndex===0} style={{ padding:'8px 12px', borderRadius:8, border:'1px solid #334155', background:'transparent', color:'#cbd5e1', cursor:'pointer' }}>← Sebelumnya</button>
+                      <button onClick={() => setQuizFlow(f => ({ ...f, reviewIndex: Math.max(0, f.reviewIndex - 1) }))} disabled={quizFlow.reviewIndex===0} style={{ padding:'8px 12px', borderRadius:8, border:'1px solid #334155', background:'transparent', color:'var(--nk-text)', cursor:'pointer' }}>← Sebelumnya</button>
                       {!isLast ? (
                         <button onClick={() => setQuizFlow(f => ({ ...f, reviewIndex: Math.min(f.result.reviews.length - 1, f.reviewIndex + 1) }))} style={{ padding:'8px 12px', borderRadius:8, border:'none', background:'#2563eb', color:'#fff', cursor:'pointer', fontWeight:700 }}>Next →</button>
                       ) : (
@@ -3394,7 +3394,7 @@ export default function Page() {
               })()}
 
               {quizFlow.phase === 'result' && quizFlow.result && (
-                <div style={{ border:'1px solid #1e2d45', borderRadius:12, padding:14, background:'#0f172a' }}>
+                <div style={{ border:'1px solid #1e2d45', borderRadius:12, padding:14, background:'var(--theme-elevated)' }}>
                   <div style={{ fontSize:18, fontWeight:800, marginBottom:8 }}>Hasil {quizFlow.mode === 'quiz' ? 'Quiz' : 'Tryout'}</div>
                   <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:10 }}>
                     <span className="nk-badge nk-badge-purple">Benar: {quizFlow.result.correct_count}/{quizFlow.result.total}</span>
@@ -3415,7 +3415,7 @@ export default function Page() {
                       <tbody>{(history.quiz || []).map((q, i) => (
                         <tr key={i}>
                           <td style={{ fontWeight: 600 }}>{q.category}</td>
-                          <td style={{ color: '#94a3b8' }}>#{q.attempt_no}</td>
+                          <td style={{ color: 'var(--nk-muted)' }}>#{q.attempt_no}</td>
                           <td style={{ color: q.wrong_count > 0 ? '#f87171' : '#4ade80' }}>{q.wrong_count}</td>
                           <td>{q.total_questions}</td>
                           <td><span className={`nk-badge ${q.all_correct ? 'nk-badge-green' : 'nk-badge-yellow'}`}>{q.all_correct ? '✓ LULUS' : '○ BELUM'}</span></td>
@@ -3435,7 +3435,7 @@ export default function Page() {
                         <tr key={i}>
                           <td style={{ fontWeight: 600 }}>{t.correct_count}</td>
                           <td>{t.total_questions}</td>
-                          <td style={{ color: '#94a3b8' }}>{t.duration_seconds}s</td>
+                          <td style={{ color: 'var(--nk-muted)' }}>{t.duration_seconds}s</td>
                           <td><span className="nk-badge nk-badge-orange">{Number(t.speed_qpm || 0).toFixed(2)} qpm</span></td>
                           <td><span className={`nk-badge ${t.all_correct ? 'nk-badge-green' : 'nk-badge-yellow'}`}>{t.all_correct ? '⭐ PERFECT' : '○ BELUM'}</span></td>
                         </tr>
@@ -3459,7 +3459,7 @@ export default function Page() {
                   const pct = total ? Math.round(done/total*100) : 0;
                   return total > 0 ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 100, height: 6, background: '#1e2d45', borderRadius: 99, overflow: 'hidden' }}>
+                      <div style={{ width: 100, height: 6, background: 'var(--nk-border)', borderRadius: 99, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${pct}%`, background: pct===100?'#22c55e':'#be94f5', borderRadius: 99, transition: 'width 0.4s' }} />
                       </div>
                       <span style={{ fontSize: 12, color: '#64748b' }}>{done}/{total} selesai ({pct}%)</span>
@@ -3485,7 +3485,7 @@ export default function Page() {
                   const catIsOpen = ci === 0 ? (openCats[catName] !== false) : !!openCats[catName];
 
                   return (
-                    <div key={catName} style={{ background: '#0f172a', border: `1px solid ${pct===100?'rgba(34,197,94,0.3)':'#1e2d45'}`, borderRadius: 14, marginBottom: 10, overflow: 'hidden' }}>
+                    <div key={catName} style={{ background: 'var(--theme-elevated)', border: `1px solid ${pct===100?'rgba(34,197,94,0.3)':'var(--nk-border)'}`, borderRadius: 14, marginBottom: 10, overflow: 'hidden' }}>
                       {/* Header kategori — klik untuk buka/tutup */}
                       <button onClick={() => setOpenCats(prev => ({...prev, [catName]: !catIsOpen}))}
                         style={{ width: '100%', background: 'none', border: 'none', padding: '14px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left' }}>
@@ -3500,7 +3500,7 @@ export default function Page() {
                             </div>
                           </div>
                           {/* Mini progress bar */}
-                          <div style={{ height: 4, background: '#1e2d45', borderRadius: 99, overflow: 'hidden' }}>
+                          <div style={{ height: 4, background: 'var(--nk-border)', borderRadius: 99, overflow: 'hidden' }}>
                             <div style={{ height: '100%', width: `${pct}%`, background: pct===100?'#22c55e':'#be94f5', borderRadius: 99, transition: 'width 0.4s' }} />
                           </div>
                         </div>
@@ -3574,13 +3574,13 @@ export default function Page() {
                     const canClaim = myPoints >= it.point_cost && it.stock !== 0;
                     return (
                       <div key={it.id} style={{
-                        border: `1px solid ${canClaim ? 'rgba(255,87,52,0.25)' : '#1e2d45'}`,
-                        borderRadius: 14, padding: 16, background: '#0f172a',
+                        border: `1px solid ${canClaim ? 'rgba(255,87,52,0.25)' : 'var(--nk-border)'}`,
+                        borderRadius: 14, padding: 16, background: 'var(--theme-elevated)',
                         display: 'flex', flexDirection: 'column', gap: 8
                       }}>
                         <div style={{ fontSize: 28 }}>🎁</div>
                         <div style={{ fontWeight: 700, fontSize: 15 }}>{it.name}</div>
-                        {it.description && <div style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.5 }}>{it.description}</div>}
+                        {it.description && <div style={{ fontSize: 13, color: 'var(--nk-muted)', lineHeight: 1.5 }}>{it.description}</div>}
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
                           <span className="nk-badge nk-badge-orange">💰 {it.point_cost} poin</span>
                           <span className={`nk-badge ${it.stock === -1 ? 'nk-badge-green' : it.stock > 0 ? 'nk-badge-yellow' : 'nk-badge-red'}`}>
@@ -3592,7 +3592,7 @@ export default function Page() {
                           onClick={() => claimRedeem(it.id)}
                           style={{
                             marginTop: 8, border: 0, borderRadius: 10, padding: '9px 0',
-                            background: canClaim ? 'linear-gradient(135deg,#ff5734,#e8431f)' : '#1e2d45',
+                            background: canClaim ? 'linear-gradient(135deg,#ff5734,#e8431f)' : 'var(--nk-border)',
                             color: canClaim ? 'white' : '#475569',
                             fontWeight: 700, fontSize: 13, cursor: canClaim ? 'pointer' : 'not-allowed',
                             boxShadow: canClaim ? '0 4px 12px rgba(255,87,52,0.3)' : 'none',
@@ -3623,8 +3623,8 @@ export default function Page() {
                             {c.status === 'approved' ? '✓ Disetujui' : c.status === 'rejected' ? '✗ Ditolak' : '⏳ Pending'}
                           </span>
                         </td>
-                        <td style={{ color: '#94a3b8', fontSize: 13 }}>{c.note || '-'}</td>
-                        <td style={{ color: '#94a3b8', fontSize: 13 }}>{new Date(c.claimed_at).toLocaleString('id-ID')}</td>
+                        <td style={{ color: 'var(--nk-muted)', fontSize: 13 }}>{c.note || '-'}</td>
+                        <td style={{ color: 'var(--nk-muted)', fontSize: 13 }}>{new Date(c.claimed_at).toLocaleString('id-ID')}</td>
                       </tr>
                     ))}</tbody>
                   </table>
@@ -3644,7 +3644,7 @@ export default function Page() {
         {/* ── Modal Ajukan Catatan ke Materi ── */}
         {showContributeModal && contributeNote && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-            <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 16, padding: 24, width: '100%', maxWidth: 480 }}>
+            <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 16, padding: 24, width: '100%', maxWidth: 480 }}>
               <h3 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 700, color: '#e2e8f0' }}>
                 💡 Ajukan Catatan ke Materi
               </h3>
@@ -3664,7 +3664,7 @@ export default function Page() {
 
               {/* Pilih Kategori */}
               <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: '#cbd5e1' }}>
+                <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: 'var(--nk-text)' }}>
                   📚 Pilih Kategori Materi
                 </label>
                 {contributeCategories.length === 0 ? (
@@ -3691,7 +3691,7 @@ export default function Page() {
                 <button
                   onClick={() => { setShowContributeModal(false); setContributeNote(null); }}
                   disabled={contributeLoading}
-                  style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1px solid #374151', background: 'transparent', color: '#94a3b8', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}
+                  style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1px solid #374151', background: 'transparent', color: 'var(--nk-muted)', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}
                 >
                   Batal
                 </button>
@@ -3716,7 +3716,7 @@ export default function Page() {
         {/* ── Modal Refleksi Harian ── */}
         {showReflectionEditor && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-            <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 16, padding: 20, width: '100%', maxWidth: 560 }}>
+            <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 16, padding: 20, width: '100%', maxWidth: 560 }}>
               <h3 style={{ margin: '0 0 8px', color: '#e2e8f0' }}>📔 Buat Refleksi Harian</h3>
               <p style={{ margin: '0 0 12px', fontSize: 12, color: '#64748b' }}>Refleksi bersifat privat. Submit pertama hari ini dapat EXP.</p>
               <textarea
@@ -3727,7 +3727,7 @@ export default function Page() {
               />
               <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop: 10 }}>
                 <button onClick={() => setShowReflectionEditor(false)}
-                  style={{ padding:'8px 12px', borderRadius:8, border:'1px solid #334155', background:'transparent', color:'#94a3b8', fontSize:12, cursor:'pointer' }}>
+                  style={{ padding:'8px 12px', borderRadius:8, border:'1px solid #334155', background:'transparent', color:'var(--nk-muted)', fontSize:12, cursor:'pointer' }}>
                   Batal
                 </button>
                 <button
@@ -3775,7 +3775,7 @@ export default function Page() {
                       padding: '9px 12px', borderRadius: 10, cursor: 'pointer',
                       border: adminSection === key ? '1px solid rgba(190,148,245,0.3)' : '1px solid transparent',
                       background: adminSection === key ? 'rgba(190,148,245,0.12)' : 'transparent',
-                      color: adminSection === key ? '#be94f5' : '#94a3b8',
+                      color: adminSection === key ? '#be94f5' : 'var(--nk-muted)',
                       fontWeight: adminSection === key ? 700 : 500,
                       fontSize: 14, textAlign: 'left', transition: 'all 160ms ease', width: '100%'
                     }}
@@ -3796,19 +3796,19 @@ export default function Page() {
                   {/* Form tambah/edit */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 16 }}>
                     <div>
-                      <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>Nama Kelompok</div>
+                      <div style={{ fontSize: 11, color: 'var(--nk-muted)', marginBottom: 4 }}>Nama Kelompok</div>
                       <input className="nk-input-sm" placeholder="PT ABC" value={groupName} onChange={e => setGroupName(e.target.value)} />
                     </div>
                     <div>
-                      <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>Kode (unik, kapital)</div>
+                      <div style={{ fontSize: 11, color: 'var(--nk-muted)', marginBottom: 4 }}>Kode (unik, kapital)</div>
                       <input className="nk-input-sm" placeholder="PTABC" value={groupCode} onChange={e => setGroupCode(e.target.value.toUpperCase())} />
                     </div>
                     <div>
-                      <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>Deskripsi</div>
+                      <div style={{ fontSize: 11, color: 'var(--nk-muted)', marginBottom: 4 }}>Deskripsi</div>
                       <input className="nk-input-sm" placeholder="Keterangan kelompok..." value={groupDesc} onChange={e => setGroupDesc(e.target.value)} />
                     </div>
                     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#94a3b8', cursor: 'pointer' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--nk-muted)', cursor: 'pointer' }}>
                         <input type="checkbox" checked={groupActive} onChange={e => setGroupActive(e.target.checked)} /> Aktif
                       </label>
                       <BtnSm color="purple" onClick={async () => {
@@ -3836,7 +3836,7 @@ export default function Page() {
                         <tr key={g.id}>
                           <td style={{ fontWeight: 600 }}>{g.name}</td>
                           <td><code style={{ background: 'rgba(190,148,245,0.12)', color: '#be94f5', padding: '2px 7px', borderRadius: 5, fontSize: 12 }}>{g.code}</code></td>
-                          <td style={{ color: '#94a3b8', fontSize: 13 }}>{g.description || '-'}</td>
+                          <td style={{ color: 'var(--nk-muted)', fontSize: 13 }}>{g.description || '-'}</td>
                           <td><span className="nk-badge nk-badge-purple">{g.member_count} peserta</span></td>
                           <td><span className={`nk-badge ${g.is_active ? 'nk-badge-green' : 'nk-badge-orange'}`}>{g.is_active ? 'Aktif' : 'Nonaktif'}</span></td>
                           <td style={{ display: 'flex', gap: 6 }}>
@@ -3866,7 +3866,7 @@ export default function Page() {
                         <tbody>{participants.map((p) => (
                           <tr key={p.id}>
                             <td style={{ fontWeight: 600 }}>{p.name || '-'}</td>
-                            <td style={{ color: '#94a3b8' }}>{p.phone}</td>
+                            <td style={{ color: 'var(--nk-muted)' }}>{p.phone}</td>
                             <td>{p.group_name ? <span className="nk-badge nk-badge-purple">🏢 {p.group_name}</span> : <span style={{ color: '#475569', fontSize: 12 }}>—</span>}</td>
                             <td><span className={`nk-badge ${p.role === 'super_admin' ? '' : p.role === 'admin' ? 'nk-badge-orange' : 'nk-badge-purple'}`} style={p.role === 'super_admin' ? {background:'linear-gradient(135deg,#f59e0b,#ef4444)',color:'#fff',fontWeight:800} : {}}>{p.role === 'super_admin' ? '👑 Super Admin' : p.role}</span></td>
                             <td><span className={`nk-badge ${p.is_active ? 'nk-badge-green' : 'nk-badge-red'}`}>{p.is_active ? '● Aktif' : '○ Nonaktif'}</span></td>
@@ -3890,7 +3890,7 @@ export default function Page() {
               {/* Modal Reset Password — di luar AdminSection */}
               {showResetPass && adminSection === 'peserta' && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-                  <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 16, padding: 24, width: '100%', maxWidth: 380 }}>
+                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 16, padding: 24, width: '100%', maxWidth: 380 }}>
                     <p style={{ margin: '0 0 16px', fontWeight: 700, fontSize: 16 }}>🔑 Reset Password Peserta</p>
                     <p style={{ margin: '0 0 12px', fontSize: 13, color: '#64748b' }}>
                       Peserta: <b style={{ color: '#f1f5f9' }}>{participants.find(p=>p.id===resetPassUserId)?.name || `#${resetPassUserId}`}</b>
@@ -3990,7 +3990,7 @@ export default function Page() {
                       {qAiGenerated.length > 0 && (
                         <div style={{ marginTop: 12 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                            <p style={{ margin: 0, fontSize: 12, color: '#94a3b8' }}>
+                            <p style={{ margin: 0, fontSize: 12, color: 'var(--nk-muted)' }}>
                               {qAiGenerated.length} soal dihasilkan — <span style={{ color: '#4ade80' }}>{qAiChecked.length} dipilih</span>
                             </p>
                             <button type="button" onClick={() => setQAiChecked(qAiChecked.length === qAiGenerated.length ? [] : qAiGenerated.map((_,i) => i))}
@@ -4000,14 +4000,14 @@ export default function Page() {
                           </div>
                           {qAiGenerated.map((q, i) => (
                             <div key={i} onClick={() => setQAiChecked(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i])}
-                              style={{ background: qAiChecked.includes(i) ? '#0d2744' : '#0f172a', border: `1px solid ${qAiChecked.includes(i) ? '#2563eb' : '#1e3a5f'}`, borderRadius: 8, padding: '10px 12px', marginBottom: 8, cursor: 'pointer', transition: 'all 0.15s' }}>
+                              style={{ background: qAiChecked.includes(i) ? '#0d2744' : 'var(--theme-elevated)', border: `1px solid ${qAiChecked.includes(i) ? '#2563eb' : '#1e3a5f'}`, borderRadius: 8, padding: '10px 12px', marginBottom: 8, cursor: 'pointer', transition: 'all 0.15s' }}>
                               <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                                 <span style={{ fontSize: 16, marginTop: 1 }}>{qAiChecked.includes(i) ? '✅' : '⬜'}</span>
                                 <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{i+1}. {q.question_text}</span>
                               </div>
                               <div style={{ marginTop: 6, paddingLeft: 26, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
                                 {['a','b','c','d'].map(opt => (
-                                  <div key={opt} style={{ fontSize: 12, color: q.correct_option?.toLowerCase() === opt ? '#4ade80' : '#94a3b8', display: 'flex', gap: 4 }}>
+                                  <div key={opt} style={{ fontSize: 12, color: q.correct_option?.toLowerCase() === opt ? '#4ade80' : 'var(--nk-muted)', display: 'flex', gap: 4 }}>
                                     <span style={{ fontWeight: 700, minWidth: 14 }}>{opt.toUpperCase()}.</span>
                                     <span>{q[`option_${opt}`]}</span>
                                     {q.correct_option?.toLowerCase() === opt && <span>✓</span>}
@@ -4079,7 +4079,7 @@ export default function Page() {
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                      <span style={{ fontSize: 13, color: '#94a3b8' }}>Filter:</span>
+                      <span style={{ fontSize: 13, color: 'var(--nk-muted)' }}>Filter:</span>
                       <select className="nk-input-sm" value={questionFilterCategoryId} onChange={(e) => {
                         const v = e.target.value;
                         setQuestionFilterCategoryId(v);
@@ -4098,22 +4098,22 @@ export default function Page() {
                       {Object.entries(questionGroups).map(([catName, items]) => {
                         const isOpen = questionFoldersOpen[catName] ?? (!!questionFilterCategoryId || Object.keys(questionGroups).length === 1);
                         return (
-                          <div key={catName} style={{ border: '1px solid #1e2d45', borderRadius: 12, overflow: 'hidden', background: '#0f172a' }}>
+                          <div key={catName} style={{ border: '1px solid #1e2d45', borderRadius: 12, overflow: 'hidden', background: 'var(--theme-elevated)' }}>
                             <button
                               onClick={() => setQuestionFoldersOpen(prev => ({ ...prev, [catName]: !isOpen }))}
-                              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: '#0b1220', border: 'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', cursor: 'pointer', color: '#e2e8f0' }}>
+                              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--theme-bg-subtle)', border: 'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', cursor: 'pointer', color: '#e2e8f0' }}>
                               <span style={{ fontSize: 16 }}>📁</span>
                               <span style={{ fontWeight: 700, flex: 1, textAlign: 'left' }}>{catName}</span>
                               <span className="nk-badge nk-badge-purple">{items.length} soal</span>
-                              <span style={{ color: '#94a3b8' }}>{isOpen ? '▲' : '▼'}</span>
+                              <span style={{ color: 'var(--nk-muted)' }}>{isOpen ? '▲' : '▼'}</span>
                             </button>
 
                             {isOpen && (
                               <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', padding: 12 }}>
                                 {items.map((q) => (
-                                  <div key={q.id} style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 14, background: '#0f172a' }}>
+                                  <div key={q.id} style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 14, background: 'var(--theme-elevated)' }}>
                                     <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>{q.question_text}</div>
-                                    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 10, lineHeight: 1.6 }}>
+                                    <div style={{ fontSize: 12, color: 'var(--nk-muted)', marginBottom: 10, lineHeight: 1.6 }}>
                                       A. {q.option_a} &nbsp;·&nbsp; B. {q.option_b}<br />
                                       C. {q.option_c} &nbsp;·&nbsp; D. {q.option_d}<br />
                                       <span style={{ color: '#4ade80', fontWeight: 600 }}>✓ Jawaban: {q.correct_option}</span>
@@ -4138,11 +4138,11 @@ export default function Page() {
               {/* Admin — Tryout Config */}
               {adminSection === 'tryout' && (
                 <AdminSection title="🎯 Manajemen Tryout">
-                  <p style={{ margin: '0 0 14px', fontSize: 13, color: '#94a3b8' }}>
+                  <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--nk-muted)' }}>
                     Atur soal yang akan digunakan dalam tryout bot per kelompok. Admin hanya bisa mengelola config kelompoknya sendiri.
                   </p>
                   {/* Buat Config Baru */}
-                  <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 14, marginBottom: 16 }}>
+                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 14, marginBottom: 16 }}>
                     <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600 }}>➕ Buat Config Tryout Baru</p>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <input className="nk-input-sm" style={{ flex: 1 }} placeholder="Nama config (misal: Tryout Bulan Maret)" value={tryoutNewName} onChange={e => setTryoutNewName(e.target.value)} />
@@ -4159,13 +4159,13 @@ export default function Page() {
                   {/* List Config */}
                   {tryoutConfigs.length === 0 && <div className="nk-empty">Belum ada config tryout.</div>}
                   {tryoutConfigs.map(cfg => (
-                    <div key={cfg.id} style={{ background: '#0f172a', border: `1px solid ${cfg.is_active ? '#1d4ed8' : '#1e2d45'}`, borderRadius: 12, marginBottom: 12, overflow: 'hidden' }}>
+                    <div key={cfg.id} style={{ background: 'var(--theme-elevated)', border: `1px solid ${cfg.is_active ? '#1d4ed8' : 'var(--nk-border)'}`, borderRadius: 12, marginBottom: 12, overflow: 'hidden' }}>
                       {/* Header */}
                       <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }} onClick={() => setTryoutExpandedId(tryoutExpandedId === cfg.id ? null : cfg.id)}>
                         <span style={{ flex: 1, fontWeight: 700, fontSize: 14 }}>{cfg.name}</span>
                         {cfg.group_name && <span className="nk-badge nk-badge-purple" style={{ fontSize: 11 }}>🏢 {cfg.group_name}</span>}
                         <span className={`nk-badge ${cfg.is_active ? 'nk-badge-green' : ''}`} style={{ fontSize: 11, background: cfg.is_active ? '' : '#1e293b', color: cfg.is_active ? '' : '#64748b' }}>{cfg.is_active ? '✅ Aktif' : '⏸ Nonaktif'}</span>
-                        <span style={{ fontSize: 12, color: '#94a3b8' }}>{cfg.items.length} kategori · {cfg.items.reduce((s,i) => s+i.question_count, 0)} soal total</span>
+                        <span style={{ fontSize: 12, color: 'var(--nk-muted)' }}>{cfg.items.length} kategori · {cfg.items.reduce((s,i) => s+i.question_count, 0)} soal total</span>
                         <span style={{ color: '#64748b' }}>{tryoutExpandedId === cfg.id ? '▲' : '▼'}</span>
                       </div>
                       {/* Detail */}
@@ -4186,7 +4186,7 @@ export default function Page() {
                           </div>
 
                           {/* Daftar kategori soal */}
-                          <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 600, color: '#94a3b8' }}>Kategori Soal dalam Tryout ini:</p>
+                          <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 600, color: 'var(--nk-muted)' }}>Kategori Soal dalam Tryout ini:</p>
                           {cfg.items.length === 0 && <p style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>Belum ada kategori. Tambahkan di bawah.</p>}
                           {cfg.items.map(item => (
                             <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid #1a2535' }}>
@@ -4237,22 +4237,22 @@ export default function Page() {
                   {adminLearningSummary ? (<>
                     {/* Stat cards */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
-                      <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                      <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
                         <div style={{ fontSize: 28, fontWeight: 800, color: '#be94f5' }}>{adminLearningSummary.total_participants}</div>
                         <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Total Peserta</div>
                       </div>
-                      <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                      <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
                         <div style={{ fontSize: 28, fontWeight: 800, color: '#34d399' }}>{adminLearningSummary.active_today}</div>
                         <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Aktif Hari Ini</div>
                       </div>
-                      <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                      <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
                         <div style={{ fontSize: 28, fontWeight: 800, color: '#38bdf8' }}>{adminLearningSummary.active_week}</div>
                         <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Aktif 7 Hari</div>
                       </div>
                     </div>
 
                     {/* Tabel per peserta */}
-                    <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                    <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 16 }}>
                       <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>📊 Detail Per Peserta</p>
                       {adminLearningSummary.participants?.length > 0 ? (
                         <div className="nk-table-wrap" style={{ maxHeight: 380, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
@@ -4278,7 +4278,7 @@ export default function Page() {
                     </div>
 
                     {/* Jadwal belajar terpasang */}
-                    <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16 }}>
+                    <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16 }}>
                       <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>⏰ Jadwal Pengingat Belajar</p>
                       {adminReminders.length ? (
                         <div className="nk-table-wrap" style={{ maxHeight: 240, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
@@ -4288,7 +4288,7 @@ export default function Page() {
                               <tr key={i}>
                                 <td style={{ fontWeight: 600 }}>{r.name || '-'}</td>
                                 <td><span className="nk-badge nk-badge-yellow">🕐 {r.time_of_day}</span></td>
-                                <td style={{ color: '#94a3b8', fontSize: 12 }}>{r.timezone}</td>
+                                <td style={{ color: 'var(--nk-muted)', fontSize: 12 }}>{r.timezone}</td>
                                 <td><span className={`nk-badge ${r.is_active ? 'nk-badge-green' : 'nk-badge-red'}`}>{r.is_active ? '● Aktif' : '○ Nonaktif'}</span></td>
                               </tr>
                             ))}</tbody>
@@ -4303,8 +4303,8 @@ export default function Page() {
               {/* Admin — Poin */}
               {adminSection === 'poin' && (
                 <AdminSection title="💰 Poin Peserta">
-                  <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px', marginBottom: 16 }}>
-                    <p style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600, color: '#cbd5e1' }}>
+                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px', marginBottom: 16 }}>
+                    <p style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600, color: 'var(--nk-text)' }}>
                       {editingPointEntryId ? '✏️ Edit Entry Poin' : '➕ Tambah / Kurangi Poin'}
                     </p>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
@@ -4335,7 +4335,7 @@ export default function Page() {
                         <tbody>{adminPointBalances.map((b) => (
                           <tr key={b.user_id}>
                             <td style={{ fontWeight: 600 }}>{b.name || '-'}</td>
-                            <td style={{ color: '#94a3b8' }}>{b.phone || '-'}</td>
+                            <td style={{ color: 'var(--nk-muted)' }}>{b.phone || '-'}</td>
                             <td><span className="nk-badge nk-badge-orange">🌟 {b.balance} poin</span></td>
                           </tr>
                         ))}</tbody>
@@ -4351,11 +4351,11 @@ export default function Page() {
                         <tbody>{adminPointHistory.slice(0, 100).map((p) => (
                           <tr key={p.id}>
                             <td style={{ fontWeight: 600 }}>{p.name || '-'}</td>
-                            <td style={{ color: '#94a3b8' }}>{p.phone || '-'}</td>
+                            <td style={{ color: 'var(--nk-muted)' }}>{p.phone || '-'}</td>
                             <td><span className={`nk-badge ${p.delta > 0 ? 'nk-badge-green' : 'nk-badge-red'}`}>{p.delta > 0 ? `+${p.delta}` : p.delta}</span></td>
-                            <td style={{ color: '#cbd5e1' }}>{p.reason}</td>
+                            <td style={{ color: 'var(--nk-text)' }}>{p.reason}</td>
                             <td><span className="nk-badge nk-badge-purple">{p.type}</span></td>
-                            <td style={{ color: '#94a3b8', fontSize: 13 }}>{new Date(p.created_at).toLocaleString('id-ID')}</td>
+                            <td style={{ color: 'var(--nk-muted)', fontSize: 13 }}>{new Date(p.created_at).toLocaleString('id-ID')}</td>
                             <td>
                               <div style={{ display: 'flex', gap: 6 }}>
                                 <BtnSm disabled={busy} onClick={() => startEditPointEntry(p)}>Edit</BtnSm>
@@ -4375,7 +4375,7 @@ export default function Page() {
                 <AdminSection title="🎖️ Manajemen Badges">
 
                   {/* Form buat/edit badge */}
-                  <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 20 }}>
                     <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>{badgeForm.id ? '✏️ Edit Badge' : '➕ Buat Badge Baru'}</p>
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
                       <div style={{ flex: '1 1 200px' }}>
@@ -4437,16 +4437,16 @@ export default function Page() {
                   </div>
 
                   {/* Daftar badge */}
-                  <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 20 }}>
                     <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>📋 Daftar Badge ({adminBadges.length})</p>
                     {adminBadges.length > 0 ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {adminBadges.map(b => (
                           <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#0d1b2e', borderRadius: 10, padding: '10px 14px', border: '1px solid #1e2d45' }}>
-                            {b.icon_url ? <img src={b.icon_url} alt={b.name} style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} onError={e => { e.target.style.display='none'; }} /> : <div style={{ width: 44, height: 44, borderRadius: 8, background: '#1e2d45', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🎖️</div>}
+                            {b.icon_url ? <img src={b.icon_url} alt={b.name} style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} onError={e => { e.target.style.display='none'; }} /> : <div style={{ width: 44, height: 44, borderRadius: 8, background: 'var(--nk-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🎖️</div>}
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontWeight: 700, fontSize: 14 }}>{b.name}</div>
-                              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{b.description}</div>
+                              <div style={{ fontSize: 12, color: 'var(--nk-muted)', marginTop: 2 }}>{b.description}</div>
                               <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                                 <span className={`nk-badge ${b.badge_type === 'auto' ? 'nk-badge-blue' : 'nk-badge-purple'}`}>{b.badge_type === 'auto' ? '⚡ Otomatis' : '👤 Manual'}</span>
                                 {b.trigger_key && <span className="nk-badge" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>{b.trigger_key}</span>}
@@ -4470,7 +4470,7 @@ export default function Page() {
                   </div>
 
                   {/* Form kasih badge ke peserta */}
-                  <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 20 }}>
                     <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>🏅 Berikan Badge ke Peserta</p>
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                       <div style={{ flex: '1 1 180px' }}>
@@ -4507,7 +4507,7 @@ export default function Page() {
                   </div>
 
                   {/* Riwayat pemberian badge */}
-                  <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16 }}>
+                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16 }}>
                     <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>📜 Riwayat Pemberian Badge</p>
                     {adminBadgeAwards.length > 0 ? (
                       <div className="nk-table-wrap" style={{ maxHeight: 360, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
@@ -4525,7 +4525,7 @@ export default function Page() {
                                     <span style={{ fontWeight: 600, fontSize: 13 }}>{badge?.name || `#${aw.badge_id}`}</span>
                                   </div>
                                 </td>
-                                <td style={{ color: '#94a3b8', fontSize: 12 }}>{aw.note || '—'}</td>
+                                <td style={{ color: 'var(--nk-muted)', fontSize: 12 }}>{aw.note || '—'}</td>
                                 <td style={{ color: '#64748b', fontSize: 12, whiteSpace: 'nowrap' }}>{aw.awarded_at}</td>
                                 <td><BtnSm color="red" disabled={busy} onClick={async () => {
                                   if (!confirm('Cabut badge ini?')) return;
@@ -4548,7 +4548,7 @@ export default function Page() {
                 <AdminSection title="💬 Feedback Peserta">
                   {/* Setting jadwal — hanya super admin */}
                   {isSuperAdmin && (
-                    <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+                    <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 20 }}>
                       <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>⏰ Jadwal Broadcast Feedback</p>
                       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                         <div>
@@ -4562,7 +4562,7 @@ export default function Page() {
                             style={{ background: '#0d1b2e', border: '1px solid #1e2d45', borderRadius: 8, color: '#f1f5f9', padding: '7px 12px', fontSize: 14 }} />
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#94a3b8', cursor: 'pointer' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--nk-muted)', cursor: 'pointer' }}>
                             <input type="checkbox" checked={fbScheduleActive} onChange={e => setFbScheduleActive(e.target.checked)} />
                             Aktifkan pengiriman otomatis
                           </label>
@@ -4592,18 +4592,18 @@ export default function Page() {
                   {/* Stats */}
                   {adminFeedbackStats && (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px,1fr))', gap: 12, marginBottom: 20 }}>
-                      <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                      <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
                         <div style={{ fontSize: 28, fontWeight: 800, color: '#fbbf24' }}>{adminFeedbackStats.avg_rating}</div>
                         <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Rata-rata Rating</div>
                         <div style={{ fontSize: 20, marginTop: 4 }}>{'⭐'.repeat(Math.round(adminFeedbackStats.avg_rating || 0))}</div>
                       </div>
-                      <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                      <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
                         <div style={{ fontSize: 28, fontWeight: 800, color: '#be94f5' }}>{adminFeedbackStats.total}</div>
                         <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Total Feedback</div>
                       </div>
                       {/* Distribusi bintang */}
                       {[5,4,3,2,1].map(star => (
-                        <div key={star} style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div key={star} style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
                           <span style={{ fontSize: 13, color: '#fbbf24', minWidth: 28 }}>{'⭐'.repeat(star)}</span>
                           <div style={{ flex: 1, background: '#1e293b', borderRadius: 4, height: 8 }}>
                             <div style={{ height: 8, borderRadius: 4, background: star >= 4 ? '#34d399' : star === 3 ? '#fbbf24' : '#f87171', width: `${adminFeedbackStats.total ? Math.round((adminFeedbackStats.dist?.[star]||0)/adminFeedbackStats.total*100) : 0}%` }}></div>
@@ -4615,7 +4615,7 @@ export default function Page() {
                   )}
 
                   {/* Tabel rekapan */}
-                  <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16 }}>
+                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16 }}>
                     <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>📋 Rekapan Feedback{!isSuperAdmin ? ' (Kelompokmu)' : ''}</p>
                     {adminFeedbackList.length > 0 ? (
                       <div className="nk-table-wrap" style={{ maxHeight: 400, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
@@ -4626,7 +4626,7 @@ export default function Page() {
                               <td style={{ fontWeight: 600 }}>{f.name}</td>
                               {isSuperAdmin && <td>{f.group_name !== '-' ? <span className="nk-badge nk-badge-purple">🏢 {f.group_name}</span> : <span style={{ color: '#475569', fontSize: 12 }}>—</span>}</td>}
                               <td><span style={{ color: '#fbbf24' }}>{'⭐'.repeat(f.rating)}</span></td>
-                              <td style={{ color: '#94a3b8', fontSize: 13, maxWidth: 260 }}>{f.message || <span style={{ color: '#334155', fontStyle: 'italic' }}>—</span>}</td>
+                              <td style={{ color: 'var(--nk-muted)', fontSize: 13, maxWidth: 260 }}>{f.message || <span style={{ color: '#334155', fontStyle: 'italic' }}>—</span>}</td>
                               <td style={{ color: '#64748b', fontSize: 12, whiteSpace: 'nowrap' }}>{f.created_at}</td>
                             </tr>
                           ))}</tbody>
@@ -4643,21 +4643,21 @@ export default function Page() {
                   {adminReflectionStats ? (
                     <>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
-                        <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                        <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
                           <div style={{ fontSize: 28, fontWeight: 800, color: '#be94f5' }}>{adminReflectionStats.today}</div>
                           <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Refleksi Hari Ini</div>
                         </div>
-                        <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                        <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
                           <div style={{ fontSize: 28, fontWeight: 800, color: '#38bdf8' }}>{adminReflectionStats.week}</div>
                           <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>7 Hari Terakhir</div>
                         </div>
-                        <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                        <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
                           <div style={{ fontSize: 28, fontWeight: 800, color: '#34d399' }}>{adminReflectionStats.unique_users}</div>
                           <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Peserta Aktif</div>
                         </div>
                       </div>
                       {adminReflectionStats.top_users?.length > 0 && (
-                        <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                        <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 16 }}>
                           <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>🏆 Peserta Paling Konsisten (30 hari)</p>
                           {adminReflectionStats.top_users.map((u, i) => (
                             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: i < adminReflectionStats.top_users.length - 1 ? '1px solid #1e2d45' : 'none' }}>
@@ -4668,7 +4668,7 @@ export default function Page() {
                         </div>
                       )}
                       {adminReflectionStats.trend?.length > 0 && (
-                        <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16 }}>
+                        <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16 }}>
                           <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>📈 Tren 7 Hari Terakhir</p>
                           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', height: 80 }}>
                             {adminReflectionStats.trend.map((d, i) => {
@@ -4686,7 +4686,7 @@ export default function Page() {
                         </div>
                       )}
                       {/* Tabel peserta */}
-                      <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginTop: 16 }}>
+                      <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginTop: 16 }}>
                         <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>👥 Status Refleksi Peserta</p>
                         {adminReflectionStats.participants?.length > 0 ? (
                           <div className="nk-table-wrap" style={{ maxHeight: 340, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
@@ -4708,9 +4708,9 @@ export default function Page() {
                           </div>
                         ) : <p style={{ color: '#475569', fontSize: 13 }}>Belum ada peserta terdaftar.</p>}
                       </div>
-                      <div style={{ marginTop: 16, padding: 16, background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12 }}>
+                      <div style={{ marginTop: 16, padding: 16, background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12 }}>
                         <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: 14 }}>📣 Kirim Reminder Refleksi</p>
-                        <p style={{ margin: '0 0 12px', fontSize: 13, color: '#94a3b8' }}>Kirim pengingat refleksi sekarang ke semua peserta yang belum refleksi hari ini (tanpa menunggu jadwal).</p>
+                        <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--nk-muted)' }}>Kirim pengingat refleksi sekarang ke semua peserta yang belum refleksi hari ini (tanpa menunggu jadwal).</p>
                         <button
                           disabled={reminderLoading}
                           onClick={async () => {
@@ -4745,18 +4745,18 @@ export default function Page() {
               {/* Admin — EXP */}
               {adminSection === 'exp' && (
                 <AdminSection title="⭐ EXP Peserta">
-                  <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 16 }}>
                     <p style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>⏰ Setting Laporan EXP Harian</p>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                       <input className="nk-input-sm" type="time" value={expReportSetting.time_of_day || '10:00'} onChange={(e) => setExpReportSetting((s) => ({ ...s, time_of_day: e.target.value }))} />
                       <input className="nk-input-sm" placeholder="Timezone" style={{ width: 180 }} value={expReportSetting.timezone || 'Asia/Jakarta'} onChange={(e) => setExpReportSetting((s) => ({ ...s, timezone: e.target.value }))} />
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: '#cbd5e1' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: 'var(--nk-text)' }}>
                         <input type="checkbox" checked={!!expReportSetting.is_active} onChange={(e) => setExpReportSetting((s) => ({ ...s, is_active: e.target.checked }))} />
                         Aktif
                       </label>
                       <BtnSm disabled={busy} onClick={saveExpReportSetting}>{busy ? '...' : 'Simpan'}</BtnSm>
                     </div>
-                    <p style={{ margin: '10px 0 0', fontSize: 13, color: '#94a3b8' }}>
+                    <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--nk-muted)' }}>
                       Laporan level + EXP dikirim ke semua peserta Telegram setiap hari sesuai jam di atas.
                     </p>
                   </div>
@@ -4786,15 +4786,15 @@ export default function Page() {
                         <tbody>{adminExpStatus.map((s) => (
                           <tr key={s.user_id}>
                             <td style={{ fontWeight: 600 }}>{s.name || '-'}</td>
-                            <td style={{ color: '#94a3b8' }}>{s.phone || '-'}</td>
+                            <td style={{ color: 'var(--nk-muted)' }}>{s.phone || '-'}</td>
                             <td><span className="nk-badge nk-badge-purple">Lv. {s.level}</span></td>
                             <td><span className="nk-badge nk-badge-yellow">⭐ {s.exp}</span></td>
                             <td>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <div style={{ flex: 1, height: 6, background: '#1e2d45', borderRadius: 99, overflow: 'hidden', minWidth: 80 }}>
+                                <div style={{ flex: 1, height: 6, background: 'var(--nk-border)', borderRadius: 99, overflow: 'hidden', minWidth: 80 }}>
                                   <div style={{ height: '100%', borderRadius: 99, background: 'linear-gradient(90deg, #be94f5, #9b6de0)', width: `${Math.min(100, Math.round((s.progress / (s.level_step || 1)) * 100))}%` }} />
                                 </div>
-                                <span style={{ fontSize: 12, color: '#94a3b8' }}>{s.progress}/{s.level_step}</span>
+                                <span style={{ fontSize: 12, color: 'var(--nk-muted)' }}>{s.progress}/{s.level_step}</span>
                               </div>
                             </td>
                           </tr>
@@ -4811,11 +4811,11 @@ export default function Page() {
                         <tbody>{adminExpHistory.map((h) => (
                           <tr key={h.id}>
                             <td style={{ fontWeight: 600 }}>{h.name || '-'}</td>
-                            <td style={{ color: '#94a3b8' }}>{h.phone || '-'}</td>
+                            <td style={{ color: 'var(--nk-muted)' }}>{h.phone || '-'}</td>
                             <td><span className={`nk-badge ${h.delta > 0 ? 'nk-badge-green' : 'nk-badge-red'}`}>{h.delta > 0 ? `+${h.delta}` : h.delta}</span></td>
                             <td><span className="nk-badge nk-badge-purple">{h.type}</span></td>
-                            <td style={{ color: '#cbd5e1' }}>{h.reason}</td>
-                            <td style={{ color: '#94a3b8', fontSize: 13 }}>{new Date(h.created_at).toLocaleString('id-ID')}</td>
+                            <td style={{ color: 'var(--nk-text)' }}>{h.reason}</td>
+                            <td style={{ color: 'var(--nk-muted)', fontSize: 13 }}>{new Date(h.created_at).toLocaleString('id-ID')}</td>
                           </tr>
                         ))}</tbody>
                       </table>
@@ -4827,7 +4827,7 @@ export default function Page() {
               {/* Admin — AI Settings (super_admin only) */}
               {adminSection === 'ai' && isSuperAdmin && (
                 <AdminSection title="🤖 AI Settings & Profiles (Super Admin)">
-                  <div style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 12, background: '#0f172a', marginBottom: 12 }}>
+                  <div style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 12, background: 'var(--theme-elevated)', marginBottom: 12 }}>
                     <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700 }}>Token Usage</p>
                     <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:8 }}>
                       {[
@@ -4837,42 +4837,42 @@ export default function Page() {
                         {k:'month', t:'Bulan ini'},
                       ].map(x => (
                         <button key={x.k} onClick={() => setAiUsageRange(x.k)}
-                          style={{ border: aiUsageRange===x.k ? '1px solid #8b5cf6' : '1px solid #334155', background: aiUsageRange===x.k ? 'rgba(139,92,246,0.18)' : 'transparent', color: aiUsageRange===x.k ? '#c4b5fd' : '#94a3b8', borderRadius:999, padding:'4px 10px', fontSize:11, cursor:'pointer' }}>
+                          style={{ border: aiUsageRange===x.k ? '1px solid #8b5cf6' : '1px solid #334155', background: aiUsageRange===x.k ? 'rgba(139,92,246,0.18)' : 'transparent', color: aiUsageRange===x.k ? '#c4b5fd' : 'var(--nk-muted)', borderRadius:999, padding:'4px 10px', fontSize:11, cursor:'pointer' }}>
                           {x.t}
                         </button>
                       ))}
                     </div>
                     <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px,1fr))', gap:8 }}>
-                      <div style={{ border:'1px solid #23324a', borderRadius:8, padding:'8px 10px', display:'flex', justifyContent:'space-between', gap:8 }}><span style={{ color:'#94a3b8', fontSize:12 }}>Hari ini</span><b>{aiUsageStats?.today_tokens || 0}</b></div>
-                      <div style={{ border:'1px solid #23324a', borderRadius:8, padding:'8px 10px', display:'flex', justifyContent:'space-between', gap:8 }}><span style={{ color:'#94a3b8', fontSize:12 }}>Bulan ini</span><b>{aiUsageStats?.month_tokens || 0}</b></div>
+                      <div style={{ border:'1px solid #23324a', borderRadius:8, padding:'8px 10px', display:'flex', justifyContent:'space-between', gap:8 }}><span style={{ color:'var(--nk-muted)', fontSize:12 }}>Hari ini</span><b>{aiUsageStats?.today_tokens || 0}</b></div>
+                      <div style={{ border:'1px solid #23324a', borderRadius:8, padding:'8px 10px', display:'flex', justifyContent:'space-between', gap:8 }}><span style={{ color:'var(--nk-muted)', fontSize:12 }}>Bulan ini</span><b>{aiUsageStats?.month_tokens || 0}</b></div>
                     </div>
                     {Array.isArray(aiUsageStats?.top_features) && aiUsageStats.top_features.length > 0 && (
-                      <div style={{ marginTop:8, fontSize:12, color:'#94a3b8' }}>
+                      <div style={{ marginTop:8, fontSize:12, color:'var(--nk-muted)' }}>
                         Top fitur: {aiUsageStats.top_features.map((x,i)=>`${i+1}. ${x.feature} (${x.tokens})`).join(' • ')}
                       </div>
                     )}
                     {Array.isArray(aiUsageStats?.model_breakdown) && aiUsageStats.model_breakdown.length > 0 && (
-                      <div style={{ marginTop:8, fontSize:12, color:'#94a3b8' }}>
+                      <div style={{ marginTop:8, fontSize:12, color:'var(--nk-muted)' }}>
                         Provider/Model: {aiUsageStats.model_breakdown.map((x,i)=>`${i+1}. ${x.provider}/${x.model} (${x.tokens})`).join(' • ')}
                       </div>
                     )}
                     {Array.isArray(aiUsageStats?.top_users) && aiUsageStats.top_users.length > 0 && (
                       <div style={{ marginTop:8 }}>
-                        <div style={{ marginBottom:6, fontSize:12, color:'#94a3b8' }}>Top user:</div>
+                        <div style={{ marginBottom:6, fontSize:12, color:'var(--nk-muted)' }}>Top user:</div>
                         <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                           {aiUsageStats.top_users.map((x,i)=>(
                             <button key={`${x.user_id||x.user}-${i}`} onClick={()=>setAiUsageUserId(Number(x.user_id||0))}
-                              style={{ border: (Number(aiUsageUserId)===Number(x.user_id||0)) ? '1px solid #8b5cf6' : '1px solid #334155', background: (Number(aiUsageUserId)===Number(x.user_id||0)) ? 'rgba(139,92,246,0.18)' : 'transparent', color:'#cbd5e1', borderRadius:999, padding:'4px 10px', fontSize:11, cursor:'pointer' }}>
+                              style={{ border: (Number(aiUsageUserId)===Number(x.user_id||0)) ? '1px solid #8b5cf6' : '1px solid #334155', background: (Number(aiUsageUserId)===Number(x.user_id||0)) ? 'rgba(139,92,246,0.18)' : 'transparent', color:'var(--nk-text)', borderRadius:999, padding:'4px 10px', fontSize:11, cursor:'pointer' }}>
                               {i+1}. {x.user} ({x.tokens})
                             </button>
                           ))}
-                          <button onClick={()=>setAiUsageUserId(0)} style={{ border:'1px solid #334155', background:'transparent', color:'#94a3b8', borderRadius:999, padding:'4px 10px', fontSize:11, cursor:'pointer' }}>Reset</button>
+                          <button onClick={()=>setAiUsageUserId(0)} style={{ border:'1px solid #334155', background:'transparent', color:'var(--nk-muted)', borderRadius:999, padding:'4px 10px', fontSize:11, cursor:'pointer' }}>Reset</button>
                         </div>
                       </div>
                     )}
                     {Array.isArray(aiUsageStats?.daily_trend) && aiUsageStats.daily_trend.length > 0 && (
                       <div style={{ marginTop:10 }}>
-                        <div style={{ marginBottom:6, fontSize:12, color:'#94a3b8' }}>Trend harian (global)</div>
+                        <div style={{ marginBottom:6, fontSize:12, color:'var(--nk-muted)' }}>Trend harian (global)</div>
                         <div style={{ display:'flex', alignItems:'end', gap:4, height:54, border:'1px solid #23324a', borderRadius:8, padding:'6px 8px', overflowX:'auto' }}>
                           {(() => {
                             const maxTok = Math.max(1, ...aiUsageStats.daily_trend.map(x => Number(x.tokens || 0)));
@@ -4884,17 +4884,17 @@ export default function Page() {
                       </div>
                     )}
                     {aiUsageStats?.user_detail?.user && (
-                      <div style={{ marginTop:10, border:'1px solid #23324a', borderRadius:8, padding:'8px 10px', fontSize:12, color:'#cbd5e1' }}>
+                      <div style={{ marginTop:10, border:'1px solid #23324a', borderRadius:8, padding:'8px 10px', fontSize:12, color:'var(--nk-text)' }}>
                         <div style={{ fontWeight:700, marginBottom:6 }}>Detail User: {aiUsageStats.user_detail.user}</div>
                         {Array.isArray(aiUsageStats?.user_detail?.features) && aiUsageStats.user_detail.features.length > 0 && (
-                          <div style={{ color:'#94a3b8', marginBottom:4 }}>Fitur: {aiUsageStats.user_detail.features.map((x,i)=>`${i+1}. ${x.feature} (${x.tokens})`).join(' • ')}</div>
+                          <div style={{ color:'var(--nk-muted)', marginBottom:4 }}>Fitur: {aiUsageStats.user_detail.features.map((x,i)=>`${i+1}. ${x.feature} (${x.tokens})`).join(' • ')}</div>
                         )}
                         {Array.isArray(aiUsageStats?.user_detail?.models) && aiUsageStats.user_detail.models.length > 0 && (
-                          <div style={{ color:'#94a3b8', marginBottom:6 }}>Model: {aiUsageStats.user_detail.models.map((x,i)=>`${i+1}. ${x.provider}/${x.model} (${x.tokens})`).join(' • ')}</div>
+                          <div style={{ color:'var(--nk-muted)', marginBottom:6 }}>Model: {aiUsageStats.user_detail.models.map((x,i)=>`${i+1}. ${x.provider}/${x.model} (${x.tokens})`).join(' • ')}</div>
                         )}
                         {Array.isArray(aiUsageStats?.user_detail?.daily_trend) && aiUsageStats.user_detail.daily_trend.length > 0 && (
                           <div>
-                            <div style={{ marginBottom:4, fontSize:11, color:'#94a3b8' }}>Trend harian user</div>
+                            <div style={{ marginBottom:4, fontSize:11, color:'var(--nk-muted)' }}>Trend harian user</div>
                             <div style={{ display:'flex', alignItems:'end', gap:4, height:50, border:'1px solid #23324a', borderRadius:8, padding:'6px 8px', overflowX:'auto' }}>
                               {(() => {
                                 const maxTok = Math.max(1, ...aiUsageStats.user_detail.daily_trend.map(x => Number(x.tokens || 0)));
@@ -4910,7 +4910,7 @@ export default function Page() {
 
                     {Array.isArray(aiUsageStats?.user_table) && aiUsageStats.user_table.length > 0 && (
                       <div style={{ marginTop:10 }}>
-                        <div style={{ marginBottom:6, fontSize:12, color:'#94a3b8' }}>Tabel detail per-user</div>
+                        <div style={{ marginBottom:6, fontSize:12, color:'var(--nk-muted)' }}>Tabel detail per-user</div>
                         <div className="nk-table-wrap" style={{ maxHeight: 260 }}>
                           <table className="nk-table" style={{ minWidth: 760 }}>
                             <thead><tr><th>User</th><th>Total</th><th>Prompt</th><th>Completion</th><th>Calls</th><th>Aksi</th></tr></thead>
@@ -4922,7 +4922,7 @@ export default function Page() {
                                   <td>{u.prompt_tokens || 0}</td>
                                   <td>{u.completion_tokens || 0}</td>
                                   <td>{u.calls || 0}</td>
-                                  <td><button onClick={() => setAiUsageUserId(Number(u.user_id || 0))} style={{ border:'1px solid #334155', background:'transparent', color:'#cbd5e1', borderRadius:8, padding:'3px 8px', fontSize:11, cursor:'pointer' }}>Detail</button></td>
+                                  <td><button onClick={() => setAiUsageUserId(Number(u.user_id || 0))} style={{ border:'1px solid #334155', background:'transparent', color:'var(--nk-text)', borderRadius:8, padding:'3px 8px', fontSize:11, cursor:'pointer' }}>Detail</button></td>
                                 </tr>
                               ))}
                             </tbody>
@@ -4932,10 +4932,10 @@ export default function Page() {
                     )}
                   </div>
 
-                  <div style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 12, background: '#0f172a', marginBottom: 12 }}>
+                  <div style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 12, background: 'var(--theme-elevated)', marginBottom: 12 }}>
                     <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700 }}>AI Credit Wallet (Super Admin)</p>
                     <div style={{ border:'1px solid #23324a', borderRadius:10, padding:10, marginBottom:10 }}>
-                      <div style={{ fontSize:11, color:'#94a3b8', marginBottom:6, fontWeight:700 }}>Pengaturan Rate (1 credit = X token)</div>
+                      <div style={{ fontSize:11, color:'var(--nk-muted)', marginBottom:6, fontWeight:700 }}>Pengaturan Rate (1 credit = X token)</div>
                       <div style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:8, alignItems:'end' }}>
                         <input className="nk-input-sm" type="number" min="1" value={aiCreditConfig?.tokens_per_credit || 1000} onChange={e=>setAiCreditConfig(s=>({...s, tokens_per_credit: e.target.value}))} />
                         <BtnSm disabled={busy} onClick={saveAICreditRate}>💾 Simpan Rate</BtnSm>
@@ -4956,7 +4956,7 @@ export default function Page() {
                       <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:8 }}>
                         {aiCreditUserHits.map((u, i) => (
                           <button key={`${u.id}-${i}`} onClick={() => { setAiCreditTopup(s => ({ ...s, user_id: String(u.id) })); setAiCreditPickedUser(u); }}
-                            style={{ border:'1px solid #334155', background:'transparent', color:'#cbd5e1', borderRadius:999, padding:'4px 9px', fontSize:11, cursor:'pointer' }}>
+                            style={{ border:'1px solid #334155', background:'transparent', color:'var(--nk-text)', borderRadius:999, padding:'4px 9px', fontSize:11, cursor:'pointer' }}>
                             {u.name} ({u.phone || '-'}) • ID:{u.id}
                           </button>
                         ))}
@@ -4981,17 +4981,17 @@ export default function Page() {
                     )}
                     {Array.isArray(aiCreditConfig?.logs) && aiCreditConfig.logs.length > 0 && (
                       <div style={{ marginTop:10 }}>
-                        <div style={{ marginBottom:6, fontSize:12, color:'#94a3b8' }}>Histori credit</div>
+                        <div style={{ marginBottom:6, fontSize:12, color:'var(--nk-muted)' }}>Histori credit</div>
                         <div className="nk-table-wrap" style={{ maxHeight: 240 }}>
                           <table className="nk-table" style={{ minWidth: 760 }}>
                             <thead><tr><th>Waktu</th><th>User</th><th>Delta</th><th>Reason</th><th>By</th></tr></thead>
                             <tbody>{aiCreditConfig.logs.slice(0, 80).map((l,i)=>(
                               <tr key={`${l.id||i}`}>
-                                <td style={{ color:'#94a3b8', fontSize:12 }}>{new Date(l.created_at).toLocaleString('id-ID')}</td>
+                                <td style={{ color:'var(--nk-muted)', fontSize:12 }}>{new Date(l.created_at).toLocaleString('id-ID')}</td>
                                 <td>{l.user || '-'}</td>
                                 <td><span className={`nk-badge ${Number(l.delta_credits||0) >= 0 ? 'nk-badge-green' : 'nk-badge-red'}`}>{Number(l.delta_credits||0) >= 0 ? '+' : ''}{Number(l.delta_credits||0).toFixed(3)}</span></td>
-                                <td style={{ color:'#cbd5e1' }}>{l.reason || '-'}</td>
-                                <td style={{ color:'#94a3b8' }}>{l.admin || '-'}</td>
+                                <td style={{ color:'var(--nk-text)' }}>{l.reason || '-'}</td>
+                                <td style={{ color:'var(--nk-muted)' }}>{l.admin || '-'}</td>
                               </tr>
                             ))}</tbody>
                           </table>
@@ -5001,7 +5001,7 @@ export default function Page() {
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
-                    <div style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 12, background: '#0f172a' }}>
+                    <div style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 12, background: 'var(--theme-elevated)' }}>
                       <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700 }}>Profile Form</p>
                       <div style={{ display: 'grid', gap: 8 }}>
                         <input className="nk-input-sm" placeholder="Profile name" value={aiProfileForm.name} onChange={e=>setAiProfileForm(s=>({...s,name:e.target.value}))} />
@@ -5032,7 +5032,7 @@ export default function Page() {
                                 const preset = aiProviderPresets[p];
                                 setAiProfileForm(s => ({ ...s, provider: p, base_url: preset.base_url, model: preset.model || s.model }));
                               }}
-                              style={{ border:'1px solid #334155', background:'transparent', color:'#94a3b8', borderRadius:8, padding:'4px 8px', fontSize:11, cursor:'pointer' }}>
+                              style={{ border:'1px solid #334155', background:'transparent', color:'var(--nk-muted)', borderRadius:8, padding:'4px 8px', fontSize:11, cursor:'pointer' }}>
                               preset: {p}
                             </button>
                           ))}
@@ -5050,15 +5050,15 @@ export default function Page() {
                       </div>
                     </div>
 
-                    <div style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 12, background: '#0f172a' }}>
+                    <div style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 12, background: 'var(--theme-elevated)' }}>
                       <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700 }}>Profiles</p>
                       <div style={{ display: 'grid', gap: 8, maxHeight: 300, overflow: 'auto' }}>
                         {aiProfiles.map(p => (
-                          <div key={p.id} style={{ border: '1px solid #26364d', borderRadius: 10, padding: 10, background: p.is_active ? 'rgba(34,197,94,0.08)' : '#0b1220' }}>
+                          <div key={p.id} style={{ border: '1px solid #26364d', borderRadius: 10, padding: 10, background: p.is_active ? 'rgba(34,197,94,0.08)' : 'var(--theme-bg-subtle)' }}>
                             <div style={{ display:'flex', justifyContent:'space-between', gap:8 }}>
                               <div>
                                 <div style={{ fontWeight: 700, fontSize: 13 }}>{p.name} {p.is_active ? '✅' : ''}</div>
-                                <div style={{ fontSize: 12, color: '#94a3b8' }}>{p.provider} • {p.model}</div>
+                                <div style={{ fontSize: 12, color: 'var(--nk-muted)' }}>{p.provider} • {p.model}</div>
                               </div>
                               <div style={{ display:'flex', gap:6, flexWrap:'wrap', justifyContent:'flex-end' }}>
                                 <BtnSm disabled={busy} onClick={()=>setAiProfileForm({ id:p.id, name:p.name, provider:p.provider, base_url:p.base_url, api_key:'', model:p.model, temperature:p.temperature, max_tokens:p.max_tokens })}>Edit</BtnSm>
@@ -5072,7 +5072,7 @@ export default function Page() {
                       </div>
                       <div style={{ marginTop: 10, display:'flex', gap:8 }}>
                         <BtnSm disabled={busy} onClick={testAISettings}>🧪 Test Profile Aktif</BtnSm>
-                        <span style={{ fontSize: 12, color: '#94a3b8', alignSelf:'center' }}>Aktif: {aiSettings.provider} / {aiSettings.model}</span>
+                        <span style={{ fontSize: 12, color: 'var(--nk-muted)', alignSelf:'center' }}>Aktif: {aiSettings.provider} / {aiSettings.model}</span>
                       </div>
                     </div>
                   </div>
@@ -5097,10 +5097,10 @@ export default function Page() {
                       {categories.filter(c => /^lrmc-|^rmc-/.test(String(c.code || ''))).map((c) => (
                         <div key={c.id} style={{
                           border: '1px solid #1e2d45', borderRadius: 12,
-                          padding: '14px 16px', background: '#0f172a'
+                          padding: '14px 16px', background: 'var(--theme-elevated)'
                         }}>
                           <div style={{ fontWeight: 700, marginBottom: 2 }}>{c.name}</div>
-                          <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>{c.code}</div>
+                          <div style={{ fontSize: 12, color: 'var(--nk-muted)', marginBottom: 4 }}>{c.code}</div>
                           <div style={{ fontSize: 11, marginBottom: 10 }}>{c.group_name ? <span className="nk-badge nk-badge-purple">🏢 {c.group_name}</span> : <span className="nk-badge" style={{ background: '#1e293b', color: '#64748b' }}>🌐 Global</span>}</div>
                           <div style={{ fontSize:11, color:'#64748b' }}>Sumber: Roadmap (otomatis) • Ubah kelompok utama dari menu Roadmap Jabatan.</div>
                         </div>
@@ -5111,7 +5111,7 @@ export default function Page() {
 
                   <AdminSection title="📚 Manajemen Materi Belajar" style={{ marginTop: 14 }}>
                     {/* Form tambah/edit */}
-                    <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                    <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 16 }}>
                       <p style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>
                         {editingMateriId ? '✏️ Edit Materi' : '➕ Tambah Materi Baru'}
                       </p>
@@ -5189,7 +5189,7 @@ export default function Page() {
                                 <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginBottom: 6 }}>
                                   {toolbarBtns.map((btn, ti) => (
                                     <button key={ti} type="button" title={btn.title}
-                                      style={{ background: '#1e2d45', border: '1px solid #2d3f5c', borderRadius: 4, color: '#cbd5e1', padding: '2px 7px', fontSize: 11, cursor: 'pointer', ...btn.style }}
+                                      style={{ background: 'var(--nk-border)', border: '1px solid #2d3f5c', borderRadius: 4, color: 'var(--nk-text)', padding: '2px 7px', fontSize: 11, cursor: 'pointer', ...btn.style }}
                                       onClick={() => {
                                         const el = document.getElementById(editorId);
                                         if (!el) return;
@@ -5229,7 +5229,7 @@ export default function Page() {
                           <details style={{ marginTop: 8 }}>
                             <summary style={{ fontSize: 12, color: '#64748b', cursor: 'pointer', userSelect: 'none' }}>📖 Panduan format Markdown (klik untuk buka)</summary>
                             <div style={{ background: '#0a1628', border: '1px solid #1e2d45', borderRadius: 8, padding: 14, marginTop: 8, fontSize: 12, lineHeight: 1.8 }}>
-                              <p style={{ fontWeight: 700, color: '#94a3b8', margin: '0 0 8px' }}>✍️ Cara penulisan teks di Telegram:</p>
+                              <p style={{ fontWeight: 700, color: 'var(--nk-muted)', margin: '0 0 8px' }}>✍️ Cara penulisan teks di Telegram:</p>
                               <div style={{ width:'100%', overflowX:'auto' }}>
                               <table style={{ width: '100%', minWidth: 560, borderCollapse: 'collapse' }}>
                                 <thead><tr style={{ color: '#475569', borderBottom: '1px solid #1e2d45' }}><th style={{ textAlign: 'left', padding: '4px 8px' }}>Yang kamu tulis</th><th style={{ textAlign: 'left', padding: '4px 8px' }}>Tampil di Telegram</th></tr></thead>
@@ -5249,12 +5249,12 @@ export default function Page() {
                                 ].map(([src, res], ri) => (
                                   <tr key={ri} style={{ borderBottom: '1px solid #0f172a' }}>
                                     <td style={{ padding: '4px 8px', fontFamily: 'monospace', color: '#fbbf24' }}>{src}</td>
-                                    <td style={{ padding: '4px 8px', color: '#94a3b8' }}>{res}</td>
+                                    <td style={{ padding: '4px 8px', color: 'var(--nk-muted)' }}>{res}</td>
                                   </tr>
                                 ))}</tbody>
                               </table>
                               </div>
-                              <p style={{ margin: '10px 0 4px', color: '#475569' }}>💡 <b style={{ color: '#94a3b8' }}>Tips:</b> Blok di baris kosong = paragraf baru. Kamu bisa pakai tombol toolbar di atas untuk format otomatis.</p>
+                              <p style={{ margin: '10px 0 4px', color: '#475569' }}>💡 <b style={{ color: 'var(--nk-muted)' }}>Tips:</b> Blok di baris kosong = paragraf baru. Kamu bisa pakai tombol toolbar di atas untuk format otomatis.</p>
                             </div>
                           </details>
                         </>) : <input value={materiContent} onChange={e => setMateriContent(e.target.value)} placeholder="https://..." className="nk-input-sm" style={{ width: "100%" }} />
@@ -5286,7 +5286,7 @@ export default function Page() {
 
                     {/* Filter kategori + kelompok */}
                     <div style={{ marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                      <label style={{ fontSize: 13, color: '#94a3b8' }}>Filter:</label>
+                      <label style={{ fontSize: 13, color: 'var(--nk-muted)' }}>Filter:</label>
                       <select className="nk-input-sm" value={materiFilterGroup} onChange={e => { setMateriFilterGroup(e.target.value); setMateriFilterCat(''); }}>
                         {isSuperAdmin && <option value="">🌐 Global (Super Admin)</option>}
                         {adminGroups.map(g => <option key={g.id} value={String(g.id)}>🏢 {g.name}</option>)}
@@ -5311,14 +5311,14 @@ export default function Page() {
                       {Object.entries(adminMaterialGroups).map(([catName, items]) => {
                         const isOpen = materiFoldersOpen[catName] ?? (!!materiFilterCat || Object.keys(adminMaterialGroups).length === 1);
                         return (
-                          <div key={catName} style={{ border: '1px solid #1e2d45', borderRadius: 12, overflow: 'hidden', background: '#0f172a' }}>
+                          <div key={catName} style={{ border: '1px solid #1e2d45', borderRadius: 12, overflow: 'hidden', background: 'var(--theme-elevated)' }}>
                             <button
                               onClick={() => setMateriFoldersOpen(prev => ({ ...prev, [catName]: !isOpen }))}
-                              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: '#0b1220', border: 'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', cursor: 'pointer', color: '#e2e8f0' }}>
+                              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--theme-bg-subtle)', border: 'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', cursor: 'pointer', color: '#e2e8f0' }}>
                               <span style={{ fontSize: 16 }}>📁</span>
                               <span style={{ fontWeight: 700, flex: 1, textAlign: 'left' }}>{catName}</span>
                               <span className="nk-badge nk-badge-purple">{items.length} materi</span>
-                              <span style={{ color: '#94a3b8' }}>{isOpen ? '▲' : '▼'}</span>
+                              <span style={{ color: 'var(--nk-muted)' }}>{isOpen ? '▲' : '▼'}</span>
                             </button>
 
                             {isOpen && (
@@ -5326,7 +5326,7 @@ export default function Page() {
                                 {items.map(m => {
                                   const typeIcon = { text: '📖', video: '🎬', audio: '🎵' }[m.type] || '📄';
                                   return (
-                                    <div key={m.id} style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 10, padding: '12px 14px', marginBottom: 8, display: 'flex', flexDirection:'column', gap: 10, overflow:'hidden' }}>
+                                    <div key={m.id} style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 10, padding: '12px 14px', marginBottom: 8, display: 'flex', flexDirection:'column', gap: 10, overflow:'hidden' }}>
                                       <div style={{ minWidth: 0 }}>
                                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
                                           <span>{typeIcon}</span>
@@ -5347,7 +5347,7 @@ export default function Page() {
                                         <BtnSm onClick={() => publishMateriTelegram(m.id)} style={{ background: '#9333ea', fontSize: 12 }}>Publish Peserta</BtnSm>
                                         <BtnSm onClick={() => deleteMateri(m.id)} style={{ background: '#7f1d1d', fontSize: 12 }}>Hapus</BtnSm>
                                         {chatPublishPreview && chatPublishPreview.id === m.id && (
-                                          <div style={{ width:'100%', fontSize:11, color:'#cbd5e1', marginTop:4 }}>
+                                          <div style={{ width:'100%', fontSize:11, color:'var(--nk-text)', marginTop:4 }}>
                                             👥 {chatPublishPreview.recipient_count || 0} peserta • 💬 {chatPublishPreview.bubble_count || 0} bubble • 📤 estimasi {chatPublishPreview.estimated_messages || 0} pesan
                                           </div>
                                         )}
@@ -5373,12 +5373,12 @@ export default function Page() {
                 <>
                   <AdminSection title="🧭 Roadmap Jabatan">
                     <div style={{ display:'flex', gap:8, marginBottom: 12, flexWrap:'wrap' }}>
-                      <button onClick={() => setRoadmapMenu('positions')} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'positions' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'positions' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'positions' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>👔 Jabatan</button>
-                      <button onClick={async () => { setRoadmapMenu('competencies'); await loadRoadmapCompetencies(competencyForm.position_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'competencies' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'competencies' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'competencies' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>🛠️ Kompetensi Teknis</button>
-                      <button onClick={async () => { setRoadmapMenu('core-competencies'); await loadRoadmapCoreCompetencies(coreCompetencyForm.position_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'core-competencies' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'core-competencies' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'core-competencies' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>🧠 Kompetensi Inti</button>
-                      <button onClick={async () => { setRoadmapMenu('leadership-competencies'); await loadRoadmapLeadershipCompetencies(leadershipCompetencyForm.position_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'leadership-competencies' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'leadership-competencies' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'leadership-competencies' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>👑 Kompetensi Kepemimpinan</button>
-                      <button onClick={async () => { setRoadmapMenu('materials'); await loadRoadmapMaterials(materialForm.competency_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'materials' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'materials' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'materials' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>📘 Materi</button>
-                      <button onClick={async () => { setRoadmapMenu('graph'); await loadRoadmapMaterialGraph(materialGraphFilter.position_id || '', materialGraphFilter.mode || 'material'); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'graph' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'graph' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'graph' ? '#c4b5fd' : '#94a3b8', fontSize:12, fontWeight:700, cursor:'pointer' }}>🕸️ Graph</button>
+                      <button onClick={() => setRoadmapMenu('positions')} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'positions' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'positions' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'positions' ? '#c4b5fd' : 'var(--nk-muted)', fontSize:12, fontWeight:700, cursor:'pointer' }}>👔 Jabatan</button>
+                      <button onClick={async () => { setRoadmapMenu('competencies'); await loadRoadmapCompetencies(competencyForm.position_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'competencies' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'competencies' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'competencies' ? '#c4b5fd' : 'var(--nk-muted)', fontSize:12, fontWeight:700, cursor:'pointer' }}>🛠️ Kompetensi Teknis</button>
+                      <button onClick={async () => { setRoadmapMenu('core-competencies'); await loadRoadmapCoreCompetencies(coreCompetencyForm.position_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'core-competencies' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'core-competencies' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'core-competencies' ? '#c4b5fd' : 'var(--nk-muted)', fontSize:12, fontWeight:700, cursor:'pointer' }}>🧠 Kompetensi Inti</button>
+                      <button onClick={async () => { setRoadmapMenu('leadership-competencies'); await loadRoadmapLeadershipCompetencies(leadershipCompetencyForm.position_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'leadership-competencies' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'leadership-competencies' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'leadership-competencies' ? '#c4b5fd' : 'var(--nk-muted)', fontSize:12, fontWeight:700, cursor:'pointer' }}>👑 Kompetensi Kepemimpinan</button>
+                      <button onClick={async () => { setRoadmapMenu('materials'); await loadRoadmapMaterials(materialForm.competency_id || ''); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'materials' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'materials' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'materials' ? '#c4b5fd' : 'var(--nk-muted)', fontSize:12, fontWeight:700, cursor:'pointer' }}>📘 Materi</button>
+                      <button onClick={async () => { setRoadmapMenu('graph'); await loadRoadmapMaterialGraph(materialGraphFilter.position_id || '', materialGraphFilter.mode || 'material'); }} style={{ padding:'8px 12px', borderRadius:8, border: roadmapMenu === 'graph' ? '1px solid #8b5cf6' : '1px solid #334155', background: roadmapMenu === 'graph' ? 'rgba(139,92,246,0.18)' : 'transparent', color: roadmapMenu === 'graph' ? '#c4b5fd' : 'var(--nk-muted)', fontSize:12, fontWeight:700, cursor:'pointer' }}>🕸️ Graph</button>
                     </div>
 
                     {roadmapMenu === 'positions' && <>
@@ -5392,7 +5392,7 @@ export default function Page() {
                             {adminGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                           </select>
                         ) : (
-                          <div className="nk-input-sm" style={{ display:'flex', alignItems:'center', color:'#94a3b8' }}>
+                          <div className="nk-input-sm" style={{ display:'flex', alignItems:'center', color:'var(--nk-muted)' }}>
                             Kelompok aktif: <b style={{ marginLeft:6, color:'#e2e8f0' }}>{adminGroups.find(g => String(g.id) === String(positionForm.group_id || me?.group_id || ''))?.name || 'Kelompok Admin'}</b>
                           </div>
                         )}
@@ -5414,7 +5414,7 @@ export default function Page() {
                               <td style={{ fontWeight:700 }}>{p.code}</td>
                               <td>{p.name}</td>
                               <td style={{ maxWidth: 320, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{p.description || '-'}</td>
-                              <td style={{ fontSize:12, color:'#94a3b8' }}>{p.updated_at ? new Date(p.updated_at).toLocaleString('id-ID') : '-'}</td>
+                              <td style={{ fontSize:12, color:'var(--nk-muted)' }}>{p.updated_at ? new Date(p.updated_at).toLocaleString('id-ID') : '-'}</td>
                               <td style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                                 <BtnSm onClick={async () => { setPositionForm({ id: p.id, code: p.code || '', name: p.name || '', description: p.description || '', group_id: String(p.group_id || ''), is_active: !!p.is_active }); setCompetencyForm(f => ({ ...f, position_id: String(p.id) })); await loadRoadmapCompetencies(p.id); }}>Edit</BtnSm>
                                 <BtnSm danger onClick={() => deleteRoadmapPosition(p.id)}>Hapus</BtnSm>
@@ -5447,23 +5447,23 @@ export default function Page() {
                         {Object.entries(techCompGroups).map(([posName, items]) => {
                           const isOpen = techCompFoldersOpen[posName] ?? (Object.keys(techCompGroups).length === 1);
                           return (
-                            <div key={posName} style={{ border:'1px solid #1e2d45', borderRadius:12, overflow:'hidden', background:'#0f172a' }}>
+                            <div key={posName} style={{ border:'1px solid #1e2d45', borderRadius:12, overflow:'hidden', background:'var(--theme-elevated)' }}>
                               <button onClick={() => setTechCompFoldersOpen(prev => ({ ...prev, [posName]: !isOpen }))}
-                                style={{ width:'100%', display:'flex', alignItems:'center', gap:8, padding:'10px 12px', background:'#0b1220', border:'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', color:'#e2e8f0', cursor:'pointer' }}>
+                                style={{ width:'100%', display:'flex', alignItems:'center', gap:8, padding:'10px 12px', background:'var(--theme-bg-subtle)', border:'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', color:'#e2e8f0', cursor:'pointer' }}>
                                 <span style={{ fontSize:16 }}>📁</span>
                                 <span style={{ fontWeight:700, flex:1, textAlign:'left' }}>{posName}</span>
                                 <span className="nk-badge nk-badge-purple">{items.length} kompetensi</span>
-                                <span style={{ color:'#94a3b8' }}>{isOpen ? '▲' : '▼'}</span>
+                                <span style={{ color:'var(--nk-muted)' }}>{isOpen ? '▲' : '▼'}</span>
                               </button>
                               {isOpen && (
                                 <div style={{ padding:10, display:'grid', gap:8 }}>
                                   {items.map(c => (
-                                    <div key={c.id} style={{ border:'1px solid #1e2d45', borderRadius:10, padding:'10px 12px', background:'#0f172a' }}>
+                                    <div key={c.id} style={{ border:'1px solid #1e2d45', borderRadius:10, padding:'10px 12px', background:'var(--theme-elevated)' }}>
                                       <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:6 }}>
                                         <span className="nk-badge">{c.code}</span>
                                         <span style={{ fontWeight:700 }}>{c.name}</span>
                                       </div>
-                                      <div style={{ fontSize:12, color:'#94a3b8', marginBottom:8, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{c.description || '-'}</div>
+                                      <div style={{ fontSize:12, color:'var(--nk-muted)', marginBottom:8, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{c.description || '-'}</div>
                                       <div style={{ display:'flex', justifyContent:'space-between', gap:8, flexWrap:'wrap', alignItems:'center' }}>
                                         <span style={{ fontSize:11, color:'#64748b' }}>{c.updated_at ? new Date(c.updated_at).toLocaleString('id-ID') : '-'}</span>
                                         <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
@@ -5501,23 +5501,23 @@ export default function Page() {
                         {Object.entries(coreCompGroups).map(([posName, items]) => {
                           const isOpen = coreCompFoldersOpen[posName] ?? (Object.keys(coreCompGroups).length === 1);
                           return (
-                            <div key={posName} style={{ border:'1px solid #1e2d45', borderRadius:12, overflow:'hidden', background:'#0f172a' }}>
+                            <div key={posName} style={{ border:'1px solid #1e2d45', borderRadius:12, overflow:'hidden', background:'var(--theme-elevated)' }}>
                               <button onClick={() => setCoreCompFoldersOpen(prev => ({ ...prev, [posName]: !isOpen }))}
-                                style={{ width:'100%', display:'flex', alignItems:'center', gap:8, padding:'10px 12px', background:'#0b1220', border:'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', color:'#e2e8f0', cursor:'pointer' }}>
+                                style={{ width:'100%', display:'flex', alignItems:'center', gap:8, padding:'10px 12px', background:'var(--theme-bg-subtle)', border:'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', color:'#e2e8f0', cursor:'pointer' }}>
                                 <span style={{ fontSize:16 }}>📁</span>
                                 <span style={{ fontWeight:700, flex:1, textAlign:'left' }}>{posName}</span>
                                 <span className="nk-badge nk-badge-purple">{items.length} kompetensi inti</span>
-                                <span style={{ color:'#94a3b8' }}>{isOpen ? '▲' : '▼'}</span>
+                                <span style={{ color:'var(--nk-muted)' }}>{isOpen ? '▲' : '▼'}</span>
                               </button>
                               {isOpen && (
                                 <div style={{ padding:10, display:'grid', gap:8 }}>
                                   {items.map(c => (
-                                    <div key={c.id} style={{ border:'1px solid #1e2d45', borderRadius:10, padding:'10px 12px', background:'#0f172a' }}>
+                                    <div key={c.id} style={{ border:'1px solid #1e2d45', borderRadius:10, padding:'10px 12px', background:'var(--theme-elevated)' }}>
                                       <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:6 }}>
                                         <span className="nk-badge">{c.code}</span>
                                         <span style={{ fontWeight:700 }}>{c.name}</span>
                                       </div>
-                                      <div style={{ fontSize:12, color:'#94a3b8', marginBottom:8, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{c.description || '-'}</div>
+                                      <div style={{ fontSize:12, color:'var(--nk-muted)', marginBottom:8, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{c.description || '-'}</div>
                                       <div style={{ display:'flex', justifyContent:'space-between', gap:8, flexWrap:'wrap', alignItems:'center' }}>
                                         <span style={{ fontSize:11, color:'#64748b' }}>{c.updated_at ? new Date(c.updated_at).toLocaleString('id-ID') : '-'}</span>
                                         <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
@@ -5555,23 +5555,23 @@ export default function Page() {
                         {Object.entries(leadCompGroups).map(([posName, items]) => {
                           const isOpen = leadCompFoldersOpen[posName] ?? (Object.keys(leadCompGroups).length === 1);
                           return (
-                            <div key={posName} style={{ border:'1px solid #1e2d45', borderRadius:12, overflow:'hidden', background:'#0f172a' }}>
+                            <div key={posName} style={{ border:'1px solid #1e2d45', borderRadius:12, overflow:'hidden', background:'var(--theme-elevated)' }}>
                               <button onClick={() => setLeadCompFoldersOpen(prev => ({ ...prev, [posName]: !isOpen }))}
-                                style={{ width:'100%', display:'flex', alignItems:'center', gap:8, padding:'10px 12px', background:'#0b1220', border:'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', color:'#e2e8f0', cursor:'pointer' }}>
+                                style={{ width:'100%', display:'flex', alignItems:'center', gap:8, padding:'10px 12px', background:'var(--theme-bg-subtle)', border:'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', color:'#e2e8f0', cursor:'pointer' }}>
                                 <span style={{ fontSize:16 }}>📁</span>
                                 <span style={{ fontWeight:700, flex:1, textAlign:'left' }}>{posName}</span>
                                 <span className="nk-badge nk-badge-purple">{items.length} kompetensi kepemimpinan</span>
-                                <span style={{ color:'#94a3b8' }}>{isOpen ? '▲' : '▼'}</span>
+                                <span style={{ color:'var(--nk-muted)' }}>{isOpen ? '▲' : '▼'}</span>
                               </button>
                               {isOpen && (
                                 <div style={{ padding:10, display:'grid', gap:8 }}>
                                   {items.map(c => (
-                                    <div key={c.id} style={{ border:'1px solid #1e2d45', borderRadius:10, padding:'10px 12px', background:'#0f172a' }}>
+                                    <div key={c.id} style={{ border:'1px solid #1e2d45', borderRadius:10, padding:'10px 12px', background:'var(--theme-elevated)' }}>
                                       <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:6 }}>
                                         <span className="nk-badge">{c.code}</span>
                                         <span style={{ fontWeight:700 }}>{c.name}</span>
                                       </div>
-                                      <div style={{ fontSize:12, color:'#94a3b8', marginBottom:8, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{c.description || '-'}</div>
+                                      <div style={{ fontSize:12, color:'var(--nk-muted)', marginBottom:8, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{c.description || '-'}</div>
                                       <div style={{ display:'flex', justifyContent:'space-between', gap:8, flexWrap:'wrap', alignItems:'center' }}>
                                         <span style={{ fontSize:11, color:'#64748b' }}>{c.updated_at ? new Date(c.updated_at).toLocaleString('id-ID') : '-'}</span>
                                         <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
@@ -5593,7 +5593,7 @@ export default function Page() {
                     {roadmapMenu === 'materials' && <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12, marginTop: 2 }}>
                       <div style={{ fontWeight:700, marginBottom:8 }}>Materi per Kompetensi Teknis</div>
                       <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:8, flexWrap:'wrap' }}>
-                        <label style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:12, color:'#cbd5e1' }}>
+                        <label style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:12, color:'var(--nk-text)' }}>
                           <input type="checkbox" checked={materialStrictMode} onChange={e => setMaterialStrictMode(e.target.checked)} />
                           Strict mode backlink (hanya judul yang sudah ada)
                         </label>
@@ -5611,7 +5611,7 @@ export default function Page() {
                           if (!comp) return '';
                           const pos = roadmapPositions.find(p => String(p.id) === String(comp.position_id));
                           return pos ? `${pos.code || '-'} • ${pos.name || ''}` : '';
-                        })()} placeholder="Nama jabatan (otomatis)" style={{ color:'#cbd5e1', background:'#0a1220' }} />
+                        })()} placeholder="Nama jabatan (otomatis)" style={{ color:'var(--nk-text)', background:'#0a1220' }} />
                         <input ref={materialTitleInputRef} className="nk-input-sm" placeholder="Judul materi" value={materialForm.title} onChange={e => setMaterialForm(f => ({ ...f, title: e.target.value }))} />
                         <textarea className="nk-input-sm" placeholder="Deskripsi singkat materi (untuk AI generate draft)" value={materialForm.brief || ''} onChange={e => setMaterialForm(f => ({ ...f, brief: e.target.value }))} style={{ minHeight: 72 }} />
                         <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(180px,1fr))' }}>
@@ -5642,11 +5642,11 @@ export default function Page() {
                           </div>
                         )}
                         {materialLinkSuggestions.length > 0 && (
-                          <div style={{ border:'1px solid #334155', borderRadius:8, padding:8, background:'#0b1220' }}>
-                            <div style={{ fontSize:11, color:'#94a3b8', marginBottom:6 }}>Saran backlink untuk [[{materialLinkQuery}]] (↑ ↓ Enter/Tab):</div>
+                          <div style={{ border:'1px solid #334155', borderRadius:8, padding:8, background:'var(--theme-bg-subtle)' }}>
+                            <div style={{ fontSize:11, color:'var(--nk-muted)', marginBottom:6 }}>Saran backlink untuk [[{materialLinkQuery}]] (↑ ↓ Enter/Tab):</div>
                             <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
                               {materialLinkSuggestions.map((it, i) => (
-                                <button key={i} onClick={() => insertMaterialBacklink(it.title)} style={{ border: i === materialSuggestionIndex ? '1px solid #a78bfa' : '1px solid #475569', background: i === materialSuggestionIndex ? 'rgba(167,139,250,0.14)' : 'transparent', color:'#cbd5e1', borderRadius:999, padding:'4px 10px', fontSize:11, cursor:'pointer' }}>
+                                <button key={i} onClick={() => insertMaterialBacklink(it.title)} style={{ border: i === materialSuggestionIndex ? '1px solid #a78bfa' : '1px solid #475569', background: i === materialSuggestionIndex ? 'rgba(167,139,250,0.14)' : 'transparent', color:'var(--nk-text)', borderRadius:999, padding:'4px 10px', fontSize:11, cursor:'pointer' }}>
                                   [[{it.title}]] {it.scope === 'local' ? '• kompetensi ini' : '• global'}
                                 </button>
                               ))}
@@ -5663,24 +5663,24 @@ export default function Page() {
                         {Object.entries(roadmapMaterialGroups).map(([compName, items]) => {
                           const isOpen = roadmapMaterialFoldersOpen[compName] ?? (Object.keys(roadmapMaterialGroups).length === 1);
                           return (
-                            <div key={compName} style={{ border:'1px solid #1e2d45', borderRadius:12, overflow:'hidden', background:'#0f172a' }}>
+                            <div key={compName} style={{ border:'1px solid #1e2d45', borderRadius:12, overflow:'hidden', background:'var(--theme-elevated)' }}>
                               <button
                                 onClick={() => setRoadmapMaterialFoldersOpen(prev => ({ ...prev, [compName]: !isOpen }))}
-                                style={{ width:'100%', display:'flex', alignItems:'center', gap:8, padding:'10px 12px', background:'#0b1220', border:'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', color:'#e2e8f0', cursor:'pointer' }}>
+                                style={{ width:'100%', display:'flex', alignItems:'center', gap:8, padding:'10px 12px', background:'var(--theme-bg-subtle)', border:'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', color:'#e2e8f0', cursor:'pointer' }}>
                                 <span style={{ fontSize:16 }}>📁</span>
                                 <span style={{ fontWeight:700, flex:1, textAlign:'left' }}>{compName}</span>
                                 <span className="nk-badge nk-badge-purple">{items.length} materi</span>
-                                <span style={{ color:'#94a3b8' }}>{isOpen ? '▲' : '▼'}</span>
+                                <span style={{ color:'var(--nk-muted)' }}>{isOpen ? '▲' : '▼'}</span>
                               </button>
                               {isOpen && (
                                 <div style={{ padding:10, display:'grid', gap:8 }}>
                                   {items.map(m => (
-                                    <div key={m.id} style={{ border:'1px solid #1e2d45', borderRadius:10, padding:'10px 12px', background:'#0f172a' }}>
+                                    <div key={m.id} style={{ border:'1px solid #1e2d45', borderRadius:10, padding:'10px 12px', background:'var(--theme-elevated)' }}>
                                       <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:6 }}>
                                         <span className="nk-badge">{m.bloom_level || 'C2'}</span>
                                         <span style={{ fontWeight:700 }}>{m.title}</span>
                                       </div>
-                                      <div style={{ fontSize:12, color:'#94a3b8', marginBottom:8, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{renderBacklinkBold((m.content || '').slice(0,180))}{(m.content||'').length>180?'...':''}</div>
+                                      <div style={{ fontSize:12, color:'var(--nk-muted)', marginBottom:8, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{renderBacklinkBold((m.content || '').slice(0,180))}{(m.content||'').length>180?'...':''}</div>
                                       <div style={{ display:'flex', justifyContent:'space-between', gap:8, alignItems:'center', flexWrap:'wrap' }}>
                                         <span style={{ fontSize:11, color:'#64748b' }}>{m.updated_at ? new Date(m.updated_at).toLocaleString('id-ID') : '-'}</span>
                                         <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
@@ -5714,7 +5714,7 @@ export default function Page() {
                           <option value="competency">Mode: Kompetensi</option>
                         </select>
                         <button onClick={refreshRoadmapGraphData} disabled={refreshingGraphData}
-                          style={{ border:'1px solid #334155', background: refreshingGraphData ? '#1e293b' : '#0b1220', color:'#cbd5e1', borderRadius:8, padding:'8px 10px', fontSize:12, fontWeight:700, cursor: refreshingGraphData ? 'not-allowed' : 'pointer' }}>
+                          style={{ border:'1px solid #334155', background: refreshingGraphData ? '#1e293b' : 'var(--theme-bg-subtle)', color:'var(--nk-text)', borderRadius:8, padding:'8px 10px', fontSize:12, fontWeight:700, cursor: refreshingGraphData ? 'not-allowed' : 'pointer' }}>
                           {refreshingGraphData ? '⏳ Refreshing...' : '🔄 Refresh Data Graph'}
                         </button>
                       </div>
@@ -5747,7 +5747,7 @@ export default function Page() {
                             padding: '6px 12px', borderRadius: 8,
                             border: adminContribFilter === status ? '1px solid #8b5cf6' : '1px solid #374151',
                             background: adminContribFilter === status ? 'rgba(139, 92, 246, 0.1)' : 'transparent',
-                            color: adminContribFilter === status ? '#a78bfa' : '#94a3b8',
+                            color: adminContribFilter === status ? '#a78bfa' : 'var(--nk-muted)',
                             fontSize: 12, fontWeight: 600, cursor: 'pointer'
                           }}
                         >
@@ -5773,9 +5773,9 @@ export default function Page() {
                                 <h4 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700, color: '#e2e8f0' }}>
                                   {contrib.title}
                                 </h4>
-                                <div style={{ fontSize: 13, color: '#94a3b8' }}>
-                                  👤 <span style={{ color: '#cbd5e1' }}>{contrib.contributor_name}</span> • 
-                                  📚 <span style={{ color: '#cbd5e1' }}>{contrib.category_name}</span> • 
+                                <div style={{ fontSize: 13, color: 'var(--nk-muted)' }}>
+                                  👤 <span style={{ color: 'var(--nk-text)' }}>{contrib.contributor_name}</span> • 
+                                  📚 <span style={{ color: 'var(--nk-text)' }}>{contrib.category_name}</span> • 
                                   📅 {contrib.created_at}
                                   {contrib.exp_awarded > 0 && (
                                     <span style={{ color: '#10b981', marginLeft: 8 }}>
@@ -5826,7 +5826,7 @@ export default function Page() {
                               background: 'rgba(15, 23, 42, 0.8)',
                               border: '1px solid #1e2d45',
                               borderRadius: 8, padding: 16, marginBottom: 12,
-                              fontSize: 14, color: '#cbd5e1', lineHeight: 1.6,
+                              fontSize: 14, color: 'var(--nk-text)', lineHeight: 1.6,
                               maxHeight: 200, overflowY: 'auto'
                             }}>
                               {contrib.content.split('\n').map((line, i) => (
@@ -5846,10 +5846,10 @@ export default function Page() {
                                 <div style={{ fontSize: 11, color: '#60a5fa', fontWeight: 600, marginBottom: 6 }}>
                                   💬 Feedback Admin:
                                 </div>
-                                <div style={{ fontSize: 13, color: '#cbd5e1', marginBottom: 6 }}>
+                                <div style={{ fontSize: 13, color: 'var(--nk-text)', marginBottom: 6 }}>
                                   {contrib.admin_feedback}
                                 </div>
-                                <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                                <div style={{ fontSize: 11, color: 'var(--nk-muted)' }}>
                                   Review oleh {contrib.reviewed_by_name} • {contrib.reviewed_at}
                                 </div>
                               </div>
@@ -5874,7 +5874,7 @@ export default function Page() {
                       zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
                     }}>
                       <div style={{
-                        background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 16,
+                        background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 16,
                         padding: 24, width: '100%', maxWidth: 600
                       }}>
                         <h3 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 700, color: '#e2e8f0' }}>
@@ -5882,17 +5882,17 @@ export default function Page() {
                         </h3>
                         
                         <div style={{ marginBottom: 16, padding: 16, background: 'rgba(15, 23, 42, 0.5)', borderRadius: 8 }}>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: '#cbd5e1', marginBottom: 8 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--nk-text)', marginBottom: 8 }}>
                             {reviewingContrib.title}
                           </div>
-                          <div style={{ fontSize: 12, color: '#94a3b8' }}>
+                          <div style={{ fontSize: 12, color: 'var(--nk-muted)' }}>
                             Oleh: {reviewingContrib.contributor_name} • Kategori: {reviewingContrib.category_name}
                           </div>
                         </div>
 
                         {reviewAction === 'approve' && (
                           <div style={{ marginBottom: 14 }}>
-                            <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: '#cbd5e1' }}>
+                            <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: 'var(--nk-text)' }}>
                               ⚙️ Mode Persetujuan Roadmap
                             </label>
                             <div style={{ display: 'flex', gap: 8 }}>
@@ -5902,7 +5902,7 @@ export default function Page() {
                                   padding: '6px 10px', borderRadius: 8,
                                   border: reviewApproveMode === 'direct' ? '1px solid #22c55e' : '1px solid #374151',
                                   background: reviewApproveMode === 'direct' ? 'rgba(34,197,94,0.12)' : 'transparent',
-                                  color: reviewApproveMode === 'direct' ? '#4ade80' : '#94a3b8',
+                                  color: reviewApproveMode === 'direct' ? '#4ade80' : 'var(--nk-muted)',
                                   fontSize: 12, cursor: 'pointer'
                                 }}
                               >
@@ -5914,7 +5914,7 @@ export default function Page() {
                                   padding: '6px 10px', borderRadius: 8,
                                   border: reviewApproveMode === 'ai' ? '1px solid #8b5cf6' : '1px solid #374151',
                                   background: reviewApproveMode === 'ai' ? 'rgba(139,92,246,0.12)' : 'transparent',
-                                  color: reviewApproveMode === 'ai' ? '#c4b5fd' : '#94a3b8',
+                                  color: reviewApproveMode === 'ai' ? '#c4b5fd' : 'var(--nk-muted)',
                                   fontSize: 12, cursor: 'pointer'
                                 }}
                               >
@@ -5926,7 +5926,7 @@ export default function Page() {
 
                         <div style={{ marginBottom: 20 }}>
                           <label style={{
-                            display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: '#cbd5e1'
+                            display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: 'var(--nk-text)'
                           }}>
                             💬 Feedback untuk Kontributor
                             <span style={{ color: '#6b7280', fontWeight: 400 }}> (opsional)</span>
@@ -5955,7 +5955,7 @@ export default function Page() {
                             disabled={reviewLoading}
                             style={{
                               padding: '10px 20px', borderRadius: 8, border: '1px solid #374151',
-                              background: 'transparent', color: '#94a3b8', fontSize: 13,
+                              background: 'transparent', color: 'var(--nk-muted)', fontSize: 13,
                               cursor: reviewLoading ? 'not-allowed' : 'pointer', fontWeight: 600
                             }}
                           >
@@ -5989,7 +5989,7 @@ export default function Page() {
                 <>
                   <AdminSection title="🎁 Manajemen Hadiah Redeem">
                     {/* Form tambah/edit */}
-                    <div style={{ background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                    <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 16 }}>
                       <p style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>
                         {editingRedeemId ? '✏️ Edit Hadiah' : '➕ Tambah Hadiah Baru'}
                       </p>
@@ -6027,12 +6027,12 @@ export default function Page() {
                     {/* Daftar hadiah */}
                     <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))' }}>
                       {adminRedeemItems.map((it) => (
-                        <div key={it.id} style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 14, background: '#0b1220' }}>
+                        <div key={it.id} style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 14, background: 'var(--theme-bg-subtle)' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                             <div style={{ fontWeight: 700 }}>{it.name}</div>
                             <span className={`nk-badge ${it.is_active ? 'nk-badge-green' : 'nk-badge-red'}`}>{it.is_active ? 'Aktif' : 'Nonaktif'}</span>
                           </div>
-                          {it.description && <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 8 }}>{it.description}</div>}
+                          {it.description && <div style={{ fontSize: 13, color: 'var(--nk-muted)', marginBottom: 8 }}>{it.description}</div>}
                           <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
                             <span className="nk-badge nk-badge-orange">💰 {it.point_cost} poin</span>
                             <span className={`nk-badge ${it.stock === -1 ? 'nk-badge-purple' : it.stock > 0 ? 'nk-badge-yellow' : 'nk-badge-red'}`}>
@@ -6057,7 +6057,7 @@ export default function Page() {
                           <tbody>{adminRedeemClaims.map((c) => (
                             <tr key={c.id}>
                               <td style={{ fontWeight: 600 }}>{c.user_name || '-'}</td>
-                              <td style={{ color: '#94a3b8' }}>{c.user_phone || '-'}</td>
+                              <td style={{ color: 'var(--nk-muted)' }}>{c.user_phone || '-'}</td>
                               <td style={{ fontWeight: 600 }}>{c.item_name}</td>
                               <td><span className="nk-badge nk-badge-orange">{c.point_cost}</span></td>
                               <td>
@@ -6065,8 +6065,8 @@ export default function Page() {
                                   {c.status === 'approved' ? '✓ Disetujui' : c.status === 'rejected' ? '✗ Ditolak' : '⏳ Pending'}
                                 </span>
                               </td>
-                              <td style={{ color: '#94a3b8', fontSize: 13, maxWidth: 160 }}>{c.note || '-'}</td>
-                              <td style={{ color: '#94a3b8', fontSize: 13 }}>{new Date(c.claimed_at).toLocaleString('id-ID')}</td>
+                              <td style={{ color: 'var(--nk-muted)', fontSize: 13, maxWidth: 160 }}>{c.note || '-'}</td>
+                              <td style={{ color: 'var(--nk-muted)', fontSize: 13 }}>{new Date(c.claimed_at).toLocaleString('id-ID')}</td>
                               <td>
                                 {c.status === 'pending' ? (
                                   <div style={{ display: 'flex', gap: 6 }}>
@@ -6103,11 +6103,11 @@ export default function Page() {
         }}>
           <div style={{
             width: 'min(440px,92vw)', border: '1px solid #1e2d45', borderRadius: 18,
-            padding: '24px', background: '#0f172a',
+            padding: '24px', background: 'var(--theme-elevated)',
             boxShadow: '0 20px 60px rgba(0,0,0,0.6)'
           }}>
             <h3 style={{ margin: '0 0 12px', fontFamily: 'Poppins, sans-serif', fontSize: 18 }}>⚠️ Konfirmasi Aksi</h3>
-            <p style={{ margin: '0 0 20px', color: '#94a3b8', fontSize: 14, lineHeight: 1.6 }}>{confirmAction.message}</p>
+            <p style={{ margin: '0 0 20px', color: 'var(--nk-muted)', fontSize: 14, lineHeight: 1.6 }}>{confirmAction.message}</p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button onClick={() => setConfirmAction(null)} style={btnOutlineNeutral}>Batal</button>
               <button onClick={executeConfirmAction} style={btnDanger}>Ya, Lanjutkan</button>
@@ -6156,7 +6156,7 @@ export default function Page() {
               }}>Install</button>
             )}
             <button onClick={() => { setShowInstallBanner(false); localStorage.setItem('pwa-dismissed-until', String(Date.now() + 24*60*60*1000)); }}
-              style={{ background: 'rgba(255,255,255,0.07)', color: '#94a3b8', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '8px 12px', fontSize: 12, cursor: 'pointer' }}>
+              style={{ background: 'rgba(255,255,255,0.07)', color: 'var(--nk-muted)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '8px 12px', fontSize: 12, cursor: 'pointer' }}>
               ✕
             </button>
           </div>
@@ -6378,17 +6378,17 @@ function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote }) {
             const cx = (containerRef.current?.clientWidth || 400) / 2;
             const cy = (containerRef.current?.clientHeight || 300) / 2;
             return { scale: ns, x: cx - (cx - v.x) * (ns / v.scale), y: cy - (cy - v.y) * (ns / v.scale) };
-          })} style={{ padding: '6px 10px', background: 'none', color: '#94a3b8', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>−</button>
+          })} style={{ padding: '6px 10px', background: 'none', color: 'var(--nk-muted)', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>−</button>
           <span style={{ fontSize: 11, color: '#64748b', minWidth: 38, textAlign: 'center', userSelect: 'none' }}>{Math.round(viewport.scale * 100)}%</span>
           <button onClick={() => setViewport(v => {
             const ns = clampScale(v.scale * 1.25);
             const cx = (containerRef.current?.clientWidth || 400) / 2;
             const cy = (containerRef.current?.clientHeight || 300) / 2;
             return { scale: ns, x: cx - (cx - v.x) * (ns / v.scale), y: cy - (cy - v.y) * (ns / v.scale) };
-          })} style={{ padding: '6px 10px', background: 'none', color: '#94a3b8', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>+</button>
+          })} style={{ padding: '6px 10px', background: 'none', color: 'var(--nk-muted)', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>+</button>
         </div>
         <button onClick={() => setViewport({ x: 0, y: 0, scale: 1 })}
-          style={{ padding: '6px 8px', background: 'rgba(255,255,255,0.07)', color: '#94a3b8', border: '1px solid #1e2d45', borderRadius: 8, cursor: 'pointer', fontSize: 12 }}>
+          style={{ padding: '6px 8px', background: 'rgba(255,255,255,0.07)', color: 'var(--nk-muted)', border: '1px solid #1e2d45', borderRadius: 8, cursor: 'pointer', fontSize: 12 }}>
           ⌂
         </button>
         {saving && <span style={{ fontSize: 11, color: '#64748b' }}>💾...</span>}
@@ -6396,7 +6396,7 @@ function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote }) {
 
       {/* Add menu dropdown */}
       {showAddMenu && (
-        <div style={{ position: 'absolute', top: 46, left: 10, zIndex: 30, background: '#0f172a', border: '1px solid #1e2d45', borderRadius: 10, padding: 8, minWidth: 220, maxHeight: 280, overflowY: 'auto' }}>
+        <div style={{ position: 'absolute', top: 46, left: 10, zIndex: 30, background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 10, padding: 8, minWidth: 220, maxHeight: 280, overflowY: 'auto' }}>
           <p style={{ fontSize: 11, color: '#475569', margin: '0 0 6px 4px', fontWeight: 600, textTransform: 'uppercase' }}>Pilih catatan:</p>
           {notes.filter(n => n.note_type !== 'fleeting').map(n => (
             <div key={n.id} onClick={() => addNoteCard(n.id)}
@@ -6452,7 +6452,7 @@ function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote }) {
                 position: 'absolute',
                 left: item.x, top: item.y,
                 width: item.width, height: item.height,
-                background: '#0f172a',
+                background: 'var(--theme-elevated)',
                 border: `2px solid ${selectedId === item.id ? '#3b82f6' : '#1e3a5f'}`,
                 borderRadius: 12,
                 boxShadow: selectedId === item.id ? '0 0 0 3px rgba(59,130,246,0.25), 0 4px 24px rgba(0,0,0,0.5)' : '0 4px 20px rgba(0,0,0,0.4)',

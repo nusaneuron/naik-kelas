@@ -468,6 +468,13 @@ button:active { transform: translateY(0); }
     height: auto !important;
     min-height: 56px;
   }
+
+  :root[data-theme='light'] .nk-sidebar {
+    border-top: 1px solid rgba(15,23,42,0.14) !important;
+    background: rgba(248,250,252,0.92) !important;
+    backdrop-filter: blur(16px) saturate(140%) !important;
+    -webkit-backdrop-filter: blur(16px) saturate(140%) !important;
+  }
   .nk-sidebar::-webkit-scrollbar { display: none; }
 
   .nk-sidebar .nk-sidebar-label { display: none; }
