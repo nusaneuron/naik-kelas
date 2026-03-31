@@ -2289,7 +2289,7 @@ export default function Page() {
 
           {/* Card */}
           <form onSubmit={login} style={{
-            border: '1px solid #1e2d45',
+            border: '1px solid var(--nk-border)',
             borderRadius: 20,
             padding: '28px 24px',
             background: 'rgba(15,23,42,0.85)',
@@ -2370,7 +2370,7 @@ export default function Page() {
   if (!entryMode) {
     return (
       <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 16 }}>
-        <div style={{ width: '100%', maxWidth: 680, border: '1px solid #1e2d45', borderRadius: 20, padding: 24, background: 'rgba(15,23,42,0.85)' }}>
+        <div style={{ width: '100%', maxWidth: 680, border: '1px solid var(--nk-border)', borderRadius: 20, padding: 24, background: 'rgba(15,23,42,0.85)' }}>
           <h2 style={{ margin: '0 0 8px', color: '#fff' }}>Pilih Mode Masuk</h2>
           <p style={{ margin: '0 0 18px', color: 'var(--nk-muted)', fontSize: 13 }}>Kamu bisa masuk cepat ke Catatan atau ke Portal Lengkap. Data catatan tetap sinkron di keduanya.</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -2544,7 +2544,7 @@ export default function Page() {
                       }} style={{ flex: 1, padding: '5px 0', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                         {editNameLoading ? 'Menyimpan...' : '💾 Simpan'}
                       </button>
-                      <button onClick={() => setEditingName(false)} style={{ flex: 1, padding: '5px 0', background: 'transparent', color: 'var(--nk-muted)', border: '1px solid #1e2d45', borderRadius: 7, cursor: 'pointer', fontSize: 12 }}>Batal</button>
+                      <button onClick={() => setEditingName(false)} style={{ flex: 1, padding: '5px 0', background: 'transparent', color: 'var(--nk-muted)', border: '1px solid var(--nk-border)', borderRadius: 7, cursor: 'pointer', fontSize: 12 }}>Batal</button>
                     </div>
                   </div>
                 ) : (
@@ -2646,7 +2646,7 @@ export default function Page() {
                     <p style={{ color: '#64748b', fontSize: 13, margin: '0 0 16px' }}>Kamu punya <b style={{ color: '#a78bfa' }}>{myBadges.length} badge</b> 🎉</p>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 14 }}>
                       {myBadges.map((b, i) => (
-                        <div key={i} style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 14, padding: 16, textAlign: 'center', transition: 'all 0.2s', cursor: 'default' }}
+                        <div key={i} style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 14, padding: 16, textAlign: 'center', transition: 'all 0.2s', cursor: 'default' }}
                           onMouseEnter={e => { e.currentTarget.style.borderColor='#7c3aed'; e.currentTarget.style.transform='translateY(-2px)'; }}
                           onMouseLeave={e => { e.currentTarget.style.borderColor='var(--nk-border)'; e.currentTarget.style.transform='none'; }}>
                           {b.icon_url
@@ -2815,15 +2815,15 @@ export default function Page() {
                     📔 Refleksi Baru
                   </button>
                   <button onClick={() => { setNoteView('list'); setNoteListMode('all'); }}
-                    style={{ padding: '7px 12px', background: noteView === 'list' ? '#1e3a5f' : 'transparent', color: noteView === 'list' ? '#93c5fd' : '#64748b', border: '1px solid #1e2d45', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>
+                    style={{ padding: '7px 12px', background: noteView === 'list' ? '#1e3a5f' : 'transparent', color: noteView === 'list' ? '#93c5fd' : '#64748b', border: '1px solid var(--nk-border)', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>
                     📋 Daftar
                   </button>
                   <button onClick={loadGraph}
-                    style={{ padding: '7px 12px', background: noteView === 'graph' ? '#1e3a5f' : 'transparent', color: noteView === 'graph' ? '#93c5fd' : '#64748b', border: '1px solid #1e2d45', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>
+                    style={{ padding: '7px 12px', background: noteView === 'graph' ? '#1e3a5f' : 'transparent', color: noteView === 'graph' ? '#93c5fd' : '#64748b', border: '1px solid var(--nk-border)', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>
                     🕸️ Graph
                   </button>
                   <button onClick={loadCanvas}
-                    style={{ padding: '7px 12px', background: noteView === 'canvas' ? '#1e3a5f' : 'transparent', color: noteView === 'canvas' ? '#93c5fd' : '#64748b', border: '1px solid #1e2d45', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>
+                    style={{ padding: '7px 12px', background: noteView === 'canvas' ? '#1e3a5f' : 'transparent', color: noteView === 'canvas' ? '#93c5fd' : '#64748b', border: '1px solid var(--nk-border)', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>
                     🖼️ Canvas
                   </button>
                   {noteView === 'list' && (
@@ -2862,7 +2862,7 @@ export default function Page() {
 
                 {/* Refleksi Harian (di Catatan) */}
                 {noteView === 'list' && (noteListMode === 'all' || noteListMode === 'reflection') && (
-                <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 12, marginBottom: 12 }}>
+                <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: 12, marginBottom: 12 }}>
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 8, gap: 8, flexWrap:'wrap' }}>
                     <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--nk-text)' }}>📔 Refleksi Harian</div>
                     <button onClick={() => setShowReflectionEditor(true)}
@@ -2874,7 +2874,7 @@ export default function Page() {
                   {myReflections.length ? (
                     <div style={{ display: 'grid', gap: 8, maxHeight: 180, overflowY: 'auto' }}>
                       {myReflections.slice(0, 5).map(r => (
-                        <div key={r.id} style={{ background:'#080d18', border:'1px solid #1e2d45', borderRadius:8, padding:'8px 10px' }}>
+                        <div key={r.id} style={{ background:'#080d18', border:'1px solid var(--nk-border)', borderRadius:8, padding:'8px 10px' }}>
                           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:4 }}>
                             <div style={{ fontSize:11, color:'var(--nk-muted)' }}>📅 {new Date(r.reflected_date + 'T00:00:00').toLocaleDateString('id-ID')}</div>
                             <button onClick={() => deleteReflection(r.id)} disabled={reflectionDeletingId === r.id}
@@ -2962,7 +2962,7 @@ export default function Page() {
 
                 {/* EDITOR VIEW */}
                 {noteView === 'editor' && (
-                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, overflow: 'hidden' }}>
+                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, overflow: 'hidden' }}>
                     {/* Header editor */}
                     <div style={{ display: 'flex', gap: 8, padding: '10px 12px', borderBottom: '1px solid #1e2d45', alignItems: 'center', flexWrap: 'wrap' }}>
                       <button onClick={() => setNoteView('list')} style={{ color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, padding: 0 }}>←</button>
@@ -2982,7 +2982,7 @@ export default function Page() {
                       {activeNote?.id && !noteEditing && (
                         <>
                           <button onClick={() => setNoteEditing(true)}
-                            style={{ padding: '5px 12px', background: 'transparent', color: 'var(--nk-muted)', border: '1px solid #1e2d45', borderRadius: 7, cursor: 'pointer', fontSize: 12 }}>✏️ Edit</button>
+                            style={{ padding: '5px 12px', background: 'transparent', color: 'var(--nk-muted)', border: '1px solid var(--nk-border)', borderRadius: 7, cursor: 'pointer', fontSize: 12 }}>✏️ Edit</button>
                           {activeNote?.note_type !== 'fleeting' && (
                             <button onClick={() => openContributeModal(activeNote)}
                               style={{ padding: '5px 12px', background: 'rgba(139,92,246,0.15)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
@@ -3084,7 +3084,7 @@ export default function Page() {
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                         <button onClick={() => setCanvasOpenId(null)}
-                          style={{ padding: '5px 12px', background: 'transparent', color: '#64748b', border: '1px solid #1e2d45', borderRadius: 7, cursor: 'pointer', fontSize: 12 }}>
+                          style={{ padding: '5px 12px', background: 'transparent', color: '#64748b', border: '1px solid var(--nk-border)', borderRadius: 7, cursor: 'pointer', fontSize: 12 }}>
                           ← Daftar Canvas
                         </button>
                         <span style={{ fontSize: 13, color: '#93c5fd', fontWeight: 700 }}>
@@ -3232,7 +3232,7 @@ export default function Page() {
                       <button className="nk-input-sm" onClick={() => loadParticipantRoadmapGraph(participantRoadmapFilter.position_id || '', participantRoadmapFilter.mode || 'material')}>🔄 Refresh Graph</button>
                     </div>
 
-                    <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
+                    <div style={{ border:'1px solid var(--nk-border)', borderRadius: 10, padding: 10 }}>
                       <div style={{ fontWeight:700, marginBottom:6 }}>Graph Materi (Backlink)</div>
                       <div style={{ fontSize:12, color:'var(--nk-muted)', marginBottom:8 }}>Silakan klik node jika ingin melihat detail materi.</div>
                       {(() => { const g = parseRoadmapGraph(participantRoadmapGraph); return g.error ? <div className="nk-empty" style={{ margin:0 }}>{g.error}</div> : <NoteGraph nodes={g.nodes} edges={g.edges} onNodeClick={openParticipantRoadmapMaterial} />; })()}
@@ -3241,7 +3241,7 @@ export default function Page() {
                       )}
                     </div>
 
-                    <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12 }}>
+                    <div style={{ border:'1px solid var(--nk-border)', borderRadius: 10, padding: 12 }}>
                       <div style={{ fontWeight:700, marginBottom:8 }}>🤖 Tanya Roadmap (RAG)</div>
                       <textarea className="nk-input-sm" placeholder="Tanyakan materi roadmap..." value={participantRagQuestion} onChange={e => setParticipantRagQuestion(e.target.value)} style={{ minHeight: 80 }} />
                       <div style={{ display:'flex', justifyContent:'flex-end', marginTop:8 }}>
@@ -3269,7 +3269,7 @@ export default function Page() {
                     </div>
 
                     {participantRoadmapMaterialDetail && (
-                      <div ref={participantMaterialTopRef} style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12 }}>
+                      <div ref={participantMaterialTopRef} style={{ border:'1px solid var(--nk-border)', borderRadius: 10, padding: 12 }}>
                         <div style={{ display:'flex', justifyContent:'space-between', gap:8, alignItems:'center', marginBottom:8, flexWrap:'wrap' }}>
                           <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
                             <div style={{ fontWeight:700 }}>📘 Baca Materi</div>
@@ -3308,7 +3308,7 @@ export default function Page() {
               {quizFlow.phase === 'idle' && (
                 <div style={{ display:'grid', gap:12 }}>
                   <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))', gap:10 }}>
-                    <div style={{ border:'1px solid #1e2d45', borderRadius:12, padding:12, background:'var(--theme-elevated)' }}>
+                    <div style={{ border:'1px solid var(--nk-border)', borderRadius:12, padding:12, background:'var(--theme-elevated)' }}>
                       <div style={{ fontSize:12, color:'var(--nk-muted)', marginBottom:8 }}>Mulai Quiz per kategori</div>
                       <select className="nk-input-sm" value={quizFlow.categoryId} onChange={e => setQuizFlow(f => ({ ...f, categoryId: e.target.value }))}>
                         <option value="">Pilih kategori quiz</option>
@@ -3316,7 +3316,7 @@ export default function Page() {
                       </select>
                       <button onClick={() => startQuizFlow('quiz')} disabled={quizFlow.loading} style={{ marginTop:10, width:'100%', padding:'9px 12px', borderRadius:9, border:'none', background:'#2563eb', color:'#fff', fontWeight:700, cursor:'pointer' }}>Mulai Quiz</button>
                     </div>
-                    <div style={{ border:'1px solid #1e2d45', borderRadius:12, padding:12, background:'var(--theme-elevated)' }}>
+                    <div style={{ border:'1px solid var(--nk-border)', borderRadius:12, padding:12, background:'var(--theme-elevated)' }}>
                       <div style={{ fontSize:12, color:'var(--nk-muted)', marginBottom:8 }}>Mulai Tryout (acak dari config aktif)</div>
                       <button onClick={() => startQuizFlow('tryout')} disabled={quizFlow.loading} style={{ width:'100%', padding:'9px 12px', borderRadius:9, border:'none', background:'#7c3aed', color:'#fff', fontWeight:700, cursor:'pointer' }}>Mulai Tryout</button>
                     </div>
@@ -3330,7 +3330,7 @@ export default function Page() {
                 const ans = quizFlow.answers[q.id] || '';
                 const isLast = quizFlow.current === quizFlow.questions.length - 1;
                 return (
-                  <div style={{ border:'1px solid #1e2d45', borderRadius:12, padding:14, background:'var(--theme-elevated)' }}>
+                  <div style={{ border:'1px solid var(--nk-border)', borderRadius:12, padding:14, background:'var(--theme-elevated)' }}>
                     <div style={{ display:'flex', justifyContent:'space-between', gap:8, marginBottom:10, flexWrap:'wrap' }}>
                       <div style={{ fontSize:12, color:'var(--nk-muted)' }}>{quizFlow.mode === 'quiz' ? `Quiz • ${quizFlow.categoryName || '-'}` : 'Tryout'}</div>
                       <div style={{ fontSize:12, color:'var(--nk-muted)' }}>Soal {quizFlow.current + 1}/{quizFlow.questions.length}</div>
@@ -3362,7 +3362,7 @@ export default function Page() {
                 if (!rv) return null;
                 const isLast = quizFlow.reviewIndex === (quizFlow.result.reviews.length - 1);
                 return (
-                  <div style={{ border:'1px solid #1e2d45', borderRadius:12, padding:14, background:'var(--theme-elevated)' }}>
+                  <div style={{ border:'1px solid var(--nk-border)', borderRadius:12, padding:14, background:'var(--theme-elevated)' }}>
                     <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
                       <div style={{ fontSize:12, color:'var(--nk-muted)' }}>Pembahasan {quizFlow.reviewIndex + 1}/{quizFlow.result.reviews.length}</div>
                       <span className={`nk-badge ${rv.is_correct ? 'nk-badge-green' : 'nk-badge-red'}`}>{rv.is_correct ? 'Benar' : 'Salah'}</span>
@@ -3394,7 +3394,7 @@ export default function Page() {
               })()}
 
               {quizFlow.phase === 'result' && quizFlow.result && (
-                <div style={{ border:'1px solid #1e2d45', borderRadius:12, padding:14, background:'var(--theme-elevated)' }}>
+                <div style={{ border:'1px solid var(--nk-border)', borderRadius:12, padding:14, background:'var(--theme-elevated)' }}>
                   <div style={{ fontSize:18, fontWeight:800, marginBottom:8 }}>Hasil {quizFlow.mode === 'quiz' ? 'Quiz' : 'Tryout'}</div>
                   <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:10 }}>
                     <span className="nk-badge nk-badge-purple">Benar: {quizFlow.result.correct_count}/{quizFlow.result.total}</span>
@@ -3535,7 +3535,7 @@ export default function Page() {
                                       let bubbles = [m.content];
                                       if (m.content?.startsWith('[')) { try { bubbles = JSON.parse(m.content); } catch {} }
                                       return bubbles.map((bubble, bi) => (
-                                        <div key={bi} style={{ background: '#0a1628', border: '1px solid #1e2d45', borderRadius: 10, padding: '12px 14px', marginBottom: bi < bubbles.length-1 ? 8 : 0 }}
+                                        <div key={bi} style={{ background: '#0a1628', border: '1px solid var(--nk-border)', borderRadius: 10, padding: '12px 14px', marginBottom: bi < bubbles.length-1 ? 8 : 0 }}
                                           dangerouslySetInnerHTML={{ __html: renderMD(bubble) }} />
                                       ));
                                     })()}
@@ -3644,7 +3644,7 @@ export default function Page() {
         {/* ── Modal Ajukan Catatan ke Materi ── */}
         {showContributeModal && contributeNote && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-            <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 16, padding: 24, width: '100%', maxWidth: 480 }}>
+            <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 480 }}>
               <h3 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 700, color: '#e2e8f0' }}>
                 💡 Ajukan Catatan ke Materi
               </h3>
@@ -3653,7 +3653,7 @@ export default function Page() {
               </p>
 
               {/* Preview catatan */}
-              <div style={{ background: '#080d18', border: '1px solid #1e2d45', borderRadius: 10, padding: 14, marginBottom: 20 }}>
+              <div style={{ background: '#080d18', border: '1px solid var(--nk-border)', borderRadius: 10, padding: 14, marginBottom: 20 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#93c5fd', marginBottom: 6 }}>
                   📝 {contributeNote.title}
                 </div>
@@ -3675,7 +3675,7 @@ export default function Page() {
                     onChange={e => setContributeCategoryId(e.target.value)}
                     style={{
                       width: '100%', padding: '10px 12px', borderRadius: 8,
-                      border: '1px solid #1e2d45', background: '#080d18',
+                      border: '1px solid var(--nk-border)', background: '#080d18',
                       color: '#e2e8f0', fontSize: 14
                     }}
                   >
@@ -3716,14 +3716,14 @@ export default function Page() {
         {/* ── Modal Refleksi Harian ── */}
         {showReflectionEditor && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-            <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 16, padding: 20, width: '100%', maxWidth: 560 }}>
+            <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 16, padding: 20, width: '100%', maxWidth: 560 }}>
               <h3 style={{ margin: '0 0 8px', color: '#e2e8f0' }}>📔 Buat Refleksi Harian</h3>
               <p style={{ margin: '0 0 12px', fontSize: 12, color: '#64748b' }}>Refleksi bersifat privat. Submit pertama hari ini dapat EXP.</p>
               <textarea
                 value={reflectionDraft}
                 onChange={e => setReflectionDraft(e.target.value)}
                 placeholder="Tulis refleksi harianmu di sini..."
-                style={{ width:'100%', minHeight: 140, background:'#080d18', border:'1px solid #1e2d45', borderRadius: 8, color:'#e2e8f0', padding:'10px 12px', fontSize:13, resize:'vertical' }}
+                style={{ width:'100%', minHeight: 140, background:'#080d18', border:'1px solid var(--nk-border)', borderRadius: 8, color:'#e2e8f0', padding:'10px 12px', fontSize:13, resize:'vertical' }}
               />
               <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop: 10 }}>
                 <button onClick={() => setShowReflectionEditor(false)}
@@ -3890,7 +3890,7 @@ export default function Page() {
               {/* Modal Reset Password — di luar AdminSection */}
               {showResetPass && adminSection === 'peserta' && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 16, padding: 24, width: '100%', maxWidth: 380 }}>
+                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 380 }}>
                     <p style={{ margin: '0 0 16px', fontWeight: 700, fontSize: 16 }}>🔑 Reset Password Peserta</p>
                     <p style={{ margin: '0 0 12px', fontSize: 13, color: '#64748b' }}>
                       Peserta: <b style={{ color: '#f1f5f9' }}>{participants.find(p=>p.id===resetPassUserId)?.name || `#${resetPassUserId}`}</b>
@@ -4098,7 +4098,7 @@ export default function Page() {
                       {Object.entries(questionGroups).map(([catName, items]) => {
                         const isOpen = questionFoldersOpen[catName] ?? (!!questionFilterCategoryId || Object.keys(questionGroups).length === 1);
                         return (
-                          <div key={catName} style={{ border: '1px solid #1e2d45', borderRadius: 12, overflow: 'hidden', background: 'var(--theme-elevated)' }}>
+                          <div key={catName} style={{ border: '1px solid var(--nk-border)', borderRadius: 12, overflow: 'hidden', background: 'var(--theme-elevated)' }}>
                             <button
                               onClick={() => setQuestionFoldersOpen(prev => ({ ...prev, [catName]: !isOpen }))}
                               style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--theme-bg-subtle)', border: 'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', cursor: 'pointer', color: '#e2e8f0' }}>
@@ -4111,7 +4111,7 @@ export default function Page() {
                             {isOpen && (
                               <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', padding: 12 }}>
                                 {items.map((q) => (
-                                  <div key={q.id} style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 14, background: 'var(--theme-elevated)' }}>
+                                  <div key={q.id} style={{ border: '1px solid var(--nk-border)', borderRadius: 12, padding: 14, background: 'var(--theme-elevated)' }}>
                                     <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>{q.question_text}</div>
                                     <div style={{ fontSize: 12, color: 'var(--nk-muted)', marginBottom: 10, lineHeight: 1.6 }}>
                                       A. {q.option_a} &nbsp;·&nbsp; B. {q.option_b}<br />
@@ -4142,7 +4142,7 @@ export default function Page() {
                     Atur soal yang akan digunakan dalam tryout bot per kelompok. Admin hanya bisa mengelola config kelompoknya sendiri.
                   </p>
                   {/* Buat Config Baru */}
-                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 14, marginBottom: 16 }}>
+                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: 14, marginBottom: 16 }}>
                     <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600 }}>➕ Buat Config Tryout Baru</p>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <input className="nk-input-sm" style={{ flex: 1 }} placeholder="Nama config (misal: Tryout Bulan Maret)" value={tryoutNewName} onChange={e => setTryoutNewName(e.target.value)} />
@@ -4192,7 +4192,7 @@ export default function Page() {
                             <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid #1a2535' }}>
                               <span style={{ flex: 1, fontSize: 13 }}>📚 {item.category_name}</span>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <input type="number" min="1" defaultValue={item.question_count} style={{ width: 52, padding: '3px 6px', background: '#0a1628', border: '1px solid #1e2d45', borderRadius: 6, color: '#fff', fontSize: 12 }}
+                                <input type="number" min="1" defaultValue={item.question_count} style={{ width: 52, padding: '3px 6px', background: '#0a1628', border: '1px solid var(--nk-border)', borderRadius: 6, color: '#fff', fontSize: 12 }}
                                   onBlur={async e => {
                                     const n = parseInt(e.target.value);
                                     if (!n || n === item.question_count) return;
@@ -4237,22 +4237,22 @@ export default function Page() {
                   {adminLearningSummary ? (<>
                     {/* Stat cards */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
-                      <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                      <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
                         <div style={{ fontSize: 28, fontWeight: 800, color: '#be94f5' }}>{adminLearningSummary.total_participants}</div>
                         <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Total Peserta</div>
                       </div>
-                      <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                      <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
                         <div style={{ fontSize: 28, fontWeight: 800, color: '#34d399' }}>{adminLearningSummary.active_today}</div>
                         <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Aktif Hari Ini</div>
                       </div>
-                      <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                      <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
                         <div style={{ fontSize: 28, fontWeight: 800, color: '#38bdf8' }}>{adminLearningSummary.active_week}</div>
                         <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Aktif 7 Hari</div>
                       </div>
                     </div>
 
                     {/* Tabel per peserta */}
-                    <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                    <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
                       <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>📊 Detail Per Peserta</p>
                       {adminLearningSummary.participants?.length > 0 ? (
                         <div className="nk-table-wrap" style={{ maxHeight: 380, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
@@ -4278,7 +4278,7 @@ export default function Page() {
                     </div>
 
                     {/* Jadwal belajar terpasang */}
-                    <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16 }}>
+                    <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: 16 }}>
                       <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>⏰ Jadwal Pengingat Belajar</p>
                       {adminReminders.length ? (
                         <div className="nk-table-wrap" style={{ maxHeight: 240, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
@@ -4303,7 +4303,7 @@ export default function Page() {
               {/* Admin — Poin */}
               {adminSection === 'poin' && (
                 <AdminSection title="💰 Poin Peserta">
-                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px', marginBottom: 16 }}>
+                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: '16px', marginBottom: 16 }}>
                     <p style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600, color: 'var(--nk-text)' }}>
                       {editingPointEntryId ? '✏️ Edit Entry Poin' : '➕ Tambah / Kurangi Poin'}
                     </p>
@@ -4375,7 +4375,7 @@ export default function Page() {
                 <AdminSection title="🎖️ Manajemen Badges">
 
                   {/* Form buat/edit badge */}
-                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: 16, marginBottom: 20 }}>
                     <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>{badgeForm.id ? '✏️ Edit Badge' : '➕ Buat Badge Baru'}</p>
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
                       <div style={{ flex: '1 1 200px' }}>
@@ -4437,12 +4437,12 @@ export default function Page() {
                   </div>
 
                   {/* Daftar badge */}
-                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: 16, marginBottom: 20 }}>
                     <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>📋 Daftar Badge ({adminBadges.length})</p>
                     {adminBadges.length > 0 ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {adminBadges.map(b => (
-                          <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#0d1b2e', borderRadius: 10, padding: '10px 14px', border: '1px solid #1e2d45' }}>
+                          <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#0d1b2e', borderRadius: 10, padding: '10px 14px', border: '1px solid var(--nk-border)' }}>
                             {b.icon_url ? <img src={b.icon_url} alt={b.name} style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} onError={e => { e.target.style.display='none'; }} /> : <div style={{ width: 44, height: 44, borderRadius: 8, background: 'var(--nk-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🎖️</div>}
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontWeight: 700, fontSize: 14 }}>{b.name}</div>
@@ -4470,7 +4470,7 @@ export default function Page() {
                   </div>
 
                   {/* Form kasih badge ke peserta */}
-                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: 16, marginBottom: 20 }}>
                     <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>🏅 Berikan Badge ke Peserta</p>
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                       <div style={{ flex: '1 1 180px' }}>
@@ -4507,7 +4507,7 @@ export default function Page() {
                   </div>
 
                   {/* Riwayat pemberian badge */}
-                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16 }}>
+                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: 16 }}>
                     <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>📜 Riwayat Pemberian Badge</p>
                     {adminBadgeAwards.length > 0 ? (
                       <div className="nk-table-wrap" style={{ maxHeight: 360, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
@@ -4548,18 +4548,18 @@ export default function Page() {
                 <AdminSection title="💬 Feedback Peserta">
                   {/* Setting jadwal — hanya super admin */}
                   {isSuperAdmin && (
-                    <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+                    <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: 16, marginBottom: 20 }}>
                       <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>⏰ Jadwal Broadcast Feedback</p>
                       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                         <div>
                           <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Tanggal</div>
                           <input type="date" value={fbScheduleDate} onChange={e => setFbScheduleDate(e.target.value)}
-                            style={{ background: '#0d1b2e', border: '1px solid #1e2d45', borderRadius: 8, color: '#f1f5f9', padding: '7px 12px', fontSize: 14 }} />
+                            style={{ background: '#0d1b2e', border: '1px solid var(--nk-border)', borderRadius: 8, color: '#f1f5f9', padding: '7px 12px', fontSize: 14 }} />
                         </div>
                         <div>
                           <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Jam (WIB)</div>
                           <input type="time" value={fbScheduleTime} onChange={e => setFbScheduleTime(e.target.value)}
-                            style={{ background: '#0d1b2e', border: '1px solid #1e2d45', borderRadius: 8, color: '#f1f5f9', padding: '7px 12px', fontSize: 14 }} />
+                            style={{ background: '#0d1b2e', border: '1px solid var(--nk-border)', borderRadius: 8, color: '#f1f5f9', padding: '7px 12px', fontSize: 14 }} />
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--nk-muted)', cursor: 'pointer' }}>
@@ -4592,18 +4592,18 @@ export default function Page() {
                   {/* Stats */}
                   {adminFeedbackStats && (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px,1fr))', gap: 12, marginBottom: 20 }}>
-                      <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                      <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
                         <div style={{ fontSize: 28, fontWeight: 800, color: '#fbbf24' }}>{adminFeedbackStats.avg_rating}</div>
                         <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Rata-rata Rating</div>
                         <div style={{ fontSize: 20, marginTop: 4 }}>{'⭐'.repeat(Math.round(adminFeedbackStats.avg_rating || 0))}</div>
                       </div>
-                      <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                      <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
                         <div style={{ fontSize: 28, fontWeight: 800, color: '#be94f5' }}>{adminFeedbackStats.total}</div>
                         <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Total Feedback</div>
                       </div>
                       {/* Distribusi bintang */}
                       {[5,4,3,2,1].map(star => (
-                        <div key={star} style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div key={star} style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
                           <span style={{ fontSize: 13, color: '#fbbf24', minWidth: 28 }}>{'⭐'.repeat(star)}</span>
                           <div style={{ flex: 1, background: '#1e293b', borderRadius: 4, height: 8 }}>
                             <div style={{ height: 8, borderRadius: 4, background: star >= 4 ? '#34d399' : star === 3 ? '#fbbf24' : '#f87171', width: `${adminFeedbackStats.total ? Math.round((adminFeedbackStats.dist?.[star]||0)/adminFeedbackStats.total*100) : 0}%` }}></div>
@@ -4615,7 +4615,7 @@ export default function Page() {
                   )}
 
                   {/* Tabel rekapan */}
-                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16 }}>
+                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: 16 }}>
                     <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>📋 Rekapan Feedback{!isSuperAdmin ? ' (Kelompokmu)' : ''}</p>
                     {adminFeedbackList.length > 0 ? (
                       <div className="nk-table-wrap" style={{ maxHeight: 400, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
@@ -4643,21 +4643,21 @@ export default function Page() {
                   {adminReflectionStats ? (
                     <>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
-                        <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                        <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
                           <div style={{ fontSize: 28, fontWeight: 800, color: '#be94f5' }}>{adminReflectionStats.today}</div>
                           <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Refleksi Hari Ini</div>
                         </div>
-                        <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                        <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
                           <div style={{ fontSize: 28, fontWeight: 800, color: '#38bdf8' }}>{adminReflectionStats.week}</div>
                           <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>7 Hari Terakhir</div>
                         </div>
-                        <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
+                        <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: '16px 20px', textAlign: 'center' }}>
                           <div style={{ fontSize: 28, fontWeight: 800, color: '#34d399' }}>{adminReflectionStats.unique_users}</div>
                           <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Peserta Aktif</div>
                         </div>
                       </div>
                       {adminReflectionStats.top_users?.length > 0 && (
-                        <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                        <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
                           <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>🏆 Peserta Paling Konsisten (30 hari)</p>
                           {adminReflectionStats.top_users.map((u, i) => (
                             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: i < adminReflectionStats.top_users.length - 1 ? '1px solid #1e2d45' : 'none' }}>
@@ -4668,7 +4668,7 @@ export default function Page() {
                         </div>
                       )}
                       {adminReflectionStats.trend?.length > 0 && (
-                        <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16 }}>
+                        <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: 16 }}>
                           <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>📈 Tren 7 Hari Terakhir</p>
                           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', height: 80 }}>
                             {adminReflectionStats.trend.map((d, i) => {
@@ -4686,7 +4686,7 @@ export default function Page() {
                         </div>
                       )}
                       {/* Tabel peserta */}
-                      <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginTop: 16 }}>
+                      <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: 16, marginTop: 16 }}>
                         <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 14 }}>👥 Status Refleksi Peserta</p>
                         {adminReflectionStats.participants?.length > 0 ? (
                           <div className="nk-table-wrap" style={{ maxHeight: 340, overflowX: 'scroll', overflowY: 'auto', display: 'block', width: '100%', WebkitOverflowScrolling: 'touch' }}>
@@ -4708,7 +4708,7 @@ export default function Page() {
                           </div>
                         ) : <p style={{ color: '#475569', fontSize: 13 }}>Belum ada peserta terdaftar.</p>}
                       </div>
-                      <div style={{ marginTop: 16, padding: 16, background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12 }}>
+                      <div style={{ marginTop: 16, padding: 16, background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12 }}>
                         <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: 14 }}>📣 Kirim Reminder Refleksi</p>
                         <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--nk-muted)' }}>Kirim pengingat refleksi sekarang ke semua peserta yang belum refleksi hari ini (tanpa menunggu jadwal).</p>
                         <button
@@ -4745,7 +4745,7 @@ export default function Page() {
               {/* Admin — EXP */}
               {adminSection === 'exp' && (
                 <AdminSection title="⭐ EXP Peserta">
-                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                  <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
                     <p style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>⏰ Setting Laporan EXP Harian</p>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                       <input className="nk-input-sm" type="time" value={expReportSetting.time_of_day || '10:00'} onChange={(e) => setExpReportSetting((s) => ({ ...s, time_of_day: e.target.value }))} />
@@ -4827,7 +4827,7 @@ export default function Page() {
               {/* Admin — AI Settings (super_admin only) */}
               {adminSection === 'ai' && isSuperAdmin && (
                 <AdminSection title="🤖 AI Settings & Profiles (Super Admin)">
-                  <div style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 12, background: 'var(--theme-elevated)', marginBottom: 12 }}>
+                  <div style={{ border: '1px solid var(--nk-border)', borderRadius: 12, padding: 12, background: 'var(--theme-elevated)', marginBottom: 12 }}>
                     <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700 }}>Token Usage</p>
                     <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:8 }}>
                       {[
@@ -4932,7 +4932,7 @@ export default function Page() {
                     )}
                   </div>
 
-                  <div style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 12, background: 'var(--theme-elevated)', marginBottom: 12 }}>
+                  <div style={{ border: '1px solid var(--nk-border)', borderRadius: 12, padding: 12, background: 'var(--theme-elevated)', marginBottom: 12 }}>
                     <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700 }}>AI Credit Wallet (Super Admin)</p>
                     <div style={{ border:'1px solid #23324a', borderRadius:10, padding:10, marginBottom:10 }}>
                       <div style={{ fontSize:11, color:'var(--nk-muted)', marginBottom:6, fontWeight:700 }}>Pengaturan Rate (1 credit = X token)</div>
@@ -5001,7 +5001,7 @@ export default function Page() {
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
-                    <div style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 12, background: 'var(--theme-elevated)' }}>
+                    <div style={{ border: '1px solid var(--nk-border)', borderRadius: 12, padding: 12, background: 'var(--theme-elevated)' }}>
                       <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700 }}>Profile Form</p>
                       <div style={{ display: 'grid', gap: 8 }}>
                         <input className="nk-input-sm" placeholder="Profile name" value={aiProfileForm.name} onChange={e=>setAiProfileForm(s=>({...s,name:e.target.value}))} />
@@ -5050,7 +5050,7 @@ export default function Page() {
                       </div>
                     </div>
 
-                    <div style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 12, background: 'var(--theme-elevated)' }}>
+                    <div style={{ border: '1px solid var(--nk-border)', borderRadius: 12, padding: 12, background: 'var(--theme-elevated)' }}>
                       <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700 }}>Profiles</p>
                       <div style={{ display: 'grid', gap: 8, maxHeight: 300, overflow: 'auto' }}>
                         {aiProfiles.map(p => (
@@ -5096,7 +5096,7 @@ export default function Page() {
                     <div className="nk-grid-auto" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
                       {categories.filter(c => /^lrmc-|^rmc-/.test(String(c.code || ''))).map((c) => (
                         <div key={c.id} style={{
-                          border: '1px solid #1e2d45', borderRadius: 12,
+                          border: '1px solid var(--nk-border)', borderRadius: 12,
                           padding: '14px 16px', background: 'var(--theme-elevated)'
                         }}>
                           <div style={{ fontWeight: 700, marginBottom: 2 }}>{c.name}</div>
@@ -5111,7 +5111,7 @@ export default function Page() {
 
                   <AdminSection title="📚 Manajemen Materi Belajar" style={{ marginTop: 14 }}>
                     {/* Form tambah/edit */}
-                    <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                    <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
                       <p style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>
                         {editingMateriId ? '✏️ Edit Materi' : '➕ Tambah Materi Baru'}
                       </p>
@@ -5172,7 +5172,7 @@ export default function Page() {
                               { label: '───', title: 'Separator', insert: '---\n', style: {} },
                             ];
                             return (
-                              <div key={bi} style={{ marginBottom: 12, background: '#0a1628', border: '1px solid #1e2d45', borderRadius: 10, padding: 10 }}>
+                              <div key={bi} style={{ marginBottom: 12, background: '#0a1628', border: '1px solid var(--nk-border)', borderRadius: 10, padding: 10 }}>
                                 {/* Header bubble */}
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                                   <span style={{ fontSize: 11, color: '#475569', fontWeight: 600 }}>
@@ -5208,7 +5208,7 @@ export default function Page() {
                                 <textarea id={editorId} value={bubble}
                                   onChange={e => setMateriBubbles(prev => prev.map((b,i2) => i2===bi ? e.target.value : b))}
                                   rows={4} placeholder={`Tulis isi pesan ${bi+1}...`}
-                                  style={{ width: '100%', resize: 'vertical', fontFamily: 'monospace', fontSize: 12, background: '#0d1b2e', border: '1px solid #1e2d45', borderRadius: 6, color: '#f1f5f9', padding: '8px 10px' }} />
+                                  style={{ width: '100%', resize: 'vertical', fontFamily: 'monospace', fontSize: 12, background: '#0d1b2e', border: '1px solid var(--nk-border)', borderRadius: 6, color: '#f1f5f9', padding: '8px 10px' }} />
                               </div>
                             );
                           })}
@@ -5228,7 +5228,7 @@ export default function Page() {
                           {/* Panduan Markdown */}
                           <details style={{ marginTop: 8 }}>
                             <summary style={{ fontSize: 12, color: '#64748b', cursor: 'pointer', userSelect: 'none' }}>📖 Panduan format Markdown (klik untuk buka)</summary>
-                            <div style={{ background: '#0a1628', border: '1px solid #1e2d45', borderRadius: 8, padding: 14, marginTop: 8, fontSize: 12, lineHeight: 1.8 }}>
+                            <div style={{ background: '#0a1628', border: '1px solid var(--nk-border)', borderRadius: 8, padding: 14, marginTop: 8, fontSize: 12, lineHeight: 1.8 }}>
                               <p style={{ fontWeight: 700, color: 'var(--nk-muted)', margin: '0 0 8px' }}>✍️ Cara penulisan teks di Telegram:</p>
                               <div style={{ width:'100%', overflowX:'auto' }}>
                               <table style={{ width: '100%', minWidth: 560, borderCollapse: 'collapse' }}>
@@ -5311,7 +5311,7 @@ export default function Page() {
                       {Object.entries(adminMaterialGroups).map(([catName, items]) => {
                         const isOpen = materiFoldersOpen[catName] ?? (!!materiFilterCat || Object.keys(adminMaterialGroups).length === 1);
                         return (
-                          <div key={catName} style={{ border: '1px solid #1e2d45', borderRadius: 12, overflow: 'hidden', background: 'var(--theme-elevated)' }}>
+                          <div key={catName} style={{ border: '1px solid var(--nk-border)', borderRadius: 12, overflow: 'hidden', background: 'var(--theme-elevated)' }}>
                             <button
                               onClick={() => setMateriFoldersOpen(prev => ({ ...prev, [catName]: !isOpen }))}
                               style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--theme-bg-subtle)', border: 'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', cursor: 'pointer', color: '#e2e8f0' }}>
@@ -5326,7 +5326,7 @@ export default function Page() {
                                 {items.map(m => {
                                   const typeIcon = { text: '📖', video: '🎬', audio: '🎵' }[m.type] || '📄';
                                   return (
-                                    <div key={m.id} style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 10, padding: '12px 14px', marginBottom: 8, display: 'flex', flexDirection:'column', gap: 10, overflow:'hidden' }}>
+                                    <div key={m.id} style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 10, padding: '12px 14px', marginBottom: 8, display: 'flex', flexDirection:'column', gap: 10, overflow:'hidden' }}>
                                       <div style={{ minWidth: 0 }}>
                                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
                                           <span>{typeIcon}</span>
@@ -5382,7 +5382,7 @@ export default function Page() {
                     </div>
 
                     {roadmapMenu === 'positions' && <>
-                    <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12 }}>
+                    <div style={{ border:'1px solid var(--nk-border)', borderRadius: 10, padding: 12 }}>
                       <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))' }}>
                         <input className="nk-input-sm" placeholder="Kode jabatan (contoh: CS-01)" value={positionForm.code || ''} onChange={e => setPositionForm(f => ({ ...f, code: e.target.value }))} />
                         <input className="nk-input-sm" placeholder="Nama jabatan" value={positionForm.name} onChange={e => setPositionForm(f => ({ ...f, name: e.target.value }))} />
@@ -5427,7 +5427,7 @@ export default function Page() {
                     </div>
                     </>}
 
-                    {roadmapMenu === 'competencies' && <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12, marginTop: 2 }}>
+                    {roadmapMenu === 'competencies' && <div style={{ border:'1px solid var(--nk-border)', borderRadius: 10, padding: 12, marginTop: 2 }}>
                       <div style={{ fontWeight:700, marginBottom:8 }}>Kompetensi Teknis per Jabatan</div>
                       <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))' }}>
                         <select className="nk-input-sm" value={competencyForm.position_id} onChange={async e => { const v=e.target.value; setCompetencyForm(f => ({ ...f, position_id: v })); const pos = roadmapPositions.find(p => String(p.id) === String(v)); if (pos) setTechCompFoldersOpen(prev => ({ ...prev, [`${pos.code} • ${pos.name}`]: true })); await loadRoadmapCompetencies(v); }}>
@@ -5447,7 +5447,7 @@ export default function Page() {
                         {Object.entries(techCompGroups).map(([posName, items]) => {
                           const isOpen = techCompFoldersOpen[posName] ?? (Object.keys(techCompGroups).length === 1);
                           return (
-                            <div key={posName} style={{ border:'1px solid #1e2d45', borderRadius:12, overflow:'hidden', background:'var(--theme-elevated)' }}>
+                            <div key={posName} style={{ border:'1px solid var(--nk-border)', borderRadius:12, overflow:'hidden', background:'var(--theme-elevated)' }}>
                               <button onClick={() => setTechCompFoldersOpen(prev => ({ ...prev, [posName]: !isOpen }))}
                                 style={{ width:'100%', display:'flex', alignItems:'center', gap:8, padding:'10px 12px', background:'var(--theme-bg-subtle)', border:'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', color:'#e2e8f0', cursor:'pointer' }}>
                                 <span style={{ fontSize:16 }}>📁</span>
@@ -5458,7 +5458,7 @@ export default function Page() {
                               {isOpen && (
                                 <div style={{ padding:10, display:'grid', gap:8 }}>
                                   {items.map(c => (
-                                    <div key={c.id} style={{ border:'1px solid #1e2d45', borderRadius:10, padding:'10px 12px', background:'var(--theme-elevated)' }}>
+                                    <div key={c.id} style={{ border:'1px solid var(--nk-border)', borderRadius:10, padding:'10px 12px', background:'var(--theme-elevated)' }}>
                                       <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:6 }}>
                                         <span className="nk-badge">{c.code}</span>
                                         <span style={{ fontWeight:700 }}>{c.name}</span>
@@ -5482,7 +5482,7 @@ export default function Page() {
                       </div>
                     </div>}
 
-                    {roadmapMenu === 'core-competencies' && <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12, marginTop: 2 }}>
+                    {roadmapMenu === 'core-competencies' && <div style={{ border:'1px solid var(--nk-border)', borderRadius: 10, padding: 12, marginTop: 2 }}>
                       <div style={{ fontWeight:700, marginBottom:8 }}>Kompetensi Inti per Jabatan</div>
                       <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))' }}>
                         <select className="nk-input-sm" value={coreCompetencyForm.position_id} onChange={async e => { const v=e.target.value; setCoreCompetencyForm(f => ({ ...f, position_id: v })); const pos = roadmapPositions.find(p => String(p.id) === String(v)); if (pos) setCoreCompFoldersOpen(prev => ({ ...prev, [`${pos.code} • ${pos.name}`]: true })); await loadRoadmapCoreCompetencies(v); }}>
@@ -5501,7 +5501,7 @@ export default function Page() {
                         {Object.entries(coreCompGroups).map(([posName, items]) => {
                           const isOpen = coreCompFoldersOpen[posName] ?? (Object.keys(coreCompGroups).length === 1);
                           return (
-                            <div key={posName} style={{ border:'1px solid #1e2d45', borderRadius:12, overflow:'hidden', background:'var(--theme-elevated)' }}>
+                            <div key={posName} style={{ border:'1px solid var(--nk-border)', borderRadius:12, overflow:'hidden', background:'var(--theme-elevated)' }}>
                               <button onClick={() => setCoreCompFoldersOpen(prev => ({ ...prev, [posName]: !isOpen }))}
                                 style={{ width:'100%', display:'flex', alignItems:'center', gap:8, padding:'10px 12px', background:'var(--theme-bg-subtle)', border:'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', color:'#e2e8f0', cursor:'pointer' }}>
                                 <span style={{ fontSize:16 }}>📁</span>
@@ -5512,7 +5512,7 @@ export default function Page() {
                               {isOpen && (
                                 <div style={{ padding:10, display:'grid', gap:8 }}>
                                   {items.map(c => (
-                                    <div key={c.id} style={{ border:'1px solid #1e2d45', borderRadius:10, padding:'10px 12px', background:'var(--theme-elevated)' }}>
+                                    <div key={c.id} style={{ border:'1px solid var(--nk-border)', borderRadius:10, padding:'10px 12px', background:'var(--theme-elevated)' }}>
                                       <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:6 }}>
                                         <span className="nk-badge">{c.code}</span>
                                         <span style={{ fontWeight:700 }}>{c.name}</span>
@@ -5536,7 +5536,7 @@ export default function Page() {
                       </div>
                     </div>}
 
-                    {roadmapMenu === 'leadership-competencies' && <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12, marginTop: 2 }}>
+                    {roadmapMenu === 'leadership-competencies' && <div style={{ border:'1px solid var(--nk-border)', borderRadius: 10, padding: 12, marginTop: 2 }}>
                       <div style={{ fontWeight:700, marginBottom:8 }}>Kompetensi Kepemimpinan per Jabatan</div>
                       <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))' }}>
                         <select className="nk-input-sm" value={leadershipCompetencyForm.position_id} onChange={async e => { const v=e.target.value; setLeadershipCompetencyForm(f => ({ ...f, position_id: v })); const pos = roadmapPositions.find(p => String(p.id) === String(v)); if (pos) setLeadCompFoldersOpen(prev => ({ ...prev, [`${pos.code} • ${pos.name}`]: true })); await loadRoadmapLeadershipCompetencies(v); }}>
@@ -5555,7 +5555,7 @@ export default function Page() {
                         {Object.entries(leadCompGroups).map(([posName, items]) => {
                           const isOpen = leadCompFoldersOpen[posName] ?? (Object.keys(leadCompGroups).length === 1);
                           return (
-                            <div key={posName} style={{ border:'1px solid #1e2d45', borderRadius:12, overflow:'hidden', background:'var(--theme-elevated)' }}>
+                            <div key={posName} style={{ border:'1px solid var(--nk-border)', borderRadius:12, overflow:'hidden', background:'var(--theme-elevated)' }}>
                               <button onClick={() => setLeadCompFoldersOpen(prev => ({ ...prev, [posName]: !isOpen }))}
                                 style={{ width:'100%', display:'flex', alignItems:'center', gap:8, padding:'10px 12px', background:'var(--theme-bg-subtle)', border:'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', color:'#e2e8f0', cursor:'pointer' }}>
                                 <span style={{ fontSize:16 }}>📁</span>
@@ -5566,7 +5566,7 @@ export default function Page() {
                               {isOpen && (
                                 <div style={{ padding:10, display:'grid', gap:8 }}>
                                   {items.map(c => (
-                                    <div key={c.id} style={{ border:'1px solid #1e2d45', borderRadius:10, padding:'10px 12px', background:'var(--theme-elevated)' }}>
+                                    <div key={c.id} style={{ border:'1px solid var(--nk-border)', borderRadius:10, padding:'10px 12px', background:'var(--theme-elevated)' }}>
                                       <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:6 }}>
                                         <span className="nk-badge">{c.code}</span>
                                         <span style={{ fontWeight:700 }}>{c.name}</span>
@@ -5590,7 +5590,7 @@ export default function Page() {
                       </div>
                     </div>}
 
-                    {roadmapMenu === 'materials' && <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12, marginTop: 2 }}>
+                    {roadmapMenu === 'materials' && <div style={{ border:'1px solid var(--nk-border)', borderRadius: 10, padding: 12, marginTop: 2 }}>
                       <div style={{ fontWeight:700, marginBottom:8 }}>Materi per Kompetensi Teknis</div>
                       <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:8, flexWrap:'wrap' }}>
                         <label style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:12, color:'var(--nk-text)' }}>
@@ -5663,7 +5663,7 @@ export default function Page() {
                         {Object.entries(roadmapMaterialGroups).map(([compName, items]) => {
                           const isOpen = roadmapMaterialFoldersOpen[compName] ?? (Object.keys(roadmapMaterialGroups).length === 1);
                           return (
-                            <div key={compName} style={{ border:'1px solid #1e2d45', borderRadius:12, overflow:'hidden', background:'var(--theme-elevated)' }}>
+                            <div key={compName} style={{ border:'1px solid var(--nk-border)', borderRadius:12, overflow:'hidden', background:'var(--theme-elevated)' }}>
                               <button
                                 onClick={() => setRoadmapMaterialFoldersOpen(prev => ({ ...prev, [compName]: !isOpen }))}
                                 style={{ width:'100%', display:'flex', alignItems:'center', gap:8, padding:'10px 12px', background:'var(--theme-bg-subtle)', border:'none', borderBottom: isOpen ? '1px solid #1e2d45' : 'none', color:'#e2e8f0', cursor:'pointer' }}>
@@ -5675,7 +5675,7 @@ export default function Page() {
                               {isOpen && (
                                 <div style={{ padding:10, display:'grid', gap:8 }}>
                                   {items.map(m => (
-                                    <div key={m.id} style={{ border:'1px solid #1e2d45', borderRadius:10, padding:'10px 12px', background:'var(--theme-elevated)' }}>
+                                    <div key={m.id} style={{ border:'1px solid var(--nk-border)', borderRadius:10, padding:'10px 12px', background:'var(--theme-elevated)' }}>
                                       <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:6 }}>
                                         <span className="nk-badge">{m.bloom_level || 'C2'}</span>
                                         <span style={{ fontWeight:700 }}>{m.title}</span>
@@ -5699,7 +5699,7 @@ export default function Page() {
                       </div>
                     </div>}
 
-                    {roadmapMenu === 'graph' && <div style={{ border:'1px solid #1e2d45', borderRadius: 10, padding: 12, marginTop: 2 }}>
+                    {roadmapMenu === 'graph' && <div style={{ border:'1px solid var(--nk-border)', borderRadius: 10, padding: 12, marginTop: 2 }}>
                       <div style={{ display:'flex', justifyContent:'space-between', gap:8, alignItems:'center', marginBottom:8, flexWrap:'wrap' }}>
                         <div style={{ fontWeight:700 }}>Graph Materi (Backlink)</div>
                         <BtnSm onClick={reindexRoadmapRAG} disabled={roadmapRagReindexing}>{roadmapRagReindexing ? '⏳ Reindexing...' : '🧠 Reindex RAG'}</BtnSm>
@@ -5824,7 +5824,7 @@ export default function Page() {
                             {/* Content */}
                             <div style={{
                               background: 'rgba(15, 23, 42, 0.8)',
-                              border: '1px solid #1e2d45',
+                              border: '1px solid var(--nk-border)',
                               borderRadius: 8, padding: 16, marginBottom: 12,
                               fontSize: 14, color: 'var(--nk-text)', lineHeight: 1.6,
                               maxHeight: 200, overflowY: 'auto'
@@ -5874,7 +5874,7 @@ export default function Page() {
                       zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
                     }}>
                       <div style={{
-                        background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 16,
+                        background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 16,
                         padding: 24, width: '100%', maxWidth: 600
                       }}>
                         <h3 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 700, color: '#e2e8f0' }}>
@@ -5942,7 +5942,7 @@ export default function Page() {
                             rows={4}
                             style={{
                               width: '100%', padding: '12px', borderRadius: 8,
-                              border: '1px solid #1e2d45', background: '#0a1628',
+                              border: '1px solid var(--nk-border)', background: '#0a1628',
                               color: '#e2e8f0', fontSize: 14, lineHeight: 1.5,
                               resize: 'vertical'
                             }}
@@ -5989,7 +5989,7 @@ export default function Page() {
                 <>
                   <AdminSection title="🎁 Manajemen Hadiah Redeem">
                     {/* Form tambah/edit */}
-                    <div style={{ background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                    <div style={{ background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
                       <p style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>
                         {editingRedeemId ? '✏️ Edit Hadiah' : '➕ Tambah Hadiah Baru'}
                       </p>
@@ -6027,7 +6027,7 @@ export default function Page() {
                     {/* Daftar hadiah */}
                     <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))' }}>
                       {adminRedeemItems.map((it) => (
-                        <div key={it.id} style={{ border: '1px solid #1e2d45', borderRadius: 12, padding: 14, background: 'var(--theme-bg-subtle)' }}>
+                        <div key={it.id} style={{ border: '1px solid var(--nk-border)', borderRadius: 12, padding: 14, background: 'var(--theme-bg-subtle)' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                             <div style={{ fontWeight: 700 }}>{it.name}</div>
                             <span className={`nk-badge ${it.is_active ? 'nk-badge-green' : 'nk-badge-red'}`}>{it.is_active ? 'Aktif' : 'Nonaktif'}</span>
@@ -6102,7 +6102,7 @@ export default function Page() {
           backdropFilter: 'blur(4px)'
         }}>
           <div style={{
-            width: 'min(440px,92vw)', border: '1px solid #1e2d45', borderRadius: 18,
+            width: 'min(440px,92vw)', border: '1px solid var(--nk-border)', borderRadius: 18,
             padding: '24px', background: 'var(--theme-elevated)',
             boxShadow: '0 20px 60px rgba(0,0,0,0.6)'
           }}>
@@ -6364,7 +6364,7 @@ function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote }) {
 
   // ── Render ──
   return (
-    <div style={{ position: 'relative', width: '100%', height: 520, border: '1px solid #1e2d45', borderRadius: 12, overflow: 'hidden', background: '#070c17' }}>
+    <div style={{ position: 'relative', width: '100%', height: 520, border: '1px solid var(--nk-border)', borderRadius: 12, overflow: 'hidden', background: '#070c17' }}>
       {/* Toolbar */}
       <div style={{ position: 'absolute', top: 10, left: 10, right: 10, zIndex: 20, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
         <button onClick={() => setShowAddMenu(s => !s)}
@@ -6372,7 +6372,7 @@ function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote }) {
           + Kartu
         </button>
         {/* Zoom controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 0, background: 'rgba(15,23,42,0.9)', border: '1px solid #1e2d45', borderRadius: 8, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 0, background: 'rgba(15,23,42,0.9)', border: '1px solid var(--nk-border)', borderRadius: 8, overflow: 'hidden' }}>
           <button onClick={() => setViewport(v => {
             const ns = clampScale(v.scale * 0.8);
             const cx = (containerRef.current?.clientWidth || 400) / 2;
@@ -6388,7 +6388,7 @@ function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote }) {
           })} style={{ padding: '6px 10px', background: 'none', color: 'var(--nk-muted)', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>+</button>
         </div>
         <button onClick={() => setViewport({ x: 0, y: 0, scale: 1 })}
-          style={{ padding: '6px 8px', background: 'rgba(255,255,255,0.07)', color: 'var(--nk-muted)', border: '1px solid #1e2d45', borderRadius: 8, cursor: 'pointer', fontSize: 12 }}>
+          style={{ padding: '6px 8px', background: 'rgba(255,255,255,0.07)', color: 'var(--nk-muted)', border: '1px solid var(--nk-border)', borderRadius: 8, cursor: 'pointer', fontSize: 12 }}>
           ⌂
         </button>
         {saving && <span style={{ fontSize: 11, color: '#64748b' }}>💾...</span>}
@@ -6396,7 +6396,7 @@ function NoteCanvas({ data, notes, apiBase, onUpdate, onOpenNote }) {
 
       {/* Add menu dropdown */}
       {showAddMenu && (
-        <div style={{ position: 'absolute', top: 46, left: 10, zIndex: 30, background: 'var(--theme-elevated)', border: '1px solid #1e2d45', borderRadius: 10, padding: 8, minWidth: 220, maxHeight: 280, overflowY: 'auto' }}>
+        <div style={{ position: 'absolute', top: 46, left: 10, zIndex: 30, background: 'var(--theme-elevated)', border: '1px solid var(--nk-border)', borderRadius: 10, padding: 8, minWidth: 220, maxHeight: 280, overflowY: 'auto' }}>
           <p style={{ fontSize: 11, color: '#475569', margin: '0 0 6px 4px', fontWeight: 600, textTransform: 'uppercase' }}>Pilih catatan:</p>
           {notes.filter(n => n.note_type !== 'fleeting').map(n => (
             <div key={n.id} onClick={() => addNoteCard(n.id)}
