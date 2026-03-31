@@ -1006,9 +1006,17 @@ export default function Page() {
           style: materialForm.style || 'ringkas',
         })
       });
-      const d = await res.json().catch(()=>({}));
-      if (!res.ok) return showMsg(formatAICreditError(d.error || 'Gagal generate materi AI'), 'error');
-      setMaterialForm(f => ({ ...f, content: d.draft_content || f.content }));
+
+      const raw = await res.text();
+      let d = {};
+      try { d = raw ? JSON.parse(raw) : {}; } catch (_) {}
+
+      if (!res.ok) {
+        const msg = d?.error || raw || `Gagal generate materi AI (HTTP ${res.status})`;
+        return showMsg(formatAICreditError(msg), 'error');
+      }
+
+      setMaterialForm(f => ({ ...f, content: d?.draft_content || f.content }));
       showMsg('Draft materi AI siap ✅', 'success');
     } finally {
       setGeneratingRoadmapMaterial(false);
