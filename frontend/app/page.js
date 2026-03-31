@@ -5598,7 +5598,7 @@ export default function Page() {
                           Strict mode backlink (hanya judul yang sudah ada)
                         </label>
                       </div>
-                      <div ref={materialEditorRef} style={{ display:'grid', gap:8 }}>
+                      <div ref={materialEditorRef} className="nk-roadmap-material-editor" style={{ display:'grid', gap:8 }}>
                         <select className="nk-input-sm" value={materialForm.competency_id} onChange={async e => { const v=e.target.value; setMaterialForm(f => ({ ...f, competency_id: v })); const comp = roadmapCompetencies.find(c => String(c.id) === String(v)); if (comp) setRoadmapMaterialFoldersOpen(prev => ({ ...prev, [`${comp.code} • ${comp.name}`]: true })); await loadRoadmapMaterials(v); }}>
                           <option value="">Pilih kompetensi teknis</option>
                           {roadmapCompetencies.map(c => {
@@ -5614,7 +5614,7 @@ export default function Page() {
                         })()} placeholder="Nama jabatan (otomatis)" style={{ color:'var(--nk-text)', background:'#0a1220' }} />
                         <input ref={materialTitleInputRef} className="nk-input-sm" placeholder="Judul materi" value={materialForm.title} onChange={e => setMaterialForm(f => ({ ...f, title: e.target.value }))} />
                         <textarea className="nk-input-sm" placeholder="Deskripsi singkat materi (untuk AI generate draft)" value={materialForm.brief || ''} onChange={e => setMaterialForm(f => ({ ...f, brief: e.target.value }))} style={{ minHeight: 72 }} />
-                        <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(180px,1fr))' }}>
+                        <div className="nk-roadmap-material-grid-2" style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(auto-fit, minmax(180px,1fr))' }}>
                           <select className="nk-input-sm" value={materialForm.bloom_level || 'C2'} onChange={e => setMaterialForm(f => ({ ...f, bloom_level: e.target.value }))}>
                             <option value="C1">Bloom: C1 Mengingat</option>
                             <option value="C2">Bloom: C2 Memahami</option>
@@ -5631,7 +5631,7 @@ export default function Page() {
                         </div>
                         <textarea className="nk-input-sm" placeholder="Tujuan pembelajaran (learning objectives)" value={materialForm.learning_objectives || ''} onChange={e => setMaterialForm(f => ({ ...f, learning_objectives: e.target.value }))} style={{ minHeight: 64 }} />
                         <div style={{ display:'flex', justifyContent:'flex-end' }}>
-                          <button onClick={generateRoadmapMaterialDraft} disabled={generatingRoadmapMaterial} style={{ border:'1px solid #334155', background: generatingRoadmapMaterial ? '#1e293b' : 'rgba(139,92,246,0.15)', color:'#ddd6fe', borderRadius:8, padding:'8px 12px', fontSize:12, fontWeight:700, cursor: generatingRoadmapMaterial ? 'not-allowed' : 'pointer' }}>
+                          <button onClick={generateRoadmapMaterialDraft} disabled={generatingRoadmapMaterial} style={{ border:'1px solid #334155', background: generatingRoadmapMaterial ? '#1e293b' : 'rgba(139,92,246,0.15)', color:'#ddd6fe', borderRadius:8, padding:'8px 12px', fontSize:12, fontWeight:700, cursor: generatingRoadmapMaterial ? 'not-allowed' : 'pointer', maxWidth:'100%', whiteSpace:'normal' }}>
                             {generatingRoadmapMaterial ? '⏳ Generating...' : '🤖 Generate Draft dengan AI'}
                           </button>
                         </div>

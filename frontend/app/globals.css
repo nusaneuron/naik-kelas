@@ -479,6 +479,28 @@ button:active { transform: translateY(0); }
 
   .nk-sidebar .nk-sidebar-label { display: none; }
 
+  /* Roadmap materials editor mobile fix (prevent horizontal wrap/overflow) */
+  .nk-roadmap-material-editor {
+    min-width: 0;
+    overflow-x: hidden;
+  }
+  .nk-roadmap-material-editor > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .nk-roadmap-material-editor .nk-input-sm,
+  .nk-roadmap-material-editor textarea,
+  .nk-roadmap-material-editor button,
+  .nk-roadmap-material-editor select {
+    max-width: 100% !important;
+  }
+  .nk-roadmap-material-editor button {
+    white-space: normal;
+  }
+  .nk-roadmap-material-grid-2 {
+    grid-template-columns: 1fr !important;
+  }
+
   .nk-sidebar button {
     flex: 1 0 auto !important;
     width: auto !important;
