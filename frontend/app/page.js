@@ -6611,11 +6611,11 @@ function NoteGraph({ nodes, edges, onNodeClick }) {
 function Section({ title, children }) {
   return (
     <section style={{
-      border: '1px solid #1e2d45', borderRadius: 16,
-      padding: 18, background: '#0b1220', marginBottom: 14,
+      border: '1px solid var(--nk-border)', borderRadius: 16,
+      padding: 18, background: 'var(--theme-bg-subtle)', marginBottom: 14,
       minWidth: 0, maxWidth: '100%', boxSizing: 'border-box'
     }}>
-      <h2 style={{ fontFamily: 'Poppins, sans-serif', fontSize: 16, fontWeight: 700, margin: '0 0 14px', color: '#e5e7eb' }}>{title}</h2>
+      <h2 style={{ fontFamily: 'Poppins, sans-serif', fontSize: 16, fontWeight: 700, margin: '0 0 14px', color: 'var(--nk-text)' }}>{title}</h2>
       {children}
     </section>
   );
@@ -6624,7 +6624,7 @@ function Section({ title, children }) {
 function AdminSection({ title, children, style }) {
   return (
     <section style={style}>
-      <h2 style={{ fontFamily: 'Poppins, sans-serif', fontSize: 17, fontWeight: 700, margin: '0 0 16px', color: '#e5e7eb' }}>{title}</h2>
+      <h2 style={{ fontFamily: 'Poppins, sans-serif', fontSize: 17, fontWeight: 700, margin: '0 0 16px', color: 'var(--nk-text)' }}>{title}</h2>
       {children}
     </section>
   );
@@ -6636,9 +6636,9 @@ function BtnSm({ children, onClick, disabled, danger }) {
       onClick={onClick}
       disabled={disabled}
       style={{
-        border: danger ? '1px solid rgba(220,38,38,0.5)' : '1px solid #2d3f5a',
-        background: danger ? 'rgba(127,29,29,0.6)' : '#1a2640',
-        color: danger ? '#fca5a5' : '#cbd5e1',
+        border: danger ? '1px solid rgba(220,38,38,0.45)' : '1px solid var(--nk-border)',
+        background: danger ? 'rgba(127,29,29,0.6)' : 'var(--theme-elevated)',
+        color: danger ? '#fca5a5' : 'var(--nk-text)',
         borderRadius: 8, padding: '6px 12px', cursor: disabled ? 'not-allowed' : 'pointer',
         fontSize: 12, fontWeight: 600, opacity: disabled ? 0.6 : 1,
         transition: 'all 160ms ease'
@@ -6652,7 +6652,7 @@ function BtnSm({ children, onClick, disabled, danger }) {
 // ── Styles ──────────────────────────────────────────────────
 
 const fieldLbl = {
-  display: 'block', fontSize: 11, color: '#64748b',
+  display: 'block', fontSize: 11, color: 'var(--nk-muted)',
   marginBottom: 5, fontWeight: 600,
   letterSpacing: '0.4px', textTransform: 'uppercase'
 };
@@ -6665,8 +6665,8 @@ const btnOutline = {
 };
 
 const btnOutlineNeutral = {
-  border: '1px solid #2d3f5a', background: '#1a2640',
-  color: '#94a3b8', borderRadius: 10, padding: '9px 18px',
+  border: '1px solid var(--nk-border)', background: 'var(--theme-elevated)',
+  color: 'var(--nk-muted)', borderRadius: 10, padding: '9px 18px',
   cursor: 'pointer', fontSize: 14, fontWeight: 600
 };
 

@@ -204,7 +204,7 @@ button:active { transform: translateY(0); }
   border-bottom: 1px solid var(--nk-border);
   position: sticky;
   top: 0;
-  background: #0b1220;
+  background: var(--theme-bg-subtle);
   z-index: 2;
 }
 .nk-table td {
@@ -383,17 +383,17 @@ button:active { transform: translateY(0); }
   display: flex;
   gap: 0;
   min-height: 600px;
-  border: 1px solid #1e2d45;
+  border: 1px solid var(--nk-border);
   border-radius: 16px;
-  background: #0b1220;
+  background: var(--theme-bg-subtle);
   overflow: clip;
 }
 
 .nk-sidebar {
   width: 200px;
   flex-shrink: 0;
-  background: #0a1628;
-  border-right: 1px solid #1e2d45;
+  background: var(--theme-elevated);
+  border-right: 1px solid var(--nk-border);
   padding: 20px 12px;
   display: flex;
   flex-direction: column;
@@ -410,9 +410,9 @@ button:active { transform: translateY(0); }
 
 /* ─── Admin Layout Responsive ─────────────────────────────── */
 .nk-admin-layout {
-  border: 1px solid #1e2d45;
+  border: 1px solid var(--nk-border);
   border-radius: 16px;
-  background: #0b1220;
+  background: var(--theme-bg-subtle);
   overflow: clip; /* clip tidak buat scroll context baru */
   display: grid;
   grid-template-columns: 210px minmax(0, 1fr);
@@ -420,8 +420,8 @@ button:active { transform: translateY(0); }
 }
 
 .nk-admin-sidebar {
-  background: #080d18;
-  border-right: 1px solid #1e2d45;
+  background: var(--theme-elevated);
+  border-right: 1px solid var(--nk-border);
   padding: 20px 12px;
 }
 
