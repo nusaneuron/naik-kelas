@@ -37,6 +37,7 @@
 
   --nk-ink: #151313;
   --nk-text: var(--theme-text);
+  --nk-material-text: var(--nk-text);
   --nk-muted: var(--theme-muted);
   --nk-border: var(--theme-border);
 
@@ -72,6 +73,7 @@
   --theme-elevated: #f8fafc;
   --theme-card: #ffffff;
   --theme-text: #0f172a;
+  --nk-material-text: #000000;
   --theme-muted: #475569;
   --theme-border: #cbd5e1;
 

@@ -162,22 +162,22 @@ export default function Page() {
       line = String(line || '').replace(/\r/g, '');
       const lead = line.trimStart();
       if (lead.startsWith('```')) {
-        if (inCode) { html += `<pre style="background:#0a1628;border-radius:6px;padding:10px;overflow-x:auto;font-size:12px;color:#a5f3fc;margin:6px 0">${lead.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`; inCode = false; codeLines = []; }
+        if (inCode) { html += `<pre style="background:var(--theme-elevated);border:1px solid var(--nk-border);border-radius:6px;padding:10px;overflow-x:auto;font-size:12px;color:var(--nk-text);margin:6px 0">${lead.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`; inCode = false; codeLines = []; }
         else inCode = true;
         continue;
       }
-      if (inCode) { codeLines.push(line); html += `<pre style="background:#0a1628;border-radius:6px;padding:10px;overflow-x:auto;font-size:12px;color:#a5f3fc;margin:6px 0">${codeLines.join('\n').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`; continue; }
-      if (lead.trim() === '---' || lead.trim() === '***') { html += '<hr style="border:none;border-top:1px solid #1e2d45;margin:10px 0"/>'; continue; }
-      if (lead.startsWith('#### ')) { html += `<p style="font-weight:700;font-size:13px;color:#94a3b8;margin:5px 0 2px">${inlineMD(lead.slice(5))}</p>`; continue; }
-      if (lead.startsWith('### ')) { html += `<p style="font-weight:700;font-size:14px;color:#cbd5e1;margin:6px 0 2px">${inlineMD(lead.slice(4))}</p>`; continue; }
-      if (lead.startsWith('## ')) { html += `<p style="font-weight:700;font-size:15px;color:#e2e8f0;margin:8px 0 4px">${inlineMD(lead.slice(3))}</p>`; continue; }
-      if (lead.startsWith('# ')) { html += `<p style="font-weight:800;font-size:16px;color:#f1f5f9;margin:10px 0 4px">📌 ${inlineMD(lead.slice(2))}</p>`; continue; }
-      if (lead.startsWith('> ')) { html += `<div style="border-left:3px solid #7c3aed;padding:4px 10px;margin:4px 0;color:#94a3b8;font-style:italic;font-size:13px">${inlineMD(lead.slice(2))}</div>`; continue; }
-      if (lead.startsWith('- ') || lead.startsWith('* ')) { html += `<div style="display:flex;gap:6px;margin:2px 0;font-size:13px"><span style="color:#7c3aed;flex-shrink:0">•</span><span>${inlineMD(lead.slice(2))}</span></div>`; continue; }
+      if (inCode) { codeLines.push(line); html += `<pre style="background:var(--theme-elevated);border:1px solid var(--nk-border);border-radius:6px;padding:10px;overflow-x:auto;font-size:12px;color:var(--nk-text);margin:6px 0">${codeLines.join('\n').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`; continue; }
+      if (lead.trim() === '---' || lead.trim() === '***') { html += '<hr style="border:none;border-top:1px solid var(--nk-border);margin:10px 0"/>'; continue; }
+      if (lead.startsWith('#### ')) { html += `<p style="font-weight:700;font-size:13px;color:var(--nk-material-text);margin:5px 0 2px">${inlineMD(lead.slice(5))}</p>`; continue; }
+      if (lead.startsWith('### ')) { html += `<p style="font-weight:700;font-size:14px;color:var(--nk-material-text);margin:6px 0 2px">${inlineMD(lead.slice(4))}</p>`; continue; }
+      if (lead.startsWith('## ')) { html += `<p style="font-weight:700;font-size:15px;color:var(--nk-material-text);margin:8px 0 4px">${inlineMD(lead.slice(3))}</p>`; continue; }
+      if (lead.startsWith('# ')) { html += `<p style="font-weight:800;font-size:16px;color:var(--nk-material-text);margin:10px 0 4px">📌 ${inlineMD(lead.slice(2))}</p>`; continue; }
+      if (lead.startsWith('> ')) { html += `<div style="border-left:3px solid #7c3aed;padding:4px 10px;margin:4px 0;color:var(--nk-material-text);font-style:italic;font-size:13px">${inlineMD(lead.slice(2))}</div>`; continue; }
+      if (lead.startsWith('- ') || lead.startsWith('* ')) { html += `<div style="display:flex;gap:6px;margin:2px 0;font-size:13px;color:var(--nk-material-text)"><span style="color:#7c3aed;flex-shrink:0">•</span><span>${inlineMD(lead.slice(2))}</span></div>`; continue; }
       const numMatch = lead.match(/^(\d+)\. (.+)/);
-      if (numMatch) { html += `<div style="display:flex;gap:6px;margin:2px 0;font-size:13px"><span style="color:#7c3aed;flex-shrink:0;font-weight:700">${numMatch[1]}.</span><span>${inlineMD(numMatch[2])}</span></div>`; continue; }
+      if (numMatch) { html += `<div style="display:flex;gap:6px;margin:2px 0;font-size:13px;color:var(--nk-material-text)"><span style="color:#7c3aed;flex-shrink:0;font-weight:700">${numMatch[1]}.</span><span>${inlineMD(numMatch[2])}</span></div>`; continue; }
       if (line.trim() === '') { html += '<div style="height:6px"></div>'; continue; }
-      html += `<p style="margin:3px 0;font-size:13px;line-height:1.7;color:#94a3b8">${inlineMD(lead)}</p>`;
+      html += `<p style="margin:3px 0;font-size:13px;line-height:1.7;color:var(--nk-material-text)">${inlineMD(lead)}</p>`;
     }
     return html;
   }
@@ -187,12 +187,12 @@ export default function Page() {
     s = s.replace(/\[\[(.+?)\]\]/g, '<span class="nk-backlink" data-backlink="$1" style="color:#60a5fa;font-weight:700;cursor:pointer;border-bottom:1px solid rgba(96,165,250,0.4);padding-bottom:1px">$1</span>');
     // #tag → berwarna ungu
     s = s.replace(/(^|\s)#([\w\u00C0-\u024F]+)/g, '$1<span style="color:#a78bfa;font-weight:600">#$2</span>');
-    s = s.replace(/\*\*(.+?)\*\*/g, '<strong style="color:#e2e8f0">$1</strong>');
-    s = s.replace(/__(.+?)__/g, '<strong style="color:#e2e8f0">$1</strong>');
+    s = s.replace(/\*\*(.+?)\*\*/g, '<strong style="color:var(--nk-material-text)">$1</strong>');
+    s = s.replace(/__(.+?)__/g, '<strong style="color:var(--nk-material-text)">$1</strong>');
     s = s.replace(/~~(.+?)~~/g, '<s>$1</s>');
     s = s.replace(/_(.+?)_/g, '<em>$1</em>');
     s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
-    s = s.replace(/`(.+?)`/g, '<code style="background:#1e2d45;padding:1px 5px;border-radius:4px;font-size:12px;color:#a5f3fc">$1</code>');
+    s = s.replace(/`(.+?)`/g, '<code style="background:var(--theme-elevated);border:1px solid var(--nk-border);padding:1px 5px;border-radius:4px;font-size:12px;color:var(--nk-material-text)">$1</code>');
     return s;
   }
 
@@ -3284,7 +3284,7 @@ export default function Page() {
                         </div>
                         <div style={{ fontSize:16, fontWeight:700, marginBottom:8 }}>{participantRoadmapMaterialDetail.title}</div>
                         <div style={{
-                          color:'var(--nk-text)',
+                          color:'var(--nk-material-text)',
                           lineHeight: 1.7,
                           fontSize: 14,
                         }}
