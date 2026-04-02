@@ -10981,7 +10981,8 @@ func (a *app) sendBadgeNotification(ctx context.Context, userID, badgeID int64, 
 // ── Participant: My Badges ────────────────────────────────────────────────────
 
 func (a *app) handleParticipantBadges(w http.ResponseWriter, r *http.Request) {
-	u, err := a.requireRole(r.Context(), r, "participant")
+	// Admin/super_admin juga bisa lihat koleksi badge miliknya saat mode peserta
+	u, err := a.requireRole(r.Context(), r, "participant", "admin", "super_admin")
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
